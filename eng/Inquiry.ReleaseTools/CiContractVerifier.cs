@@ -4,9 +4,9 @@ using YamlDotNet.RepresentationModel;
 
 namespace Inquiry.ReleaseTools;
 
-public static class CiContractVerifier
+public static partial class CiContractVerifier
 {
-    private static readonly IReadOnlyDictionary<string, string> ApprovedActions = new Dictionary<string, string>(StringComparer.Ordinal)
+    private static readonly Dictionary<string, string> _approvedActions = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["actions/checkout"] = "3d3c42e5aac5ba805825da76410c181273ba90b1",
         ["actions/setup-dotnet"] = "a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -16,16 +16,16 @@ public static class CiContractVerifier
         ["lycheeverse/lychee-action"] = "e7477775783ea5526144ba13e8db5eec57747ce8"
     };
 
-    private static readonly string[] RequiredJobIds =
+    private static readonly string[] _requiredJobIds =
         ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-verifier", "docs"];
     // package-provenance is not required: fork pull requests cannot attest, so it is skipped there.
-    private static readonly string[] JobIds =
+    private static readonly string[] _jobIds =
         ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-provenance", "package-verifier", "docs", "ci-required-v1"];
     private const string TrustedProvenanceCondition =
         "vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)";
-    private static readonly string[] IntegrationProviders =
+    private static readonly string[] _integrationProviders =
         ["PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle"];
-    private static readonly string[] IntegrationTfms = ["net8.0", "net9.0", "net10.0"];
+    private static readonly string[] _integrationTfms = ["net8.0", "net9.0", "net10.0"];
 
     public static void Verify(string repositoryRoot, string contractPath, string workflowPath)
     {
@@ -33,7 +33,7 @@ public static class CiContractVerifier
         var contract = ReadContract(Path.GetFullPath(contractPath, root));
         var required = contract.RequiredJobs ?? throw new ReleaseVerificationException("CI contract requiredJobs must be an array.");
         Require(contract.SchemaVersion == "ci-required-v1", "CI contract schemaVersion must be ci-required-v1.");
-        Require(required.Count == RequiredJobIds.Length && required.Select(job => job.Job).SequenceEqual(RequiredJobIds),
+        Require(required.Count == _requiredJobIds.Length && required.Select(job => job.Job).SequenceEqual(_requiredJobIds),
             "CI contract must declare the exact seven required jobs in canonical order.");
 
         var document = LoadYaml(Path.GetFullPath(workflowPath, root));
@@ -44,9 +44,9 @@ public static class CiContractVerifier
         var permissions = Map(workflow["permissions"], "workflow.permissions", "contents");
         Require(Scalar(permissions["contents"], "workflow.permissions.contents") == "read", "Workflow contents permission must be read.");
 
-        var jobs = Map(workflow["jobs"], "workflow.jobs", JobIds);
-        RequireSequence(jobs.Keys, JobIds, "workflow jobs");
-        foreach (var jobId in JobIds)
+        var jobs = Map(workflow["jobs"], "workflow.jobs", _jobIds);
+        RequireSequence(jobs.Keys, _jobIds, "workflow jobs");
+        foreach (var jobId in _jobIds)
         {
             VerifyJob(jobId, Map(jobs[jobId], $"job {jobId}"), required);
         }
@@ -55,16 +55,15 @@ public static class CiContractVerifier
         VerifyTestInventory(root, jobs);
     }
 
-    private static void VerifyTestInventory(string root, IReadOnlyDictionary<string, YamlNode> jobs)
+    private static void VerifyTestInventory(string root, Dictionary<string, YamlNode> jobs)
     {
         var commands = string.Join('\n', jobs.Values.SelectMany(node => Nodes(Map(node, "job")["steps"], "steps"))
             .Select(node => Map(node, "step"))
             .Where(step => step.ContainsKey("run"))
             .Select(step => Scalar(step["run"], "run")));
-        var executed = IntegrationProviders.SelectMany(provider =>
-                System.Text.RegularExpressions.Regex.Matches(
-                    commands.Replace("${{ matrix.provider }}", provider, StringComparison.Ordinal),
-                    @"dotnet test (tests/\S+\.csproj)"))
+        var executed = _integrationProviders.SelectMany(provider =>
+                DotnetTestProjectRegex().Matches(
+                    commands.Replace("${{ matrix.provider }}", provider, StringComparison.Ordinal)))
             .Select(match => match.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
         var nonTestProjects = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -89,7 +88,7 @@ public static class CiContractVerifier
         }
     }
 
-    private static void VerifyTriggers(IReadOnlyDictionary<string, YamlNode> triggers)
+    private static void VerifyTriggers(Dictionary<string, YamlNode> triggers)
     {
         // No push trigger: the identical matrix already gated the pull request (and merge group),
         // so a post-merge rerun only duplicates spend. Direct pushes to main are excluded by branch
@@ -101,7 +100,7 @@ public static class CiContractVerifier
         Require(IsNull(triggers["workflow_dispatch"]), "Manual CI must use the same unconditional contract.");
     }
 
-    private static void VerifyConcurrency(IReadOnlyDictionary<string, YamlNode> concurrency)
+    private static void VerifyConcurrency(Dictionary<string, YamlNode> concurrency)
     {
         // Superseded pushes to a PR cancel their in-flight run; merge-group runs must never be
         // cancelled because the queue's verdict is the merge gate.
@@ -111,7 +110,7 @@ public static class CiContractVerifier
             "Only pull request runs may be cancelled by newer pushes.");
     }
 
-    private static void VerifyJob(string jobId, IReadOnlyDictionary<string, YamlNode> job, IReadOnlyList<CiRequiredJob> contract)
+    private static void VerifyJob(string jobId, Dictionary<string, YamlNode> job, IReadOnlyList<CiRequiredJob> contract)
     {
         var allowed = jobId switch
         {
@@ -147,11 +146,11 @@ public static class CiContractVerifier
             Require(requiredMatrix.Count == 2 && hasProviders && hasTfms
                     && requiredProviders is not null && requiredTfms is not null,
                 "CI contract integration matrix must contain exactly the non-null provider and tfm keys.");
-            RequireSequence(requiredProviders!, IntegrationProviders, "CI contract integration providers");
-            RequireSequence(requiredTfms!, IntegrationTfms, "CI contract integration TFMs");
+            RequireSequence(requiredProviders!, _integrationProviders, "CI contract integration providers");
+            RequireSequence(requiredTfms!, _integrationTfms, "CI contract integration TFMs");
             RequireSequence(Sequence(matrix["provider"], "integration.matrix.provider"), requiredProviders!, "integration providers");
             RequireSequence(Sequence(matrix["tfm"], "integration.matrix.tfm"), requiredTfms!, "integration TFMs");
-            Require(Sequence(matrix["provider"], "integration.matrix.provider").Count * Sequence(matrix["tfm"], "integration.matrix.tfm").Count == 15,
+            Require(Sequence(matrix["provider"], "integration.matrix.provider").Length * Sequence(matrix["tfm"], "integration.matrix.tfm").Length == 15,
                 "Integration matrix must contain exactly 15 provider/TFM legs.");
         }
         else
@@ -173,7 +172,7 @@ public static class CiContractVerifier
         {
             Require(Scalar(job["name"], "ci-required-v1.name") == "ci-required-v1", "Aggregator name must be ci-required-v1.");
             Require(Scalar(job["if"], "ci-required-v1.if") == "always()", "Aggregator must use if: always().");
-            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), RequiredJobIds, "aggregator needs");
+            RequireSequence(Sequence(job["needs"], "ci-required-v1.needs"), _requiredJobIds, "aggregator needs");
         }
         else
         {
@@ -181,7 +180,7 @@ public static class CiContractVerifier
         }
 
         var steps = Nodes(job["steps"], $"{jobId}.steps");
-        Require(steps.Count > 0, $"{jobId} must contain steps.");
+        Require(steps.Length > 0, $"{jobId} must contain steps.");
         foreach (var (node, index) in steps.Select((node, index) => (node, index)))
         {
             var step = Map(node, $"{jobId}.steps[{index}]");
@@ -255,7 +254,7 @@ public static class CiContractVerifier
             var aggregatorStep = Map(steps.Single(), "ci-required-v1 step", "name", "env", "run");
             var env = Map(aggregatorStep["env"], "ci-required-v1.env",
                 "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "BENCHMARK_SMOKE_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT", "DOCS_RESULT");
-            var expected = RequiredJobIds.ToDictionary(
+            var expected = _requiredJobIds.ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}",
                 StringComparer.Ordinal);
@@ -266,7 +265,7 @@ public static class CiContractVerifier
 
     private const string PackageConsumerCommand = "./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath .artifacts/downloaded -ResultsPath \"$env:RUNNER_TEMP/package-consumers\" -Commit ((git rev-parse HEAD).Trim())";
 
-    private static void VerifyRequiredCommands(IReadOnlyDictionary<string, YamlNode> jobs)
+    private static void VerifyRequiredCommands(Dictionary<string, YamlNode> jobs)
     {
         RequireRuns(jobs, "build-and-unit",
             "dotnet restore Inquiry.slnx --locked-mode",
@@ -304,7 +303,7 @@ public static class CiContractVerifier
         Require(!workflowText.Contains("dotnet nuget push", StringComparison.OrdinalIgnoreCase), "Normal CI must not publish packages.");
     }
 
-    private static void RequireRuns(IReadOnlyDictionary<string, YamlNode> jobs, string jobId, params string[] expected)
+    private static void RequireRuns(Dictionary<string, YamlNode> jobs, string jobId, params string[] expected)
     {
         var job = Map(jobs[jobId], jobId);
         var actual = Nodes(job["steps"], $"{jobId}.steps")
@@ -315,13 +314,13 @@ public static class CiContractVerifier
         RequireSequence(actual, expected.Select(NormalizeRun), $"{jobId} commands");
     }
 
-    private static void VerifyAction(string uses, IReadOnlyDictionary<string, YamlNode> step, string jobId)
+    private static void VerifyAction(string uses, Dictionary<string, YamlNode> step, string jobId)
     {
         var separator = uses.LastIndexOf('@');
         Require(separator > 0, $"Invalid GitHub Action reference: {uses}.");
         var repository = uses[..separator];
         var reference = uses[(separator + 1)..];
-        Require(ApprovedActions.TryGetValue(repository, out var approved) && reference == approved,
+        Require(_approvedActions.TryGetValue(repository, out var approved) && reference == approved,
             $"GitHub Action is not on the exact approved Node 24 SHA allowlist: {uses}.");
         Require(!step.ContainsKey("env"), $"Action {repository} must not receive step environment overrides.");
         if (repository == "actions/checkout")
@@ -344,10 +343,13 @@ public static class CiContractVerifier
             var with = Map(withNode!, "setup-dotnet.with", "global-json-file", "dotnet-version");
             Require(Scalar(with["global-json-file"], "setup-dotnet.global-json-file") == "global.json",
                 $"{jobId} setup-dotnet must install the SDK pinned in global.json.");
-            var expectedVersions = jobId is "aot-smoke" ? "10.0.x"
-                : jobId is "docs" ? "8.0.x"
-                : jobId is "benchmark-smoke" ? "8.0.x\n10.0.x"
-                : "8.0.x\n9.0.x\n10.0.x";
+            var expectedVersions = jobId switch
+            {
+                "aot-smoke" => "10.0.x",
+                "docs" => "8.0.x",
+                "benchmark-smoke" => "8.0.x\n10.0.x",
+                _ => "8.0.x\n9.0.x\n10.0.x"
+            };
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,
                 $"{jobId} setup-dotnet SDK inputs drifted.");
         }
@@ -403,7 +405,7 @@ public static class CiContractVerifier
     private static void VerifyStepMappings(
         string jobId,
         int stepIndex,
-        IReadOnlyDictionary<string, YamlNode> step)
+        Dictionary<string, YamlNode> step)
     {
         if (step.ContainsKey("uses"))
         {
@@ -452,7 +454,7 @@ public static class CiContractVerifier
                 {
                     ["ARTIFACT_DIGEST"] = "${{ needs.package-producer.outputs.artifact-digest }}"
                 },
-            ("ci-required-v1", "Enforce every required job and matrix leg") => RequiredJobIds.ToDictionary(
+            ("ci-required-v1", "Enforce every required job and matrix leg") => _requiredJobIds.ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}", StringComparer.Ordinal),
             _ => null
@@ -534,7 +536,7 @@ public static class CiContractVerifier
         }
     }
 
-    private static IReadOnlyDictionary<string, YamlNode> Map(YamlNode node, string context, params string[] exactKeys)
+    private static Dictionary<string, YamlNode> Map(YamlNode node, string context, params string[] exactKeys)
     {
         Require(node is YamlMappingNode, $"{context} must be a mapping.");
         var result = new Dictionary<string, YamlNode>(StringComparer.Ordinal);
@@ -550,7 +552,7 @@ public static class CiContractVerifier
         return result;
     }
 
-    private static void RequireNoUnknown(IReadOnlyDictionary<string, YamlNode> map, string context, params string[] allowed)
+    private static void RequireNoUnknown(Dictionary<string, YamlNode> map, string context, params string[] allowed)
     {
         var allowedSet = allowed.ToHashSet(StringComparer.Ordinal);
         var unknown = map.Keys.FirstOrDefault(key => !allowedSet.Contains(key));
@@ -558,13 +560,13 @@ public static class CiContractVerifier
         Require(map.ContainsKey("steps") || context.Contains("steps[", StringComparison.Ordinal), $"{context} is missing steps.");
     }
 
-    private static IReadOnlyList<YamlNode> Nodes(YamlNode node, string context)
+    private static YamlNode[] Nodes(YamlNode node, string context)
     {
         Require(node is YamlSequenceNode, $"{context} must be a sequence.");
         return ((YamlSequenceNode)node).Children.ToArray();
     }
 
-    private static IReadOnlyList<string> Sequence(YamlNode node, string context) =>
+    private static string[] Sequence(YamlNode node, string context) =>
         Nodes(node, context).Select(item => Scalar(item, context)).ToArray();
 
     private static string Scalar(YamlNode node, string context)
@@ -582,6 +584,9 @@ public static class CiContractVerifier
         var expectedArray = expected.ToArray();
         Require(actualArray.SequenceEqual(expectedArray), $"Unexpected {subject}. Expected [{string.Join(", ", expectedArray)}], found [{string.Join(", ", actualArray)}].");
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"dotnet test (tests/\S+\.csproj)", System.Text.RegularExpressions.RegexOptions.None, 1000)]
+    private static partial System.Text.RegularExpressions.Regex DotnetTestProjectRegex();
 
     private static void Require(bool condition, string message)
     {

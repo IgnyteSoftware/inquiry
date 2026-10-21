@@ -38,15 +38,8 @@ internal static class BoundedProcess
             throw new ArgumentException("Bounded processes must redirect both standard output and standard error.", nameof(startInfo));
         }
 
-        if (executionTimeout <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(executionTimeout));
-        }
-
-        if (terminationTimeout <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(terminationTimeout));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(executionTimeout, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(terminationTimeout, TimeSpan.Zero);
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Could not start process '{startInfo.FileName}'.");
