@@ -136,7 +136,10 @@ public static class InquiryTvpParameter
     private sealed class TvpRecordEnumerable<T> : IEnumerable<SqlDataRecord>, IEnumerator<SqlDataRecord>, IInquiryExecutionResource
     {
         private delegate void ValueWriterDelegate(SqlDataRecord record, T value, InquiryTvpDescriptor descriptor, int index);
+        // One writer per closed element type is intended.
+#pragma warning disable S2743
         private static readonly ValueWriterDelegate _valueWriter = CreateValueWriter();
+#pragma warning restore S2743
         private IEnumerator<T>? _source;
         private readonly InquiryTvpDescriptor _descriptor;
         private SqlDataRecord? _current;

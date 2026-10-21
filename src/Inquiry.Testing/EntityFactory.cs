@@ -106,10 +106,7 @@ public sealed class EntityFactory<TEntity>
     /// </summary>
     public IReadOnlyList<TEntity> BuildMany(int count, params string[] states)
     {
-        if (count < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(count));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
 
         ArgumentNullException.ThrowIfNull(states);
 

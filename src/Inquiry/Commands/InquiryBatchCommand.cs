@@ -144,6 +144,8 @@ public readonly struct InquiryBatchCommand<TItem>
     /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>
     internal bool PreferPrepareOnce { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2208:Instantiate argument exceptions correctly", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
     internal void Validate()
     {
         if (CommandTextFactory is null && string.IsNullOrWhiteSpace(CommandText))
@@ -190,6 +192,8 @@ public readonly struct InquiryBatchCommand<TItem>
         => new(GetChunkCommandText(chunk.Count), new InquiryBatchChunk<TItem>(this, chunk), static (dbCommand, state) =>
             state.Command.BindChunk!(dbCommand, state.Chunk), CommandType);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "ParamName names the constructor argument whose factory returned empty text, which callers observe.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2208:Instantiate argument exceptions correctly", Justification = "ParamName names the constructor argument whose factory returned empty text, which callers observe.")]
     internal string GetChunkCommandText(int chunkCount)
     {
         var commandText = CommandTextFactory is null ? CommandText : CommandTextFactory(chunkCount);

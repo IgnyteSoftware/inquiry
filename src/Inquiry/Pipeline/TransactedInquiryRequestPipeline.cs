@@ -169,6 +169,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "The lease shows the caller already holds the exclusive operation and selects this overload.")]
     internal async Task ReleaseSavepointAsync(string savepointName, InFlightLease lease, CancellationToken cancellationToken)
     {
         await _transaction.ReleaseAsync(savepointName, cancellationToken).ConfigureAwait(false);
@@ -183,6 +184,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "The lease shows the caller already holds the exclusive operation and selects this overload.")]
     internal async Task RollbackToSavepointAsync(string savepointName, InFlightLease lease, CancellationToken cancellationToken)
     {
         await _transaction.RollbackAsync(savepointName, cancellationToken).ConfigureAwait(false);
@@ -412,6 +414,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1854:Unused assignments should be removed", Justification = "False positive: primaryException is read in the finally block, which Sonar does not track through async iterators.")]
     public async IAsyncEnumerable<T> QueryAsync<T>(
         InquiryCommand command,
         IInquiryEntityMaterializer<T> materializer,
@@ -426,8 +430,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         DbDataReader? reader = null;
         // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
         // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
-        // becomes permanently un-committable. A command that was created is disposed in the finally;
-        // matches the buffered overloads.
+        // becomes permanently un-committable. A command that was created is disposed in the finally,
+        // which matches the buffered overloads.
         DbCommand? dbCommand = null;
         Exception? primaryException = null;
         try
@@ -548,6 +552,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
     // ---- Struct-materializer overloads (generated-store path) -----------------------------
 
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1854:Unused assignments should be removed", Justification = "False positive: primaryException is read in the finally block, which Sonar does not track through async iterators.")]
     public async IAsyncEnumerable<T> QueryAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -561,8 +567,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         DbDataReader? reader = null;
         // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
         // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
-        // becomes permanently un-committable. A command that was created is disposed in the finally;
-        // matches the buffered overloads.
+        // becomes permanently un-committable. A command that was created is disposed in the finally,
+        // which matches the buffered overloads.
         DbCommand? dbCommand = null;
         Exception? primaryException = null;
         try
@@ -861,7 +867,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken, -1);
+        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, -1, cancellationToken);
 
     public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
@@ -872,7 +878,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
         command.Validate();
-        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken, capacityHint);
+        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, capacityHint, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -1067,6 +1073,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         return QueryValidatingSingleGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1854:Unused assignments should be removed", Justification = "False positive: primaryException is read in the finally block, which Sonar does not track through async iterators.")]
     private async IAsyncEnumerable<T> QueryGeneratedCore<T, TArgs, TMaterializer>(
         string commandText,
         CommandType commandType,
@@ -1085,8 +1093,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         DbDataReader? reader = null;
         // Create the command INSIDE the try so a throw from CreateCommand()/InitializeCommand still runs
         // the finally and releases the in-flight slot — otherwise the slot leaks and the transaction
-        // becomes permanently un-committable. A command that was created is disposed in the finally;
-        // matches the buffered overloads.
+        // becomes permanently un-committable. A command that was created is disposed in the finally,
+        // which matches the buffered overloads.
         DbCommand? dbCommand = null;
         Exception? primaryException = null;
         try
@@ -1217,8 +1225,8 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         TMaterializer materializer,
-        CancellationToken cancellationToken,
-        int capacityHint)
+        int capacityHint,
+        CancellationToken cancellationToken)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {

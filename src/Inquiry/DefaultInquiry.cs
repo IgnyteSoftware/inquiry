@@ -290,7 +290,7 @@ internal sealed class DefaultInquiry : IInquiry
             options,
             (duration, openError) => RecordBulkConnectionOpen(activity, dbSystem, enlisted, duration, openError),
             (duration, rowCount) => RecordBulkCopy(activity, dbSystem, enlisted, duration, rowCount));
-        IDisposable? operationLease = null;
+        Inquiry.Pipeline.TransactedInquiryRequestPipeline.InFlightLease? operationLease = null;
         try
         {
             operationLease = pipeline?.EnterExclusiveOperation();

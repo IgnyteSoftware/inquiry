@@ -11,6 +11,7 @@ namespace Inquiry.BulkCopy;
 /// <see cref="FieldCount"/>, name/ordinal lookup — and throws for everything else.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1010:Generic interface should also be implemented", Justification = "Published API. The reader derives from DbDataReader, whose IEnumerable contract bulk-copy APIs consume; adding IEnumerable<T> would change the public surface.")]
 public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     where TEntity : class
 {
@@ -123,7 +124,10 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
             }
         }
 
+        // DbDataReader.GetOrdinal documents IndexOutOfRangeException for an unknown name.
+#pragma warning disable CA2201, S112
         throw new IndexOutOfRangeException($"Column '{name}' is not part of this bulk insert.");
+#pragma warning restore CA2201, S112
     }
 
     private TEntity Current => _current ?? throw new InvalidOperationException("Read() has not advanced to a row.");
@@ -325,26 +329,18 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
         ThrowIfClosed();
         if ((uint)ordinal >= (uint)FieldCount)
         {
+            // DbDataReader ordinal accessors document IndexOutOfRangeException for a bad ordinal.
+#pragma warning disable CA2201, S112
             throw new IndexOutOfRangeException($"Column ordinal {ordinal} is outside the bulk insert shape.");
+#pragma warning restore CA2201, S112
         }
     }
 
     private static void ValidateCopyArguments<T>(long dataOffset, T[]? buffer, int bufferOffset, int length)
     {
-        if (dataOffset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(dataOffset));
-        }
-
-        if (bufferOffset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(bufferOffset));
-        }
-
-        if (length < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(length));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(dataOffset);
+        ArgumentOutOfRangeException.ThrowIfNegative(bufferOffset);
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
 
         if (buffer is not null && (bufferOffset > buffer.Length || length > buffer.Length - bufferOffset))
         {
@@ -354,9 +350,6 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
 
     private void ThrowIfClosed()
     {
-        if (_isClosed)
-        {
-            throw new ObjectDisposedException(GetType().Name);
-        }
+        ObjectDisposedException.ThrowIf(_isClosed, this);
     }
 }

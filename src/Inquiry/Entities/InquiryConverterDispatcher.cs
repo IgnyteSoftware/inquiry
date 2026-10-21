@@ -10,11 +10,13 @@ public static class InquiryConverterDispatcher<TConverter, TModel, TProvider>
 {
     /// <summary>Converts a model value to its provider representation.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Published API called by generated code; the generic type arguments select the converter at compile time.")]
     public static TProvider ToProvider(TModel model)
         => InquiryConverterCache<TConverter>.Instance.ToProvider(model);
 
     /// <summary>Converts a provider value to its model representation.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Published API called by generated code; the generic type arguments select the converter at compile time.")]
     public static TModel FromProvider(TProvider provider)
         => InquiryConverterCache<TConverter>.Instance.FromProvider(provider);
 }

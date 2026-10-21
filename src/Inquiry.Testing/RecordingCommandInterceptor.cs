@@ -119,12 +119,10 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
         }
 
         var commands = Commands;
-        foreach (var command in commands)
+        var match = commands.FirstOrDefault(command => command.CommandText.Contains(commandTextSubstring, StringComparison.Ordinal));
+        if (match is not null)
         {
-            if (command.CommandText.Contains(commandTextSubstring, StringComparison.Ordinal))
-            {
-                return command;
-            }
+            return match;
         }
 
         throw new InvalidOperationException(
@@ -144,13 +142,10 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
         }
 
         var commands = Commands;
-        foreach (var command in commands)
+        if (commands.Any(command => command.CommandText.Contains(commandTextSubstring, StringComparison.Ordinal)))
         {
-            if (command.CommandText.Contains(commandTextSubstring, StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Expected no command containing \"" + commandTextSubstring + "\" to have executed, but one did." + DescribeCommands(commands));
-            }
+            throw new InvalidOperationException(
+                "Expected no command containing \"" + commandTextSubstring + "\" to have executed, but one did." + DescribeCommands(commands));
         }
     }
 

@@ -16,10 +16,7 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
     internal InquiryBatchChunkReader(IEnumerable<T> items, int maxBatchSize, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
-        if (maxBatchSize <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -44,7 +41,7 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         // returned or the batch transaction commits — including the call that returns false after the
         // final chunk. That is what makes a driver's post-cancel lying success (a KILL-interrupted
         // MySQL statement reporting normal completion) unable to complete a cancelled batch, without
-        // per-execute registrations on the hot loop. BatchCancellationRaceTests pins this end to end;
+        // per-execute registrations on the hot loop. BatchCancellationRaceTests pins this end to end, so
         // do not make this check conditional.
         _cancellationToken.ThrowIfCancellationRequested();
         if (_items is not null)

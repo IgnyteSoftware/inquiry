@@ -21,6 +21,7 @@ public sealed class InquiryBulkInsertOptions
     /// <summary>Controls whether the call requires an ambient or dedicated connection.</summary>
     public InquiryBulkInsertConnectionBehavior ConnectionBehavior { get; set; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "Validation is deferred; ParamName names the option property the caller set, which callers observe.")]
     internal void Validate()
     {
         if (Timeout is { } timeout && (timeout <= TimeSpan.Zero || timeout.TotalSeconds > int.MaxValue))

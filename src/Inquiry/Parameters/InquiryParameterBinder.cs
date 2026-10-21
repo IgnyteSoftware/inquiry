@@ -128,6 +128,9 @@ internal static class InquiryParameterBinder
             }
         }
 
+        // Matches DbParameterCollection, which throws IndexOutOfRangeException for an unknown name.
+#pragma warning disable CA2201, S112
         throw new IndexOutOfRangeException($"The command does not contain a read-back parameter named '{name}'.");
+#pragma warning restore CA2201, S112
     }
 }

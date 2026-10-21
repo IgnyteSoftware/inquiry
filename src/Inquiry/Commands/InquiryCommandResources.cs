@@ -81,53 +81,6 @@ public static class InquiryCommandResources
     private static int GetSignalIndex(DbCommand command)
         => RuntimeHelpers.GetHashCode(command) & ResourceSignalMask;
 
-    private static void AddResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
-    {
-        lock (_resourceSignalGate)
-        {
-            var current = _resourceSignals[signalIndex];
-            var next = current is null ? new WeakReference<DbCommand>[1] : new WeakReference<DbCommand>[current.Length + 1];
-            if (current is not null)
-            {
-                Array.Copy(current, next, current.Length);
-            }
-
-            next[^1] = signal;
-            Volatile.Write(ref _resourceSignals[signalIndex], next);
-        }
-    }
-
-    private static void RemoveResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
-    {
-        lock (_resourceSignalGate)
-        {
-            var current = _resourceSignals[signalIndex];
-            if (current is null)
-            {
-                return;
-            }
-
-            if (current.Length == 1)
-            {
-                Volatile.Write(ref _resourceSignals[signalIndex], null);
-                return;
-            }
-
-            var next = new WeakReference<DbCommand>[current.Length - 1];
-            var destination = 0;
-            foreach (var candidate in current)
-            {
-                if (ReferenceEquals(candidate, signal))
-                {
-                    continue;
-                }
-
-                next[destination++] = candidate;
-            }
-            Volatile.Write(ref _resourceSignals[signalIndex], next);
-        }
-    }
-
     /// <summary>
     /// Releases one execution's resources without allocating a per-command owner on the success path.
     /// The primary exception is not rethrown here unless cleanup also fails; the caller's active throw
@@ -225,10 +178,7 @@ public static class InquiryCommandResources
         {
             lock (_gate)
             {
-                if (_items is null)
-                {
-                    throw new ObjectDisposedException(nameof(ResourceSet));
-                }
+                ObjectDisposedException.ThrowIf(_items is null, this);
 
                 _items.Add(resource);
             }
@@ -242,6 +192,7 @@ public static class InquiryCommandResources
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3218:Inner class members should not shadow outer class static or type members", Justification = "IDisposable.Dispose; the outer Dispose(DbCommand) is a different public operation.")]
         public void Dispose()
         {
             ReleaseSignal();
@@ -277,6 +228,53 @@ public static class InquiryCommandResources
             if (Interlocked.Exchange(ref _signalReleased, 1) == 0)
             {
                 RemoveResourceSignal(_signalIndex, _signal);
+            }
+        }
+
+        private static void AddResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
+        {
+            lock (_resourceSignalGate)
+            {
+                var current = _resourceSignals[signalIndex];
+                var next = current is null ? new WeakReference<DbCommand>[1] : new WeakReference<DbCommand>[current.Length + 1];
+                if (current is not null)
+                {
+                    Array.Copy(current, next, current.Length);
+                }
+
+                next[^1] = signal;
+                Volatile.Write(ref _resourceSignals[signalIndex], next);
+            }
+        }
+
+        private static void RemoveResourceSignal(int signalIndex, WeakReference<DbCommand> signal)
+        {
+            lock (_resourceSignalGate)
+            {
+                var current = _resourceSignals[signalIndex];
+                if (current is null)
+                {
+                    return;
+                }
+
+                if (current.Length == 1)
+                {
+                    Volatile.Write(ref _resourceSignals[signalIndex], null);
+                    return;
+                }
+
+                var next = new WeakReference<DbCommand>[current.Length - 1];
+                var destination = 0;
+                foreach (var candidate in current)
+                {
+                    if (ReferenceEquals(candidate, signal))
+                    {
+                        continue;
+                    }
+
+                    next[destination++] = candidate;
+                }
+                Volatile.Write(ref _resourceSignals[signalIndex], next);
             }
         }
     }

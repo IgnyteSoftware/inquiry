@@ -85,7 +85,7 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             : _retryingOpener.OpenAsync(_openPrimary, cancellationToken);
     }
 
-    private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
+    private static async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
     {
         var connection = new OracleConnection(connectionString);
         try
@@ -543,12 +543,20 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
             return true;
         }
 
-        var quotePrefixLength = (c == 'q' || c == 'Q') && index + 2 < text.Length && text[index + 1] == '\''
-            ? 2
-            : (c == 'n' || c == 'N') && index + 3 < text.Length
-                && (text[index + 1] == 'q' || text[index + 1] == 'Q') && text[index + 2] == '\''
-                    ? 3
-                    : 0;
+        int quotePrefixLength;
+        if ((c == 'q' || c == 'Q') && index + 2 < text.Length && text[index + 1] == '\'')
+        {
+            quotePrefixLength = 2;
+        }
+        else if ((c == 'n' || c == 'N') && index + 3 < text.Length
+            && (text[index + 1] == 'q' || text[index + 1] == 'Q') && text[index + 2] == '\'')
+        {
+            quotePrefixLength = 3;
+        }
+        else
+        {
+            quotePrefixLength = 0;
+        }
         if (quotePrefixLength != 0)
         {
             var opener = text[index + quotePrefixLength];

@@ -59,7 +59,6 @@ public static class InquirySql
         if (type.IsEnum)
         {
             value = System.Convert.ChangeType(value, Enum.GetUnderlyingType(type), CultureInfo.InvariantCulture);
-            type = value.GetType();
         }
 
         return value switch

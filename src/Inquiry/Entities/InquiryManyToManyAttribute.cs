@@ -84,12 +84,9 @@ public sealed class InquiryManyToManyAttribute : Attribute
             throw new ArgumentException("At least one child foreign-key property name is required.", nameof(childForeignKeyProperties));
         }
 
-        foreach (var name in childForeignKeyProperties)
+        if (childForeignKeyProperties.Any(string.IsNullOrWhiteSpace))
         {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                throw new ArgumentException("Child foreign-key property names cannot be empty.", nameof(childForeignKeyProperties));
-            }
+            throw new ArgumentException("Child foreign-key property names cannot be empty.", nameof(childForeignKeyProperties));
         }
 
         ParentForeignKeyProperty = parentForeignKeyProperty;

@@ -61,6 +61,7 @@ public static class InquiryJsonArrayParameter
         return estimatedCapacity <= int.MaxValue ? (int)estimatedCapacity : int.MaxValue;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendBoxedValue<T>(StringBuilder sb, T value)
     {
         if (value is null)
@@ -147,7 +148,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
-    private static object EnumStorageValue(object value, System.Type underlyingType)
+    private static long EnumStorageValue(object value, System.Type underlyingType)
         => System.Type.GetTypeCode(underlyingType) switch
         {
             TypeCode.SByte => unchecked((byte)System.Convert.ToSByte(value, CultureInfo.InvariantCulture)),
@@ -163,6 +164,7 @@ public static class InquiryJsonArrayParameter
 
     // Reflection is paid once per closed T, never once per element. The cached facts are trim/AOT safe:
     // no members are discovered or invoked dynamically.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2743:Static fields should not be used in generic types", Justification = "One cache per closed element type is intended.")]
     private static class ElementMetadata<T>
     {
         internal static readonly System.Type _type = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
@@ -368,6 +370,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendString(StringBuilder sb, string? value)
     {
         if (value is null)
@@ -412,6 +415,7 @@ public static class InquiryJsonArrayParameter
         AppendFormatted(sb, value, "R");
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullable<T>(StringBuilder sb, T? value)
         where T : struct, System.ISpanFormattable
     {
@@ -425,6 +429,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullableSByte(StringBuilder sb, sbyte? value)
     {
         if (value.HasValue)
@@ -437,6 +442,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullableUInt16(StringBuilder sb, ushort? value)
     {
         if (value.HasValue)
@@ -449,6 +455,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullableUInt32(StringBuilder sb, uint? value)
     {
         if (value.HasValue)
@@ -461,6 +468,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullableUInt64(StringBuilder sb, ulong? value)
     {
         if (value.HasValue)
@@ -473,6 +481,7 @@ public static class InquiryJsonArrayParameter
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3398:\"private\" methods called only by inner classes should be moved to those classes", Justification = "Kept outside the generic ElementWriter<T> so the helper is not compiled once per closed element type.")]
     private static void AppendNullableFinite(StringBuilder sb, float? value)
     {
         if (value.HasValue)

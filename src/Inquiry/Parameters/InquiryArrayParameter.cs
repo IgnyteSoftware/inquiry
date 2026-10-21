@@ -146,6 +146,7 @@ public static class InquiryArrayParameter
         return list.ToArray();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3267:Loops should be simplified with \"LINQ\" expressions", Justification = "Runs per command; the loop avoids LINQ iterator and delegate allocations.")]
     private static TResult[] MapNonNull<T, TResult>(IEnumerable<T>? values, System.Func<T, TResult> selector)
     {
         if (values is null)
@@ -167,6 +168,7 @@ public static class InquiryArrayParameter
         return converted.ToArray();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3267:Loops should be simplified with \"LINQ\" expressions", Justification = "Runs per command; the loop avoids LINQ iterator and delegate allocations.")]
     private static TUnderlying[] ConvertEnumElements<T, TUnderlying>(IEnumerable<T>? values)
         where TUnderlying : struct
     {

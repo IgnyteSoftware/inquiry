@@ -85,6 +85,7 @@ internal interface IInquiryRequestPipeline
     /// Buffered query with a struct materializer (JIT-specialized). <paramref name="capacityHint"/>
     /// (when &gt;= 0) pre-sizes the result list to the known row count.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
     Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -122,6 +123,7 @@ internal interface IInquiryRequestPipeline
     }
 
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
     Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
         TMaterializer materializer,

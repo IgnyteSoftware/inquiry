@@ -41,6 +41,7 @@ internal sealed class GridCommandInterception
 
     // The grid records its own QUERY_MULTIPLE span and duration metric. The built-in telemetry
     // interceptor is skipped here, because it would record each grid a second time.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3267:Loops should be simplified with \"LINQ\" expressions", Justification = "Runs per command; the loop avoids LINQ iterator and delegate allocations.")]
     private static IInquiryCommandInterceptor[]? Select(IInquiryCommandInterceptor[] interceptors)
     {
         var count = 0;

@@ -284,7 +284,10 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     {
         try
         { await rollbackTask.ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Background cleanup has no caller to report to; the provider resources are still released below.
+        }
         await DisposeProviderResourcesUnboundedObservedAsync().ConfigureAwait(false);
     }
 
@@ -292,27 +295,42 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     {
         try
         { await transactionDisposeTask.ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Background cleanup has no caller to report to; the connection is still disposed below.
+        }
         try
         { await _connection.DisposeAsync().ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Background cleanup has no caller to report to.
+        }
     }
 
     private async Task DisposeProviderResourcesUnboundedObservedAsync()
     {
         try
         { await _transaction.DisposeAsync().ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Background cleanup has no caller to report to; the connection is still disposed below.
+        }
         try
         { await _connection.DisposeAsync().ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Background cleanup has no caller to report to.
+        }
     }
 
     private static async Task ObserveBackgroundAsync(Task task)
     {
         try
         { await task.ConfigureAwait(false); }
-        catch { }
+        catch
+        {
+            // Observes a background task so its failure does not surface as an unobserved exception.
+        }
     }
 
     private static void ThrowFailures(List<Exception> failures, string aggregateMessage)

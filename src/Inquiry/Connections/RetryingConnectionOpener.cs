@@ -89,7 +89,8 @@ internal sealed class RetryingConnectionOpener
     {
         ArgumentNullException.ThrowIfNull(open);
 
-        for (var attempt = 1; ; attempt++)
+        var attempt = 1;
+        while (true)
         {
             try
             {
@@ -99,6 +100,8 @@ internal sealed class RetryingConnectionOpener
             {
                 await _delay(NextDelay(attempt), cancellationToken).ConfigureAwait(false);
             }
+
+            attempt++;
         }
     }
 

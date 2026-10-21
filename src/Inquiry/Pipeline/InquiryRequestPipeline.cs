@@ -269,6 +269,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // ---- Class-materializer overloads (ad-hoc IInquiry path) -----------------------------
 
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
     public async IAsyncEnumerable<T> QueryAsync<T>(
         InquiryCommand command,
         IInquiryEntityMaterializer<T> materializer,
@@ -396,6 +397,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
     // a shared inner method) preserves that inlining.
 
     /// <inheritdoc />
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
     public async IAsyncEnumerable<T> QueryAsync<T, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -680,7 +682,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, cancellationToken, -1);
+        => QueryListGeneratedCore<T, TArgs, TMaterializer>(commandText, CommandType.Text, args, bindParameters, materializer, -1, cancellationToken);
 
     public Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
@@ -691,7 +693,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
         command.Validate();
-        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, cancellationToken, capacityHint);
+        return QueryListGeneratedCore<T, TArgs, TMaterializer>(command.CommandText, command.CommandType, command.Args, command.BindParameters, materializer, capacityHint, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -1097,6 +1099,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Critical Code Smell", "S4456:Parameter validation in yielding methods should be wrapped", Justification = "Published behaviour: argument errors surface on first enumeration. Splitting the method would make them throw eagerly.")]
     private async IAsyncEnumerable<T> QueryGeneratedCore<T, TArgs, TMaterializer>(
         string commandText,
         CommandType commandType,
@@ -1233,8 +1236,8 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         TArgs args,
         Action<DbCommand, TArgs> bindParameters,
         TMaterializer materializer,
-        CancellationToken cancellationToken,
-        int capacityHint)
+        int capacityHint,
+        CancellationToken cancellationToken)
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {

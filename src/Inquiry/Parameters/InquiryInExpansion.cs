@@ -96,10 +96,7 @@ public static class InquiryInExpansion
 
         ArgumentNullException.ThrowIfNull(parameterName);
 
-        if (maxParameterCount < 1)
-        {
-            throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
-        }
+        System.ArgumentOutOfRangeException.ThrowIfLessThan(maxParameterCount, 1);
 
         var sentinel = "(" + parameterName + ")";
 
@@ -135,13 +132,16 @@ public static class InquiryInExpansion
                 placeholders.Append(", ");
             }
 
-            var elementName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var baseName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var elementName = baseName;
+            var suffixLength = 0;
             // SQL reserves parameters that later binders have not added yet. Check existing bindings
             // too, so separate expansions cannot reuse a name after its sentinel was replaced.
             while (command.CommandText.Contains(elementName, System.StringComparison.OrdinalIgnoreCase)
                 || !usedNames.Add(elementName))
             {
-                elementName += "_";
+                suffixLength++;
+                elementName = baseName + new string('_', suffixLength);
             }
             placeholders.Append(elementName);
 
@@ -260,6 +260,6 @@ public static class InquiryInExpansion
         var index = text.IndexOf(search, System.StringComparison.Ordinal);
         return index < 0
             ? text
-            : text.Substring(0, index) + replacement + text.Substring(index + search.Length);
+            : string.Concat(text.AsSpan(0, index), replacement, text.AsSpan(index + search.Length));
     }
 }

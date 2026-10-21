@@ -113,7 +113,10 @@ public static class InquiryFilterContext
             {
                 if (ReferenceEquals(frame, _frame))
                 {
+                    // Disposing out of order would corrupt the ambient stack, so misuse fails loudly.
+#pragma warning disable S3877
                     throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+#pragma warning restore S3877
                 }
             }
         }

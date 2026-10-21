@@ -107,6 +107,7 @@ public interface IInquiry
     /// pre-sizes the result <c>List</c> to avoid grow-reallocations — the generated paged/keyset readers
     /// pass the known row count (limit, or pageSize + 1).
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -117,6 +118,7 @@ public interface IInquiry
 
     /// <summary>Buffers rows from an immutable generated command definition.</summary>
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
     Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
         TMaterializer materializer,
