@@ -120,12 +120,12 @@ public static class CiContractVerifier
             "package-producer" => new[] { "runs-on", "timeout-minutes", "permissions", "outputs", "steps" },
             "package-provenance" => new[] { "if", "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "package-verifier" => new[] { "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
-            "ci-required-v1" => new[] { "name", "if", "needs", "runs-on", "steps" },
-            "aot-smoke" or "docs" => new[] { "runs-on", "timeout-minutes", "steps" },
+            "ci-required-v1" => new[] { "name", "if", "needs", "runs-on", "timeout-minutes", "steps" },
+            "build-and-unit" or "aot-smoke" or "docs" => new[] { "runs-on", "timeout-minutes", "steps" },
             _ => new[] { "runs-on", "steps" }
         };
         RequireNoUnknown(job, $"job {jobId}", allowed);
-        Require(Scalar(job["runs-on"], $"{jobId}.runs-on") == "ubuntu-latest", $"{jobId} must run on ubuntu-latest.");
+        Require(Scalar(job["runs-on"], $"{jobId}.runs-on") == "ubuntu-24.04", $"{jobId} must run on ubuntu-24.04.");
         Require(!job.ContainsKey("continue-on-error"), $"{jobId} must not continue on error.");
 
         if (jobId == "integration")

@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   integration-full:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
       # Docker is available on GitHub runners; a silently-skipped suite must not pass a scheduled
