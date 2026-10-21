@@ -196,3 +196,10 @@ dotnet_diagnostic.IDE0060.severity = suggestion
 # Files under tests/ and benchmarks/ still use test naming, so CA1707 does not apply there either.
 [{tests,benchmarks}/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+# Inquiry.Benchmarks.DLG holds third-party DLG generator output kept only as a benchmark comparison.
+# docs/decisions.md records this exception. Compiler diagnostics still apply.
+[benchmarks/Inquiry.Benchmarks.DLG/*.cs]
+generated_code = true
+# Sonar does not read generated_code, so its rules are turned off here explicitly.
+dotnet_analyzer_diagnostic.severity = none

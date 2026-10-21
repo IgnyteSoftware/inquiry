@@ -35,8 +35,8 @@ The solution file is named `Ignyte.<Product>.slnx` and sits at the repository ro
 - Do not add blanket `NoWarn`, `WarningsNotAsErrors`, or analyzer suppressions beyond the SDK's existing defaults. Suppress a rule only with a local explanation and an owner-approved exception.
 - `Directory.Build.props` turns on `GenerateDocumentationFile` so the build enforces `IDE0005` (unused usings). It suppresses `CS1591` (missing XML comment) repository-wide. This is an approved central suppression. A project that ships a public API may opt back in to `CS1591` with exactly `<NoWarn>$(NoWarn.Replace('CS1591', ''))</NoWarn>` in its project file. This line removes a suppression, so it does not need an exception. An `.editorconfig` severity or `WarningsAsErrors` entry does not override the central `NoWarn`.
 - Doc output also makes the compiler check existing XML comments. `CS1572`, `CS1573`, `CS1574`, `CS1587`, and related errors are not suppressed. Fix the comment, or change a stray `///` to `//`.
-- Test code does not report `CA1707`, so test names such as `Method_Scenario_Expected` build. `Directory.Build.targets` suppresses it for projects with `IsTestProject` or `IsTestingPlatformApplication`, and `.editorconfig` turns it off for files under `tests/`. This is an approved central suppression. Production projects keep `CA1707`.
-- `CA1848` and `CA1873` (use `LoggerMessage` delegates) are suggestions, not errors. Prefer `[LoggerMessage]` in hot paths; converting existing log calls is not required.
+- Test and benchmark code does not report `CA1707`, so names such as `Method_Scenario_Expected` and `SelectAll_AdoNet` build. `Directory.Build.targets` suppresses it for projects with `IsTestProject` or `IsTestingPlatformApplication` and for projects whose name contains `.Benchmarks`, and `.editorconfig` turns it off for files under `tests/` and `benchmarks/`. Benchmark names appear in results and baselines, so renaming them breaks comparisons. This is an approved central suppression. Production projects keep `CA1707`.
+- `CA1848` (use `LoggerMessage` delegates) and `CA1873` (avoid expensive logging arguments) are suggestions, not errors. Prefer `[LoggerMessage]` in hot paths; converting existing log calls is not required.
 - Agent review flags project-level `NoWarn` (except the `CS1591` opt-in above), `WarningsNotAsErrors`, `NuGetAuditSuppress`, and package-reference suppression metadata. Rule-level `.editorconfig` exceptions and source suppressions require the same documented justification.
 
 ## Formatting and naming
@@ -71,3 +71,13 @@ An exception must state:
 4. The owner and a review date.
 
 Exceptions should be as narrow as possible. Prefer a rule-specific diagnostic entry over a category-wide suppression.
+
+## Recorded exceptions
+
+Each entry names the rule, the location, and the reason. Entries marked "owner to confirm" were kept from before the template adoption and need an owner and a review date.
+
+| Rule | Location | Reason | Owner / review |
+|---|---|---|---|
+| All analyzer diagnostics (`generated_code = true`, `dotnet_analyzer_diagnostic.severity = none`) | `.editorconfig` section `[benchmarks/Inquiry.Benchmarks.DLG/*.cs]` | The project is third-party DLG generator output kept unchanged as a benchmark comparison target. Hand edits would make it stop matching what DLG emits. Sonar does not read `generated_code`, so the section also turns analyzer severities off. Compiler diagnostics still apply. | Owner decision |
+| `CS8669`, `CS1570`, `CS1572`, `CS1573`, `CS1587` | `benchmarks/Inquiry.Benchmarks.DLG/Inquiry.Benchmarks.DLG.csproj` | Generated files need an explicit `#nullable` directive for `?` annotations (`CS8669`), and the DLG XML comments are malformed. Both come from the generator output above. | Owner decision |
+| `CS8600`-`CS8625`, `CS0168`, `CS0219`, `CS0649` | `benchmarks/Inquiry.Benchmarks.DLG/Inquiry.Benchmarks.DLG.csproj` | Kept from before the template. Since the folder is marked generated, only `CS0219` still fires; the other IDs are now redundant. | Owner to confirm |
