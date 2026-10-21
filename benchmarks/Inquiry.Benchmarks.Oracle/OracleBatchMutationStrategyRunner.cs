@@ -206,7 +206,7 @@ internal sealed class OracleBatchMutationStrategyRunner(string connectionString)
         text.ParameterName = "value";
         text.DbType = DbType.String;
         text.Value = values;
-        ((OracleParameter)text).ArrayBindSize = valueSizes;
+        text.ArrayBindSize = valueSizes;
         command.Parameters.Add(text);
 
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);

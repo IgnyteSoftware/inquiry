@@ -89,7 +89,10 @@ internal sealed class PostgreSqlBatchMutationStrategyRunner(string connectionStr
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "DELETE FROM \"InquiryBatchEvidence\" WHERE \"Id\" = ANY (@ids);";
+        // Npgsql combines Array with an element type by design, although the enum has no [Flags] attribute.
+#pragma warning disable S3265
         command.Parameters.Add(new NpgsqlParameter<int[]>("ids", NpgsqlDbType.Array | NpgsqlDbType.Integer) { TypedValue = ids });
+#pragma warning restore S3265
         var affected = await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         await transaction.CommitAsync().ConfigureAwait(false);
         return affected;

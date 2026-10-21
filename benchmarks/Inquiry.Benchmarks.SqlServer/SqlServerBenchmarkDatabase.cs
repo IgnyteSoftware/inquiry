@@ -27,7 +27,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public const int SequentialAdHocRowCount = 32;
     public const int SequentialAdHocPayloadSize = 64 * 1024;
 
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static MsSqlContainer? _container;
     private static ServiceProvider? _services;
     private static string? _connectionString;
@@ -36,28 +36,49 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
 
     private SqlServerBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<SqlServerShipperContext> DbContextFactory => _dbContextFactory!;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<SqlServerProductContext> ProductContextFactory => _productContextFactory!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IInquiry Inquiry => _services!.GetRequiredService<IInquiry>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public WideBatchEvidenceStore WideBatchMutations => _services!.GetRequiredService<WideBatchEvidenceStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The DDL is built only from constants in code; no part comes from input.")]
     public static async Task<SqlServerBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -134,7 +155,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new SqlServerBenchmarkDatabase(seedRows);
@@ -198,7 +219,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         }
 
         // M:N eager evidence: two eligible parents, eight participating children, and rowCount
-        // unrelated children. The old-shape control therefore materializes rowCount + 8 children;
+        // unrelated children. The old-shape control therefore materializes rowCount + 8 children, while
         // Inquiry's generated child-key IN query materializes only the eight participating rows.
         var orderIds = new List<long>();
         await using (var insert = connection.CreateCommand())

@@ -15,7 +15,7 @@ public class WideBatchInsertThresholdBenchmarks
     private WideBatchEvidenceItem[] _items = null!;
 
     [Params(199, 200, 201, 209, 210, 211, 249, 250, 251)]
-    public int Rows;
+    public int Rows { get; set; }
 
     [GlobalSetup]
     public void Setup()

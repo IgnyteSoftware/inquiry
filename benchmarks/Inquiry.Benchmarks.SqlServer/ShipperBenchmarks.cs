@@ -35,8 +35,9 @@ public class ShipperBenchmarks
     private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     private const string SelectAllSql = "SELECT [ShipperID], [CompanyName], [Phone] FROM [Shippers]";
     private const string SelectByKeySql = SelectAllSql + " WHERE [ShipperID] = @id";
@@ -101,6 +102,7 @@ public class ShipperBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> SelectAll_Dlg()
     {
         var list = await DlgLib.Shipper.SelectAllAsync();
@@ -142,6 +144,7 @@ public class ShipperBenchmarks
         => await _db.Shippers.SelectByKeyAsync(TargetShipperId);
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<DlgLib.Shipper?> SelectByKey_Dlg()
         => await DlgLib.Shipper.SelectOneAsync(TargetShipperId);
 
@@ -190,6 +193,7 @@ public class ShipperBenchmarks
     }
 
     [BenchmarkCategory("SelectByField"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> SelectByField_Dlg()
     {
         var list = await DlgLib.Shipper.SelectByFieldAsync(DlgLib.ShipperFields.CompanyName, TargetCompanyName);
@@ -234,6 +238,7 @@ public class ShipperBenchmarks
         => await _db.Shippers.InsertAsync(new Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
 
     [BenchmarkCategory("Insert"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Insert_Dlg()
         => await new DlgLib.Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" }.InsertAsync();
 
@@ -282,6 +287,7 @@ public class ShipperBenchmarks
         });
 
     [BenchmarkCategory("Update"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Update_Dlg()
     {
         // DLG dirty-tracking: set the identity key, TakeSnapshot() to baseline it, THEN mutate the
@@ -366,6 +372,7 @@ public class ShipperBenchmarks
         });
 
     [BenchmarkCategory("Upsert"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Upsert_Dlg()
     {
         var shipper = new DlgLib.Shipper();

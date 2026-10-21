@@ -88,8 +88,10 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private SqlServerBenchmarkDatabase _db = null!;
     private IInquiry _inquiry = null!;
     private DbDataReader _dispatchReader = null!;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "The benchmark measures interface dispatch, so the field keeps the interface type.")]
     private IInquiryEntityMaterializer<SequentialBenchmarkRow> _classMaterializer = null!;
-    private readonly SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1805", Justification = "The stateless struct materializer is used as its default value; the explicit initializer shows that this is intended.")]
+    private readonly SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer = new();
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -157,6 +159,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     }
 
     [BenchmarkCategory("PartialStream"), Benchmark(Baseline = true)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S4144", Justification = "Each benchmark category needs its own full-stream baseline method; the bodies match on purpose.")]
     public async Task<long> GeneratedFullStream()
     {
         long checksum = 0;
@@ -168,6 +171,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     }
 
     [BenchmarkCategory("PartialStream"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1751", Justification = "The benchmark measures reading one row and then disposing the stream, so the loop returns on its first pass.")]
     public async Task<long> GeneratedFirstRowThenDispose()
     {
         await foreach (var row in _inquiry.QueryAsync<SequentialBenchmarkRow>(new InquiryCommand(SelectSql)))
@@ -198,7 +202,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
         => materializer.Materialize(reader);
 
-    private static DbDataReader CreateDispatchReader()
+    private static DataTableReader CreateDispatchReader()
     {
         var table = new DataTable();
         table.Columns.Add("Id", typeof(int));

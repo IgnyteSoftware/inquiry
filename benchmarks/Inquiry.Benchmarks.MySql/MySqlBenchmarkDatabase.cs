@@ -22,7 +22,7 @@ namespace Inquiry.Benchmarks.MySql;
 /// </summary>
 public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static MySqlContainer? _container;
     private static ServiceProvider? _services;
     private static string? _connectionString;
@@ -30,14 +30,22 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
 
     private MySqlBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<MySqlShipperContext> DbContextFactory => _dbContextFactory!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
@@ -45,7 +53,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
     /// </summary>
     public static async Task<MySqlBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -100,7 +108,7 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new MySqlBenchmarkDatabase(seedRows);

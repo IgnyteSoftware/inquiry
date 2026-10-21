@@ -15,7 +15,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 [Orderer(SummaryOrderPolicy.Declared, MethodOrderPolicy.Declared)]
 public class SqlServerCollectionBenchmarks
 {
-    private static readonly InquiryTvpDescriptor IntTvpDescriptor =
+    private static readonly InquiryTvpDescriptor _intTvpDescriptor =
         InquiryTvpDescriptor.Get("int", 0, 10, 0, false);
 
     internal const string Projection = """
@@ -97,7 +97,7 @@ public class SqlServerCollectionBenchmarks
         Exception? primaryException = null;
         try
         {
-            InquiryTvpParameter.Bind(command, "@ids", ids, typeName, IntTvpDescriptor);
+            InquiryTvpParameter.Bind(command, "@ids", ids, typeName, _intTvpDescriptor);
             return await ReadAsync(command).ConfigureAwait(false);
         }
         catch (Exception exception)
@@ -233,17 +233,15 @@ public static class SqlServerCollectionCorrectness
 
         var duplicates = new[] { 1, 1, 2, 2 };
         var expected = new[] { 1, 2 };
-        foreach (var rows in new[]
+        var duplicateResults = new[]
         {
             await SqlServerCollectionBenchmarks.ExecuteTvpAsync(database.ConnectionString, database.TvpTypeName, duplicates).ConfigureAwait(false),
             await SqlServerCollectionBenchmarks.ExecuteOpenJsonAsync(database.ConnectionString, duplicates).ConfigureAwait(false),
             await SqlServerCollectionBenchmarks.ExecuteScalarAsync(database.ConnectionString, duplicates).ConfigureAwait(false),
-        })
+        };
+        if (duplicateResults.Any(rows => !rows.Select(static product => product.ProductId).SequenceEqual(expected)))
         {
-            if (!rows.Select(static product => product.ProductId).SequenceEqual(expected))
-            {
-                throw new InvalidOperationException("Duplicate collection values must produce unique product rows.");
-            }
+            throw new InvalidOperationException("Duplicate collection values must produce unique product rows.");
         }
     }
 }

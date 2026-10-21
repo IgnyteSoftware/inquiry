@@ -34,8 +34,9 @@ public class ShipperBenchmarks
     private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     // Oracle DDL uses unquoted identifiers — Oracle folds them to uppercase.
     // Hand-written SQL uses the stored uppercase names to stay consistent.

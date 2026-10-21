@@ -26,6 +26,8 @@ public class BatchMutationStrategyBenchmarks
     private int[] _deleteIds = null!;
 
     [Params(1, 10, 100, 1000)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1051", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1104", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
     public int Rows;
 
     [GlobalSetup]
@@ -146,12 +148,12 @@ public class BatchMutationStrategyBenchmarks
     }
 
     private static (int[] Ids, string[] Values, int[] ValueSizes) CreateArrayBindingInputs(
-        IReadOnlyList<OracleBatchMutationItem> items)
+        OracleBatchMutationItem[] items)
     {
-        var ids = new int[items.Count];
-        var values = new string[items.Count];
-        var sizes = new int[items.Count];
-        for (var i = 0; i < items.Count; i++)
+        var ids = new int[items.Length];
+        var values = new string[items.Length];
+        var sizes = new int[items.Length];
+        for (var i = 0; i < items.Length; i++)
         {
             ids[i] = items[i].Id;
             values[i] = items[i].Value;

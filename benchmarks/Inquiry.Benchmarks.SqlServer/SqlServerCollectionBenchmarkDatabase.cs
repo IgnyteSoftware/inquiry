@@ -10,7 +10,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 
 public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly string[] InsertOrder =
+    private static readonly string[] _insertOrder =
     [
         "Categories", "Customers", "CustomerDemographics", "Region", "Shippers", "Suppliers",
         "Employees", "Territories", "Products", "Orders", "CustomerCustomerDemo",
@@ -29,6 +29,7 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
     public string ConnectionString { get; }
     public string TvpTypeName { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The database name is a fixed prefix plus a new GUID; no part comes from input.")]
     public static async Task<SqlServerCollectionBenchmarkDatabase> CreateAsync(bool applyProviderArtifacts = true)
     {
         var image = DatabaseImageCatalog.GetRequired("sqlserver");
@@ -75,7 +76,7 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         var manifest = NorthwindFixtureCatalog.For(FixtureTier.Standard);
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
-        foreach (var tableName in InsertOrder)
+        foreach (var tableName in _insertOrder)
         {
             var schema = NorthwindFixtureCatalog.Schema.Tables.Single(table => table.Name == tableName);
             using var checksum = new FixtureChecksumAccumulator();
@@ -94,9 +95,9 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
                 BulkCopyTimeout = 0,
                 EnableStreaming = true,
             };
-            foreach (var column in schema.Columns)
+            foreach (var columnName in schema.Columns.Select(static column => column.Name))
             {
-                bulk.ColumnMappings.Add(column.Name, column.Name);
+                bulk.ColumnMappings.Add(columnName, columnName);
             }
 
             await bulk.WriteToServerAsync(rows).ConfigureAwait(false);
@@ -120,6 +121,7 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "Table and column names come from the fixture schema in code; no part comes from input.")]
     private static async Task ValidateFixtureAsync(string connectionString)
     {
         var manifest = NorthwindFixtureCatalog.For(FixtureTier.Standard);
@@ -327,6 +329,9 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         public override string GetString(int ordinal) => (string)GetValue(ordinal);
         public override decimal GetDecimal(int ordinal) => (decimal)GetValue(ordinal);
         public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
-        public override void Close() { }
+        public override void Close()
+        {
+            // The reader streams generated rows and holds no connection, so there is nothing to close.
+        }
     }
 }
