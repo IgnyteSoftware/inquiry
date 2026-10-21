@@ -105,8 +105,8 @@ public static class CiContractVerifier
     {
         // Superseded pushes to a PR cancel their in-flight run; merge-group runs must never be
         // cancelled because the queue's verdict is the merge gate.
-        Require(Scalar(concurrency["group"], "concurrency.group") == "ci-${{ github.ref }}",
-            "Concurrency group must partition runs by ref.");
+        Require(Scalar(concurrency["group"], "concurrency.group") == "ci-${{ github.event.pull_request.number || github.ref }}",
+            "Concurrency group must partition pull request runs by number and other runs by ref.");
         Require(Scalar(concurrency["cancel-in-progress"], "concurrency.cancel-in-progress") == "${{ github.event_name == 'pull_request' }}",
             "Only pull request runs may be cancelled by newer pushes.");
     }
@@ -269,8 +269,9 @@ public static class CiContractVerifier
     private static void VerifyRequiredCommands(IReadOnlyDictionary<string, YamlNode> jobs)
     {
         RequireRuns(jobs, "build-and-unit",
-            "dotnet restore",
-            "dotnet build --no-restore -c Release",
+            "dotnet restore Inquiry.slnx --locked-mode",
+            "dotnet format Inquiry.slnx --no-restore --verify-no-changes --severity error",
+            "dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror",
             "dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-manifest . eng/release-manifest.json\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-ci . eng/ci-required-v1.json .github/workflows/ci.yml\ndotnet test tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj --configuration Release --no-build",
             "dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=benchmark-contracts\" --results-directory test-results\ndotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=generators\" --results-directory test-results\ndotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=unit\" --results-directory test-results\ndotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=sqlite\" --results-directory test-results\ndotnet test tests/Inquiry.Aspire.Tests/Inquiry.Aspire.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=aspire\" --results-directory test-results\ndotnet test tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=selected-strategy\" --results-directory test-results");
         RequireRuns(jobs, "aot-smoke",
@@ -339,7 +340,9 @@ public static class CiContractVerifier
         else if (repository == "actions/setup-dotnet")
         {
             Require(step.TryGetValue("with", out var withNode), "setup-dotnet must declare its exact SDK input.");
-            var with = Map(withNode!, "setup-dotnet.with", "dotnet-version");
+            var with = Map(withNode!, "setup-dotnet.with", "global-json-file", "dotnet-version");
+            Require(Scalar(with["global-json-file"], "setup-dotnet.global-json-file") == "global.json",
+                $"{jobId} setup-dotnet must install the SDK pinned in global.json.");
             var expectedVersions = jobId is "aot-smoke" ? "10.0.x"
                 : jobId is "docs" ? "8.0.x"
                 : jobId is "benchmark-smoke" ? "8.0.x\n10.0.x"
