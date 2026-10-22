@@ -672,7 +672,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
@@ -720,7 +720,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -734,7 +734,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -748,7 +748,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.Oracle": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -762,7 +762,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -777,7 +777,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -816,9 +816,9 @@
       },
       "Dapper": {
         "type": "CentralTransitive",
-        "requested": "[2.1.79, )",
-        "resolved": "2.1.79",
-        "contentHash": "8YijbzgTfmqmQOnVNorYM6K++pxqnW3nJ4aC1sRHzxUA2CcuoJ9gsTem3kgBnPRMc38zZHl4Esb6hAezXIEEuw=="
+        "requested": "[2.1.89, )",
+        "resolved": "2.1.89",
+        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
       },
       "JsonSchema.Net": {
         "type": "CentralTransitive",
@@ -1894,7 +1894,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
@@ -1942,7 +1942,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -1956,7 +1956,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -1970,7 +1970,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.Oracle": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[8.0.30, )",
@@ -1984,7 +1984,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -1999,7 +1999,7 @@
         "type": "Project",
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
-          "Dapper": "[2.1.79, )",
+          "Dapper": "[2.1.89, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -2038,9 +2038,9 @@
       },
       "Dapper": {
         "type": "CentralTransitive",
-        "requested": "[2.1.79, )",
-        "resolved": "2.1.79",
-        "contentHash": "8YijbzgTfmqmQOnVNorYM6K++pxqnW3nJ4aC1sRHzxUA2CcuoJ9gsTem3kgBnPRMc38zZHl4Esb6hAezXIEEuw=="
+        "requested": "[2.1.89, )",
+        "resolved": "2.1.89",
+        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
       },
       "JsonSchema.Net": {
         "type": "CentralTransitive",
