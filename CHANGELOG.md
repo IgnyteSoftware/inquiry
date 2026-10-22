@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Packages are now built under the Ignyte repository template's stricter analyzer rules. The public API is unchanged. Some argument and disposed-object checks now use the .NET throw helpers, so their exception messages read differently; exception types and parameter names are the same.
+- Packages are now built under the Ignyte repository template's stricter analyzer rules. The public API and the exceptions it throws, including their messages, are unchanged.
 
 ## [1.0.0-preview.12] - 2026-10-21
 

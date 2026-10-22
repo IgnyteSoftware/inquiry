@@ -336,11 +336,23 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     private static void ValidateCopyArguments<T>(long dataOffset, T[]? buffer, int bufferOffset, int length)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(dataOffset);
-        ArgumentOutOfRangeException.ThrowIfNegative(bufferOffset);
-        ArgumentOutOfRangeException.ThrowIfNegative(length);
+        if (dataOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dataOffset));
+        }
+
+        if (bufferOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bufferOffset));
+        }
+
+        if (length < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length));
+        }
 
         if (buffer is not null && (bufferOffset > buffer.Length || length > buffer.Length - bufferOffset))
         {
@@ -348,8 +360,12 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1513:Use ObjectDisposedException throw helper", Justification = "Published API: keeps the exception message and ObjectName consumers may observe.")]
     private void ThrowIfClosed()
     {
-        ObjectDisposedException.ThrowIf(_isClosed, this);
+        if (_isClosed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
     }
 }

@@ -104,9 +104,13 @@ public sealed class EntityFactory<TEntity>
     /// <summary>
     /// Builds a deterministic sequence of entities, applying the same states to each entity.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     public IReadOnlyList<TEntity> BuildMany(int count, params string[] states)
     {
-        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
 
         ArgumentNullException.ThrowIfNull(states);
 

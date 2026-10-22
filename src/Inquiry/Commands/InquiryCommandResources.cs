@@ -174,11 +174,15 @@ public static class InquiryCommandResources
         // Finalization removes the weak signal when a command is abandoned without explicit cleanup.
         ~ResourceSet() => ReleaseSignal();
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1513:Use ObjectDisposedException throw helper", Justification = "Published API: keeps the exception message and ObjectName consumers may observe.")]
         public void Add(IInquiryExecutionResource resource)
         {
             lock (_gate)
             {
-                ObjectDisposedException.ThrowIf(_items is null, this);
+                if (_items is null)
+                {
+                    throw new ObjectDisposedException(nameof(ResourceSet));
+                }
 
                 _items.Add(resource);
             }

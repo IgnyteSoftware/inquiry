@@ -103,6 +103,11 @@ Each entry names the rule, the location, and the reason. Entries marked "owner t
 | `S3398` | `InquiryJsonArrayParameter`: `AppendBoxedValue`, `AppendString`, `AppendNullable`, `AppendNullableSByte`, `AppendNullableUInt16`, `AppendNullableUInt32`, `AppendNullableUInt64`, `AppendNullableFinite(float?)` | Kept outside the generic `ElementWriter<T>` so each helper is not compiled once per closed element type (NativeAOT size). | Design exception |
 | `S3267` | `InquiryArrayParameter.MapNonNull` / `ConvertEnumElements`, `GridCommandInterception.Select` | Runs per command; the loops avoid LINQ iterator and delegate allocations. | Performance exception |
 | `IDE0060` | `TransactedInquiryRequestPipeline.ReleaseSavepointAsync` / `RollbackToSavepointAsync` (lease overloads) | The lease argument shows the caller already holds the exclusive operation and selects the overload. | Design exception |
+| `CA1512` | `InquiryBulkRowReader.ValidateCopyArguments`, `InquiryInExpansion.ExpandCore`, `InquiryBatchChunkReader<T>` constructor, `EntityFactory<TEntity>.BuildMany` | Published API: keeps the exception message and `ActualValue` consumers may observe. The throw helpers would add the value to the message. | Behaviour exception |
+| `CA1513` | `InquiryBulkRowReader.ThrowIfClosed`, `InquiryCommandResources.ResourceSet.Add` | Published API: keeps the exception message and `ObjectName` consumers may observe. `ObjectDisposedException.ThrowIf` reports the full type name instead. | Behaviour exception |
+| `S6444` | `EntityProcessor.IsRotationSqlTypeCompatible`, `SqlServerTvpResolver._typePattern` | Anchored pattern on compile-time metadata; a timeout would fail the generator instead of reporting a diagnostic. | Behaviour exception |
+| `CA1720` | `src/Inquiry.Generators.Shared/Abstractions/IColumn.cs`: `DbTypeClass` | The member names (`String`, `Int32`, ...) appear in the `INQ076` diagnostic message, so renaming them would change reported text. | Behaviour exception |
+| `S2094` | `src/Inquiry.Generators.Shared/Infrastructure/IsExternalInit.cs`: `IsExternalInit` | Required polyfill for init-only setters on netstandard2.0; empty by design. | False positive |
 
 ### Source suppressions in tests, benchmarks, samples, tools, and generators
 

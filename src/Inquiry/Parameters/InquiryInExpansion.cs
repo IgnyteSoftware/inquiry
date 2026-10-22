@@ -90,13 +90,17 @@ public static class InquiryInExpansion
     public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null)
         => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType, size, precision, scale);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null, int? size = null, byte? precision = null, byte? scale = null)
     {
         ArgumentNullException.ThrowIfNull(command);
 
         ArgumentNullException.ThrowIfNull(parameterName);
 
-        System.ArgumentOutOfRangeException.ThrowIfLessThan(maxParameterCount, 1);
+        if (maxParameterCount < 1)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+        }
 
         var sentinel = "(" + parameterName + ")";
 

@@ -928,6 +928,7 @@ internal static class EntityProcessor
         _ => DbTypeClass.String,
     };
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S6444:Not specifying a timeout for regular expressions is security-sensitive", Justification = "Anchored pattern on compile-time metadata; a timeout would fail the generator instead of reporting a diagnostic.")]
     private static bool IsRotationSqlTypeCompatible(string? sqlType, bool isGuid)
     {
         if (string.IsNullOrWhiteSpace(sqlType))
@@ -947,9 +948,7 @@ internal static class EntityProcessor
         }
 
         var match = global::System.Text.RegularExpressions.Regex.Match(type,
-            @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$",
-            global::System.Text.RegularExpressions.RegexOptions.None,
-            TimeSpan.FromSeconds(1));
+            @"^(?:N?VARCHAR2?|N?CHAR)\s*\(\s*(MAX|[0-9]+)(?:\s+(?:CHAR|BYTE))?\s*\)$");
         return match.Success && (match.Groups[1].Value == "MAX" ||
             int.TryParse(match.Groups[1].Value, out var size) && size >= 36);
     }

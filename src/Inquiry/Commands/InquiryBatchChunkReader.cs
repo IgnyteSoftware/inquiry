@@ -13,10 +13,14 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
     private int _offset;
     private int _disposed;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     internal InquiryBatchChunkReader(IEnumerable<T> items, int maxBatchSize, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
+        if (maxBatchSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 

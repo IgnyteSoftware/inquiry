@@ -14,10 +14,10 @@ internal static class SqlServerTvpResolver
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq076");
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S6444:Not specifying a timeout for regular expressions is security-sensitive", Justification = "Anchored pattern on compile-time metadata; a timeout would fail the generator instead of reporting a diagnostic.")]
     private static readonly Regex _typePattern = new(
         @"^\s*(?<name>[A-Za-z][A-Za-z0-9_]*)(?:\s*\(\s*(?<a>MAX|[0-9]+)\s*(?:,\s*(?<b>[0-9]+)\s*)?\))?\s*$",
-        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase,
-        TimeSpan.FromSeconds(1));
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public static CollectionParameterResolution Resolve(SqlServerSqlBuilder builder, CollectionParameterContext context)
     {
