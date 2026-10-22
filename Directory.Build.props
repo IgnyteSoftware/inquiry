@@ -26,9 +26,8 @@
     <NuGetAuditMode>all</NuGetAuditMode>
     <NuGetAuditLevel>low</NuGetAuditLevel>
 
-    <!-- Restore creates packages.lock.json. CI validates the committed lock file. -->
+    <!-- Restore creates packages.lock.json. CI does not use locked mode, because the lock file records SDK-supplied package versions that change with each .NET patch. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 

@@ -16,10 +16,11 @@ The solution file is named `Ignyte.<Product>.slnx` and sits at the repository ro
 
 ## SDK and language version
 
-- `global.json` pins the SDK exactly. Patch updates require an intentional template update.
+- `global.json` sets the lowest .NET 10 SDK, 10.0.100, and rolls forward to the newest installed 10.0 SDK (`latestFeature`). Developers and CI can use any 10.0 SDK. CI installs the newest one.
+- Because the floor is 10.0.100, the oldest supported compiler is Roslyn 5.0. A source generator or analyzer that ships in a package must reference `Microsoft.CodeAnalysis` 5.0 or lower, or it will not load on older 10.0 SDKs.
 - `Directory.Build.props` pins the C# language version to the version supported by that SDK for C# projects. F# and Visual Basic use their SDK defaults.
 - Visual Basic projects use explicit `Option Strict`, `Option Explicit`, `Option Infer`, and binary comparison settings.
-- SDK changes are deliberate changes. Update `global.json`, `LangVersion`, `AnalysisLevel`, and analyzer package versions together.
+- A move to a new .NET major version is a deliberate change. Update `global.json`, `LangVersion`, `AnalysisLevel`, and analyzer package versions together.
 
 ## Build and analyzer policy
 
@@ -56,8 +57,9 @@ The solution file is named `Ignyte.<Product>.slnx` and sits at the repository ro
 - `nuget.config` clears inherited sources and maps all packages to an approved source.
 - Package signatures are required. The template pins the SonarSource signing certificate and all three NuGet.org repository certificates. Packages keep the certificate from the year they were published, so the older ones stay. The 2024 certificate expires on 2027-05-18. Add the next fingerprint when NuGet announces the rotation, or restore rejects newly signed packages. Add the approved certificate and source mapping when an internal feed is introduced.
 - Never commit feed credentials. Use a credential provider, environment-backed secret, or the CI platform's secret store.
-- Restore creates `packages.lock.json`. Commit the lock file and use locked mode in CI.
-- Dependabot does not always update every lock file. A project that gets a package through a project reference or a central transitive version can keep the old version, and locked restore then fails with `NU1004`. Fix the Dependabot branch with `dotnet restore --force-evaluate` and push the lock files.
+- Restore creates `packages.lock.json`. Commit the lock file with every dependency change.
+- CI does not restore in locked mode. The lock file records the versions of packages the SDK supplies, such as the AOT compiler, trimmer, runtime packs and Blazor WebAssembly assets, and those follow the SDK's runtime patch. With roll-forward, locked restore would fail every PR after each monthly .NET release until the lock files were regenerated.
+- A restore on a different SDK patch can rewrite those entries. Commit lock-file changes only when they come with a dependency change, or regenerate them all with `dotnet restore --force-evaluate`.
 - NuGet audit covers direct and transitive packages at low severity and above.
 - The NuGet audit source is explicit and does not inherit machine- or user-level audit sources.
 

@@ -29,7 +29,7 @@ jobs:
             8.0.x
             9.0.x
             10.0.x
-      - run: dotnet restore Inquiry.slnx --locked-mode
+      - run: dotnet restore Inquiry.slnx
       - run: dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror
       # The provider source generators load from the analyzer build output. Format runs after the build
       # and in the same configuration, so it sees the generated code that some usings refer to.
@@ -65,9 +65,9 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: 10.0.x
-      # Restore without -r: a global RID would apply to every referenced library and fail locked restore.
-      - name: Restore AOT smoke app from the lock file
-        run: dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj --locked-mode
+      # Restore without -r: a global RID would apply to every referenced library and rewrite its lock file.
+      - name: Restore AOT smoke app
+        run: dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj
       - name: Publish AOT smoke app
         run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 --no-restore -o aot-out
       - name: Run native binary

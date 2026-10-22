@@ -268,13 +268,13 @@ public static partial class CiContractVerifier
     private static void VerifyRequiredCommands(Dictionary<string, YamlNode> jobs)
     {
         RequireRuns(jobs, "build-and-unit",
-            "dotnet restore Inquiry.slnx --locked-mode",
+            "dotnet restore Inquiry.slnx",
             "dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror",
             "Configuration=Release dotnet format Inquiry.slnx --no-restore --verify-no-changes --severity error",
             "dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-manifest . eng/release-manifest.json\ndotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-ci . eng/ci-required-v1.json .github/workflows/ci.yml\ndotnet test tests/Inquiry.ReleaseTools.Tests/Inquiry.ReleaseTools.Tests.csproj --configuration Release --no-build",
             "dotnet test tests/Inquiry.Benchmarks.Contracts.Tests/Inquiry.Benchmarks.Contracts.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=benchmark-contracts\" --results-directory test-results\ndotnet test tests/Inquiry.Generators.Tests/Inquiry.Generators.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=generators\" --results-directory test-results\ndotnet test tests/Inquiry.Tests/Inquiry.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=unit\" --results-directory test-results\ndotnet test tests/Inquiry.Sqlite.Tests/Inquiry.Sqlite.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=sqlite\" --results-directory test-results\ndotnet test tests/Inquiry.Aspire.Tests/Inquiry.Aspire.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=aspire\" --results-directory test-results\ndotnet test tests/Inquiry.Benchmarks.SelectedStrategy.Tests/Inquiry.Benchmarks.SelectedStrategy.Tests.csproj -c Release --no-build --logger \"trx;LogFilePrefix=selected-strategy\" --results-directory test-results");
         RequireRuns(jobs, "aot-smoke",
-            "dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj --locked-mode",
+            "dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj",
             "dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 --no-restore -o aot-out",
             "out=$(./aot-out/Inquiry.AotSmoke)\necho \"$out\"\necho \"$out\" | grep -q \"AOT-SMOKE-OK\"");
         RequireRuns(jobs, "integration",
