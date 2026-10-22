@@ -27,7 +27,13 @@ awk -v version="$version" -v changelog="$changelog" '
 
   function link_label(line) {
     sub(/^(   |  | )/, "", line)
-    return tolower(substr(line, 2, index(line, "]:") - 2))
+    return squeeze(tolower(substr(line, 2, index(line, "]:") - 2)))
+  }
+
+  # Markdown matches labels with runs of whitespace treated as one space.
+  function squeeze(text) {
+    gsub(/[ \t\n]+/, " ", text)
+    return text
   }
 
   # Return the backticks or tildes that open or close a code fence, or "".
@@ -88,17 +94,23 @@ awk -v version="$version" -v changelog="$changelog" '
     sub(/\r$/, "")
     prev_def = last_def
     last_def = ""
+    prev_bare = bare
+    bare = ""
+    code = 0
+    url_line = 0
     # Fenced text is content even when it looks like a heading. Comment text
     # is never content.
     if (fence != "") {
       if (closes_fence($0)) { fence = "" }
       kind = "content"
+      code = 1
     } else if (comment) {
       if (index($0, "-->")) { comment = 0 }
       kind = "filler"
     } else if (fence_run($0) != "") {
       fence = fence_run($0)
       kind = "content"
+      code = 1
     } else if ($0 ~ /^(   |  | )?<!--/) {
       if (!index($0, "-->")) { comment = 1 }
       kind = "filler"
@@ -108,8 +120,13 @@ awk -v version="$version" -v changelog="$changelog" '
       kind = "subheading"
     } else if ($0 ~ /^[ \t]*$/ || is_link($0)) {
       kind = "filler"
-      # A definition whose URL is on the next line is not copied.
-      if ($0 ~ /\]:[ \t]*[^ \t]/) { last_def = define($0) }
+      # A definition can put its URL on the next line.
+      if ($0 ~ /\]:[ \t]*[^ \t]/) { last_def = define($0) } else if (is_link($0)) { bare = $0 }
+    } else if (prev_bare != "" && $0 ~ /^[ \t]+(<[^>]*>|[^ \t<][^ \t]*)([ \t]+("[^"]*"|\047[^\047]*\047|\([^)]*\)))?[ \t]*$/) {
+      # An indented URL after "[label]:" belongs to that definition, like a title.
+      kind = "title"
+      last_def = define(prev_bare "\n" $0)
+      url_line = 1
     } else if (after_link && $0 ~ /^[ \t]+("[^"]*"|\047[^\047]*\047|\([^)]*\))[ \t]*$/) {
       # An indented quoted line after a link definition is its title.
       kind = "title"
@@ -117,7 +134,7 @@ awk -v version="$version" -v changelog="$changelog" '
     } else {
       kind = "content"
     }
-    after_link = is_link($0)
+    after_link = is_link($0) || url_line
   }
 
   kind == "heading" {
@@ -157,6 +174,7 @@ awk -v version="$version" -v changelog="$changelog" '
     if (kind == "content") { entries = 1 }
     flush()
     lines[++count] = $0
+    if (code) { fenced[count] = 1 }
   }
 
   END {
@@ -175,9 +193,12 @@ awk -v version="$version" -v changelog="$changelog" '
     }
     # Add the definitions that the section uses but does not contain.
     for (i = 1; i <= count; i++) {
+      # Brackets in fenced code are not links.
+      if (i in fenced) { continue }
       if (is_link(lines[i])) { have[link_label(lines[i])] = 1 }
-      text = text "\n" tolower(lines[i])
+      text = text " " tolower(lines[i])
     }
+    text = squeeze(text)
     for (i = 1; i <= defined; i++) {
       label = order[i]
       if (!(label in have) && index(text, "[" label "]")) {
