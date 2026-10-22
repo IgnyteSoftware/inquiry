@@ -67,7 +67,9 @@ public sealed class PostgreSqlProviderIntegrationTests
         var factory = new PostgreSqlInquiryConnectionFactory("Host=localhost;Database=postgres;Username=postgres;Password=postgres");
 
         await ((IAsyncDisposable)factory).DisposeAsync();
-        ((IDisposable)factory).Dispose(); // second dispose via the other path must be a no-op, not a throw.
+        // Second dispose via the other path must be a no-op, not a throw.
+        var exception = Record.Exception(() => ((IDisposable)factory).Dispose());
+        Assert.Null(exception);
     }
 
     [Fact]

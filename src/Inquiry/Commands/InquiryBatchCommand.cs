@@ -54,9 +54,14 @@ public readonly struct InquiryBatchCommand<TItem>
         }
 
         if (parametersPerItem < 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(parametersPerItem), parametersPerItem, "Parameters per item cannot be negative.");
+        }
+
         if (maxItemsPerCommand <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(maxItemsPerCommand), maxItemsPerCommand, "Maximum items per command must be positive.");
+        }
 
         CommandTextFactory = commandTextFactory ?? throw new ArgumentNullException(nameof(commandTextFactory));
         BindChunk = bindChunk ?? throw new ArgumentNullException(nameof(bindChunk));
@@ -85,10 +90,16 @@ public readonly struct InquiryBatchCommand<TItem>
         : this(chunkCommandTextFactory, bindChunk, parametersPerItem, maxItemsPerCommand, commandType)
     {
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             throw new ArgumentException("Command text cannot be empty.", nameof(commandText));
+        }
+
         if (setBasedMaxItemsPerCommand <= 0)
+        {
             throw new ArgumentOutOfRangeException(nameof(setBasedMaxItemsPerCommand), setBasedMaxItemsPerCommand,
                 "Maximum set-based items per command must be positive.");
+        }
+
         CommandText = commandText;
         BindItem = bindItem ?? throw new ArgumentNullException(nameof(bindItem));
         UseChunk = useChunk ?? throw new ArgumentNullException(nameof(useChunk));
@@ -133,17 +144,44 @@ public readonly struct InquiryBatchCommand<TItem>
     /// <summary>Gets whether <see cref="PreparedStatementMode.Auto"/> may prepare the reused command once for this batch.</summary>
     internal bool PreferPrepareOnce { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2208:Instantiate argument exceptions correctly", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
     internal void Validate()
     {
         if (CommandTextFactory is null && string.IsNullOrWhiteSpace(CommandText))
+        {
             throw new ArgumentException("Command text cannot be empty.", "commandText");
-        if (CommandTextFactory is null && BindItem is null) throw new ArgumentNullException("bindItem");
-        if (CommandTextFactory is not null && BindChunk is null) throw new ArgumentNullException("bindChunk");
-        if (ParametersPerItem < 0) throw new ArgumentOutOfRangeException("parametersPerItem");
-        if (MaxItemsPerCommand <= 0 && CommandTextFactory is not null) throw new ArgumentOutOfRangeException("maxItemsPerCommand");
+        }
+
+        if (CommandTextFactory is null && BindItem is null)
+        {
+            throw new ArgumentNullException("bindItem");
+        }
+
+        if (CommandTextFactory is not null && BindChunk is null)
+        {
+            throw new ArgumentNullException("bindChunk");
+        }
+
+        if (ParametersPerItem < 0)
+        {
+            throw new ArgumentOutOfRangeException("parametersPerItem");
+        }
+
+        if (MaxItemsPerCommand <= 0 && CommandTextFactory is not null)
+        {
+            throw new ArgumentOutOfRangeException("maxItemsPerCommand");
+        }
+
         if (SetBasedMaxItemsPerCommand <= 0 && CommandTextFactory is not null)
+        {
             throw new ArgumentOutOfRangeException("setBasedMaxItemsPerCommand");
-        if (!Enum.IsDefined(CommandType)) throw new ArgumentOutOfRangeException("commandType", CommandType, "Command type is not valid.");
+        }
+
+        if (!Enum.IsDefined(CommandType))
+        {
+            throw new ArgumentOutOfRangeException("commandType", CommandType, "Command type is not valid.");
+        }
     }
 
     internal InquiryGeneratedCommand<InquiryBatchItem<TItem>> ForItem(TItem item)
@@ -154,32 +192,49 @@ public readonly struct InquiryBatchCommand<TItem>
         => new(GetChunkCommandText(chunk.Count), new InquiryBatchChunk<TItem>(this, chunk), static (dbCommand, state) =>
             state.Command.BindChunk!(dbCommand, state.Chunk), CommandType);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "ParamName names the constructor argument whose factory returned empty text, which callers observe.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2208:Instantiate argument exceptions correctly", Justification = "ParamName names the constructor argument whose factory returned empty text, which callers observe.")]
     internal string GetChunkCommandText(int chunkCount)
     {
         var commandText = CommandTextFactory is null ? CommandText : CommandTextFactory(chunkCount);
         if (string.IsNullOrWhiteSpace(commandText))
+        {
             throw new ArgumentException("The batch command text factory returned empty command text.", "commandTextFactory");
+        }
+
         return commandText;
     }
 
     internal int GetEffectiveChunkSize(int maxBatchSize, int maxParametersPerCommand)
     {
         if (ParametersPerItem > maxParametersPerCommand)
+        {
             throw new InvalidOperationException("The configured command parameter limit cannot fit one batch item.");
+        }
 
         var size = IgnoresMaxBatchSize
             ? MaxItemsPerCommand
             : Math.Min(maxBatchSize, MaxItemsPerCommand);
         if (CommandTextFactory is not null && UseChunk is null && ParametersPerItem > 0)
+        {
             size = Math.Min(size, maxParametersPerCommand / ParametersPerItem);
+        }
+
         if (size < 1)
+        {
             throw new InvalidOperationException("The configured command parameter limit cannot fit one batch item.");
+        }
+
         return size;
     }
 
     internal bool ShouldUseChunk(IReadOnlyList<TItem> chunk, int maxParametersPerCommand)
     {
-        if (UseChunk?.Invoke(chunk) != true) return false;
+        if (UseChunk?.Invoke(chunk) != true)
+        {
+            return false;
+        }
+
         var parameterLimit = ParametersPerItem > 0
             ? maxParametersPerCommand / ParametersPerItem
             : int.MaxValue;

@@ -53,9 +53,14 @@ public readonly struct InquiryParameterTarget
     /// The parameter is not added until <see cref="AddParameter"/> is called.
     /// </summary>
     public DbParameter CreateParameter()
-        => _reuseState is not null
-            ? _reuseState.CreateParameter()
-            : _command is not null ? _command.CreateParameter() : _batchCommand!.CreateParameter();
+    {
+        if (_reuseState is not null)
+        {
+            return _reuseState.CreateParameter();
+        }
+
+        return _command is not null ? _command.CreateParameter() : _batchCommand!.CreateParameter();
+    }
 
     /// <summary>
     /// Adds <paramref name="parameter"/> to the wrapped command's parameter collection.

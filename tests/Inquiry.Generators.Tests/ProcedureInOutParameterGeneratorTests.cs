@@ -1,4 +1,4 @@
-using System;
+using System.Globalization;
 
 namespace Inquiry.Generators.Tests;
 
@@ -187,7 +187,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics,
-            d => d.Id == "INQ051" && d.GetMessage().Contains("IsInputOutput"));
+            d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("IsInputOutput"));
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics,
-            d => d.Id == "INQ051" && d.GetMessage().Contains("IsInputOutput"));
+            d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("IsInputOutput"));
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics,
-            d => d.Id == "INQ051" && d.GetMessage().Contains("at most one"));
+            d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("at most one"));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics,
-            d => d.Id == "INQ051" && d.GetMessage().Contains("must match"));
+            d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("must match"));
     }
 
     [Fact]

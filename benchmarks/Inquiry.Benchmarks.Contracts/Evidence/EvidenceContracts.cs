@@ -134,7 +134,11 @@ public static class BenchmarkStatistics
     public static double Median(IEnumerable<double> values)
     {
         var ordered = values.Order().ToArray();
-        if (ordered.Length == 0) throw new ArgumentException("At least one measurement is required.", nameof(values));
+        if (ordered.Length == 0)
+        {
+            throw new ArgumentException("At least one measurement is required.", nameof(values));
+        }
+
         var middle = ordered.Length / 2;
         return Round(ordered.Length % 2 == 0
             ? (ordered[middle - 1] + ordered[middle]) / 2
@@ -209,11 +213,31 @@ public sealed record LaunchHealthEvidence(
 
     public static LaunchHealthStatus DeriveStatus(LaunchHealthMetrics metrics, LaunchHealthRuleContract rule)
     {
-        if (metrics.ThermalThrottlingDetected) return LaunchHealthStatus.ThermalThrottling;
-        if (metrics.PowerThrottlingDetected) return LaunchHealthStatus.PowerThrottling;
-        if (metrics.CpuContentionPercent > rule.MaximumCpuContentionPercent) return LaunchHealthStatus.CpuContention;
-        if (metrics.DockerResourceDriftDetected) return LaunchHealthStatus.DockerResourceDrift;
-        if (metrics.CoefficientOfVariation > rule.MaximumCoefficientOfVariation) return LaunchHealthStatus.NoiseBudgetExceeded;
+        if (metrics.ThermalThrottlingDetected)
+        {
+            return LaunchHealthStatus.ThermalThrottling;
+        }
+
+        if (metrics.PowerThrottlingDetected)
+        {
+            return LaunchHealthStatus.PowerThrottling;
+        }
+
+        if (metrics.CpuContentionPercent > rule.MaximumCpuContentionPercent)
+        {
+            return LaunchHealthStatus.CpuContention;
+        }
+
+        if (metrics.DockerResourceDriftDetected)
+        {
+            return LaunchHealthStatus.DockerResourceDrift;
+        }
+
+        if (metrics.CoefficientOfVariation > rule.MaximumCoefficientOfVariation)
+        {
+            return LaunchHealthStatus.NoiseBudgetExceeded;
+        }
+
         return LaunchHealthStatus.Healthy;
     }
 
@@ -222,9 +246,17 @@ public sealed record LaunchHealthEvidence(
         LaunchHealthRuleContract rule)
     {
         var samples = values.ToArray();
-        if (samples.Length < 2) throw new ArgumentException("At least two measurements are required.", nameof(values));
+        if (samples.Length < 2)
+        {
+            throw new ArgumentException("At least two measurements are required.", nameof(values));
+        }
+
         var mean = samples.Average();
-        if (!double.IsFinite(mean) || mean <= 0) return 0;
+        if (!double.IsFinite(mean) || mean <= 0)
+        {
+            return 0;
+        }
+
         var sampleVariance = samples.Sum(value => Math.Pow(value - mean, 2)) / (samples.Length - 1);
         return Math.Round(Math.Sqrt(sampleVariance) / mean, rule.MetricDecimalPlaces, MidpointRounding.ToEven);
     }
@@ -301,6 +333,7 @@ public sealed record BenchmarkEvidenceEnvelope(
 
 public static class EvidenceValidator
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "Evidence must match the recorded BenchmarkDotNet values bit for bit; a tolerance would accept altered evidence.")]
     public static IReadOnlyList<ContractError> Validate(
         BenchmarkEvidenceEnvelope evidence,
         BenchmarkJobContract? nonAuthoritativeJobOverride = null)
@@ -518,7 +551,10 @@ public static class EvidenceValidator
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 
@@ -528,7 +564,8 @@ public static class EvidenceValidator
     private static bool IsGitCommit(string? value)
         => value is { Length: 40 or 64 } && value.All(static c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
-    private static IReadOnlyList<ContractError> ValidateComputedStatistics(BenchmarkEvidenceEnvelope evidence)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The stored statistics must equal the values recomputed from the same measurements; a tolerance would accept altered evidence.")]
+    private static List<ContractError> ValidateComputedStatistics(BenchmarkEvidenceEnvelope evidence)
     {
         var errors = new List<ContractError>();
         if (evidence.BenchmarkDotNet.Measurements.Count == 0)
@@ -545,10 +582,16 @@ public static class EvidenceValidator
         var allocation = gcStats.BytesAllocatedPerOperation;
         if (gcStats.TotalOperations <= 0 || allocation < 0 || !gcStats.MemoryDiagnoserEnabled ||
             !StringComparer.Ordinal.Equals(gcStats.Provenance, BenchmarkAggregationCatalog.GcStatsProvenance))
+        {
             errors.Add(new("allocation-provenance",
                 "Allocation must retain BDN 0.15.8 GcStats.TotalOperations and nullable GetBytesAllocatedPerOperation(BenchmarkCase) output with MemoryDiagnoser provenance."));
+        }
+
         if (evidence.CaseKey.MetricFamily == MetricFamily.Allocation && allocation is null)
+        {
             errors.Add(new("allocation-unavailable", "Allocation benchmark evidence cannot use an unavailable BDN allocation result."));
+        }
+
         var requiredNames = new[] { "Mean", "Median", "Allocated" };
         var fields = evidence.BenchmarkDotNet.ResultFields;
         var mandatoryUnique = requiredNames.All(name => fields.Count(field => field.Name == name) == 1) &&
@@ -567,12 +610,18 @@ public static class EvidenceValidator
                           MatchesNullableAllocationField(fields.Single(static field => field.Name == "Allocated").Value,
                               allocation, contract.BenchmarkDotNetAllocationUnit, contract.DecimalPlaces);
         if (!fieldsMatch)
+        {
             errors.Add(new("result-fields", "BDN Mean, Median, and Allocated must exactly match recomputed raw measurements and checked display units/rounding."));
+        }
+
         if (!double.IsFinite(evidence.Result.Value) ||
             evidence.Result.Value != timingMean || evidence.Result.AllocatedBytes != allocation ||
             !StringComparer.Ordinal.Equals(evidence.Result.Unit, contract.ResultTimingUnit) ||
             !StringComparer.Ordinal.Equals(evidence.Result.AllocationUnit, contract.ResultAllocationUnit))
+        {
             errors.Add(new("result-statistics", "Result evidence must equal recomputed authoritative timing/allocation statistics and checked units."));
+        }
+
         return errors;
     }
 
@@ -581,6 +630,7 @@ public static class EvidenceValidator
             ? StringComparer.Ordinal.Equals(value, BenchmarkAggregationCatalog.UnavailableAllocation)
             : MatchesBenchmarkDotNetField(value, expected.Value, unit, decimalPlaces);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The parsed field must equal the value rounded the same way BenchmarkDotNet rounds it; a tolerance would accept altered evidence.")]
     private static bool MatchesBenchmarkDotNetField(
         string value,
         double expected,
@@ -590,20 +640,26 @@ public static class EvidenceValidator
         var separator = value.LastIndexOf(' ');
         if (separator <= 0 || separator == value.Length - 1 ||
             !StringComparer.Ordinal.Equals(value[(separator + 1)..], expectedUnit))
+        {
             return false;
+        }
+
         var number = value[..separator];
         var decimalPoint = number.IndexOf('.');
         if (decimalPoint <= 0 || number.Length - decimalPoint - 1 != decimalPlaces ||
             number[(decimalPoint + 1)..].Any(static character => !char.IsAsciiDigit(character)) ||
             !double.TryParse(number, System.Globalization.NumberStyles.AllowDecimalPoint,
                 System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+        {
             return false;
+        }
+
         var rounded = Math.Round(expected, decimalPlaces, MidpointRounding.ToEven);
         return parsed == rounded && StringComparer.Ordinal.Equals(number,
             rounded.ToString($"F{decimalPlaces}", System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    private static IReadOnlyList<ContractError> ValidateSourceArtifacts(
+    private static List<ContractError> ValidateSourceArtifacts(
         BenchmarkSourceIdentity source,
         string provider,
         string runtimeTfm,
@@ -614,10 +670,16 @@ public static class EvidenceValidator
                 static artifact => $"{(int)artifact.Role}:{artifact.RelativeArtifactId}",
                 StringComparer.OrdinalIgnoreCase)
             .Any(static group => group.Count() != 1);
-        if (duplicate) errors.Add(new("source-artifact-identity", "Source artifact role/id pairs must be unique."));
+        if (duplicate)
+        {
+            errors.Add(new("source-artifact-identity", "Source artifact role/id pairs must be unique."));
+        }
+
         if (source.Artifacts.Any(static artifact => !IsSafeRelativeArtifactId(artifact.RelativeArtifactId) ||
                 !IsSha256(artifact.Sha256)))
+        {
             errors.Add(new("source-artifact", "Every source artifact needs a safe relative ID and lowercase SHA-256."));
+        }
 
         SourceArtifactManifest? manifest = null;
         try
@@ -641,8 +703,11 @@ public static class EvidenceValidator
                 .ThenBy(static artifact => artifact.RelativeArtifactId, StringComparer.Ordinal).ToArray();
             if (!StringComparer.Ordinal.Equals(source.ArtifactManifestHash, manifest.IdentityHash) ||
                 !actual.SequenceEqual(expected))
+            {
                 errors.Add(new("source-artifact-manifest",
                     "Source artifacts must exactly equal the checked provider/lane/TFM manifest; extras, omissions, and substitutions are forbidden."));
+            }
+
             var actualSelectedArtifacts = source.Artifacts
                 .Where(static artifact => artifact.Role is SourceArtifactRole.RuntimeAssembly or
                     SourceArtifactRole.AnalyzerAssembly or SourceArtifactRole.GeneratedSource)
@@ -650,14 +715,17 @@ public static class EvidenceValidator
                 .ThenBy(static artifact => artifact.RelativeArtifactId, StringComparer.Ordinal)
                 .ToArray();
             if (!actualSelectedArtifacts.SequenceEqual(selectedArtifacts))
+            {
                 errors.Add(new("selected-asset-binding",
                     "Runtime/product/provider, analyzer, and generated source claims must retain the exact logical IDs and physical hashes emitted by the selected-assets manifest."));
+            }
+
             errors.AddRange(ValidateResolvedDependencies(source, manifest));
         }
         return errors;
     }
 
-    private static IReadOnlyList<ContractError> ValidateResolvedDependencies(
+    private static List<ContractError> ValidateResolvedDependencies(
         BenchmarkSourceIdentity source,
         SourceArtifactManifest sourceManifest)
     {
@@ -729,14 +797,17 @@ public static class EvidenceValidator
             !StringComparer.Ordinal.Equals(resolved.SelectedAssetsManifestSha256, selectedAssets.SingleOrDefault()?.Sha256) ||
             manifestArtifact.Length != 1 ||
             !StringComparer.Ordinal.Equals(resolved.ContentSha256, manifestArtifact.SingleOrDefault()?.Sha256))
+        {
             errors.Add(new("resolved-dependency-manifest",
                 "Resolved dependency evidence must be the canonical provider/lane/TFM/RID MSBuild-selected compiler/runtime/native/analyzer/generated/host/product manifest with physical content hashes; project.assets.json is provenance only."));
+        }
+
         return errors;
     }
 
     private static bool IsSafeRelativeArtifactId(string? value)
         => !string.IsNullOrWhiteSpace(value) && value == value.Trim() &&
-           !value.StartsWith("/", StringComparison.Ordinal) && !value.Contains('\\') &&
+           !value.StartsWith('/') && !value.Contains('\\') &&
            !value.Contains(':') && !value.Contains('?') && !value.Contains('#') &&
            value.Split('/').All(static segment => segment is not ("" or "." or "..") &&
                segment.All(static character => char.IsLetterOrDigit(character) || character is '.' or '-' or '_' or '+'));
@@ -749,7 +820,9 @@ public static partial class EvidenceHygieneValidator
     {
         var errors = new List<ContractError>();
         if (json.Length > EvidenceLimits.MaxShardBytes)
+        {
             errors.Add(new("shard-size", $"Checked evidence shard exceeds {EvidenceLimits.MaxShardBytes} bytes."));
+        }
 
         try
         {
@@ -779,7 +852,10 @@ public static partial class EvidenceHygieneValidator
                 // Rows is the single checked BenchmarkDotNet cardinality parameter. Only its
                 // row-classification is exempt; sensitive and payload aliases remain forbidden.
                 if (path == "$.benchmarkTarget.parameters" && property.Name == "Rows" && forbiddenKind == "row")
+                {
                     forbiddenKind = null;
+                }
+
                 if (forbiddenKind is not null)
                 {
                     var code = forbiddenKind == "row" ? "row-data" : "forbidden-field";
@@ -792,7 +868,10 @@ public static partial class EvidenceHygieneValidator
         else if (element.ValueKind == JsonValueKind.Array)
         {
             var index = 0;
-            foreach (var item in element.EnumerateArray()) Visit(item, $"{path}[{index++}]", errors);
+            foreach (var item in element.EnumerateArray())
+            {
+                Visit(item, $"{path}[{index++}]", errors);
+            }
         }
         else if (element.ValueKind == JsonValueKind.String)
         {
@@ -804,11 +883,19 @@ public static partial class EvidenceHygieneValidator
     private static void ValidateString(string value, string path, List<ContractError> errors)
     {
         if (ConnectionStringPattern().IsMatch(value) || CredentialUrlPattern().IsMatch(value))
+        {
             errors.Add(new("secret-leak", $"Potential credential or connection string at {path}."));
+        }
+
         if (UnixAbsolutePathPattern().IsMatch(value) || WindowsAbsolutePathPattern().IsMatch(value))
+        {
             errors.Add(new("absolute-path", $"Absolute filesystem path at {path}."));
+        }
+
         if (UnsafeExceptionPattern().IsMatch(value))
+        {
             errors.Add(new("unsafe-exception", $"Unsanitized exception text at {path}."));
+        }
     }
 
     private static string? ClassifyPropertyName(string name)
@@ -821,7 +908,10 @@ public static partial class EvidenceHygieneValidator
             .ToHashSet(StringComparer.Ordinal);
         if (tokens.Overlaps(["row", "rows", "record", "records", "entity", "entities", "payload"]) ||
             compact.Contains("rowdata", StringComparison.Ordinal) || compact.Contains("rowpayload", StringComparison.Ordinal))
+        {
             return "row";
+        }
+
         if (tokens.Overlaps(["user", "username", "userid", "host", "hostname", "machine", "machinename"]) ||
             compact.Contains("password", StringComparison.Ordinal) || compact.Contains("passwd", StringComparison.Ordinal) ||
             compact.Contains("pwd", StringComparison.Ordinal) || compact.Contains("secret", StringComparison.Ordinal) ||
@@ -830,7 +920,10 @@ public static partial class EvidenceHygieneValidator
             compact.Contains("username", StringComparison.Ordinal) || compact.Contains("userid", StringComparison.Ordinal) ||
             compact.Contains("hostname", StringComparison.Ordinal) || compact.Contains("machinename", StringComparison.Ordinal) ||
             compact.Contains("stacktrace", StringComparison.Ordinal) || compact.Contains("exception", StringComparison.Ordinal))
+        {
             return "sensitive";
+        }
+
         return null;
     }
 
@@ -864,13 +957,13 @@ public sealed record ArtifactValidationResult<T>(T? Artifact, IReadOnlyList<Cont
 
 public static class CheckedArtifactSchemas
 {
-    private static readonly Lazy<JsonSchema> EvidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
-    private static readonly Lazy<JsonSchema> BaselineSchema = new(() => Load("checked-baseline.schema.json"));
-    private static readonly Lazy<JsonSchema> SelectedStrategySchema = new(() => Load("selected-batch-strategy-v1.schema.json"));
+    private static readonly Lazy<JsonSchema> _evidenceSchema = new(() => Load("benchmark-evidence-v2.schema.json"));
+    private static readonly Lazy<JsonSchema> _baselineSchema = new(() => Load("checked-baseline.schema.json"));
+    private static readonly Lazy<JsonSchema> _selectedStrategySchema = new(() => Load("selected-batch-strategy-v1.schema.json"));
 
-    public static JsonSchema Evidence => EvidenceSchema.Value;
-    public static JsonSchema Baseline => BaselineSchema.Value;
-    public static JsonSchema SelectedStrategy => SelectedStrategySchema.Value;
+    public static JsonSchema Evidence => _evidenceSchema.Value;
+    public static JsonSchema Baseline => _baselineSchema.Value;
+    public static JsonSchema SelectedStrategy => _selectedStrategySchema.Value;
 
     private static JsonSchema Load(string fileName)
     {
@@ -889,7 +982,7 @@ public sealed record EvidenceArtifactValidationContext(
 
 public static class EvidenceArtifactValidator
 {
-    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+    private static readonly StringComparer _pathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
@@ -924,9 +1017,15 @@ public static class EvidenceArtifactValidator
             var schemaResult = CheckedArtifactSchemas.Evidence.Evaluate(
                 document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schemaResult.IsValid)
+            {
                 errors.Add(new("json-schema", "Evidence artifact does not match the closed checked schema."));
+            }
+
             errors.AddRange(EvidenceHygieneValidator.Validate(json));
-            if (errors.Count != 0) return new(null, errors);
+            if (errors.Count != 0)
+            {
+                return new(null, errors);
+            }
 
             BenchmarkEvidenceEnvelope? artifact;
             try
@@ -938,9 +1037,17 @@ public static class EvidenceArtifactValidator
                 return new(null, [new("deserialize", "Evidence artifact could not be deserialized after schema validation.")]);
             }
 
-            if (artifact is null) return new(null, [new("deserialize", "Evidence artifact deserialized to null.")]);
+            if (artifact is null)
+            {
+                return new(null, [new("deserialize", "Evidence artifact deserialized to null.")]);
+            }
+
             errors.AddRange(EvidenceValidator.Validate(artifact));
-            if (errors.Count != 0) return new(artifact, errors);
+            if (errors.Count != 0)
+            {
+                return new(artifact, errors);
+            }
+
             if (filesystem is null)
             {
                 errors.Add(new("filesystem-context",
@@ -961,7 +1068,9 @@ public static class EvidenceArtifactValidator
             var artifactRoot = Path.GetFullPath(context.ArtifactRoot)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             if (!Directory.Exists(artifactRoot) || IsReparsePoint(artifactRoot))
+            {
                 return [new("artifact-filesystem", "The physical artifact root must be an existing non-reparse directory.")];
+            }
 
             var paths = evidence.Source.Artifacts.ToDictionary(
                 static artifact => artifact,
@@ -983,7 +1092,9 @@ public static class EvidenceArtifactValidator
                     physicalManifest, selectedAssets.Value, projectAssets.Value, context.SelectedAssetRoots) ||
                 !StringComparer.Ordinal.Equals(physicalManifest.ProjectAssetsSha256, projectAssets.Key.Sha256) ||
                 !StringComparer.Ordinal.Equals(physicalManifest.SelectedAssetsManifestSha256, selectedAssets.Key.Sha256))
+            {
                 return [new("artifact-content", "Physical selected assets and the canonical resolved dependency manifest do not exactly match checked evidence.")];
+            }
 
             foreach (var (artifact, path) in paths.Where(static item => item.Key.Role is not (
                          SourceArtifactRole.DependencyArtifact or SourceArtifactRole.SelectedAssetsManifest or
@@ -992,7 +1103,9 @@ public static class EvidenceArtifactValidator
                 var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
                     .ToLowerInvariant();
                 if (!StringComparer.Ordinal.Equals(actual, artifact.Sha256))
+                {
                     return [new("artifact-content", $"Physical artifact content does not match {artifact.RelativeArtifactId}.")];
+                }
             }
             return [];
         }
@@ -1011,14 +1124,23 @@ public static class EvidenceArtifactValidator
         if (Path.IsPathRooted(relative) || relative == ".." ||
             relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
             !File.Exists(path))
+        {
             throw new InvalidDataException($"Artifact is missing or escapes its physical root: {relativeArtifactId}");
+        }
+
         var current = new FileInfo(path) as FileSystemInfo;
         while (current is not null)
         {
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
                 throw new InvalidDataException($"Artifact path traverses a reparse point: {relativeArtifactId}");
-            if (PathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
+            }
+
+            if (_pathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar), root))
+            {
                 return path;
+            }
+
             current = current is FileInfo file ? file.Directory : ((DirectoryInfo)current).Parent;
         }
         throw new InvalidDataException($"Artifact is not contained by its physical root: {relativeArtifactId}");
@@ -1121,10 +1243,14 @@ public static class BaselineValidator
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "S1244", Justification = "The baseline medians must equal the medians recomputed from the same measurements; a tolerance would accept altered baselines.")]
     public static IReadOnlyList<ContractError> Validate(
         CheckedBaselineVector baseline,
         BenchmarkEvidenceEnvelope evidence)
@@ -1133,14 +1259,23 @@ public static class BaselineValidator
             baseline, evidence.CaseId, evidence.EnvironmentHash, evidence.BenchmarkDotNet.LaunchCount));
         if (!StringComparer.Ordinal.Equals(baseline.CampaignId, evidence.CampaignId) ||
             evidence.CollectedAtUtc < baseline.WindowStartUtc || evidence.CollectedAtUtc > baseline.WindowEndUtc)
+        {
             errors.Add(new("baseline-campaign-evidence",
                 "Baseline campaign and UTC window must contain the bound evidence collection."));
+        }
+
         if (!StringComparer.Ordinal.Equals(baseline.Approval.Commit, evidence.Checkout.Commit) ||
             !StringComparer.Ordinal.Equals(baseline.Approval.Commit, evidence.Source.Commit))
+        {
             errors.Add(new("baseline-approval", "Baseline approval must commit to the exact evidence checkout and source Git SHA."));
+        }
+
         if (evidence.LaunchHealth.Any(health =>
                 health.CollectedAtUtc < baseline.WindowStartUtc || health.CollectedAtUtc > baseline.WindowEndUtc))
+        {
             errors.Add(new("baseline-health-window", "Every launch health audit must fall inside the baseline collection window."));
+        }
+
         var job = BenchmarkJobCatalog.Jobs.SingleOrDefault(candidate =>
             StringComparer.Ordinal.Equals(candidate.Id, evidence.BenchmarkDotNet.JobId));
         var expectedIterations = job?.MeasurementIterationFloor ?? -1;
@@ -1151,12 +1286,17 @@ public static class BaselineValidator
                 .Where(measurement => measurement.LaunchIndex == sample.LaunchIndex).ToArray();
             if (measurements.Length == 0 || measurements.Length != expectedIterations ||
                 sample.Median != BenchmarkStatistics.Median(measurements.Select(static measurement => measurement.NanosecondsPerOperation)))
+            {
                 errors.Add(new("baseline-launch-median",
                     "Every retained launch median must be recomputed exactly from its complete raw target measurements."));
+            }
+
             var health = evidence.LaunchHealth.Where(item => item.LaunchIndex == sample.LaunchIndex).ToArray();
             if (health.Length != 1 || health[0].Status != LaunchHealthStatus.Healthy)
+            {
                 errors.Add(new("baseline-health-contradiction",
                     "A retained launch must have exactly one healthy audited launch-health record."));
+            }
         }
 
         foreach (var sample in baseline.InvalidSamples)
@@ -1165,8 +1305,10 @@ public static class BaselineValidator
             if (health.Length != 1 || health[0].Status == LaunchHealthStatus.Healthy ||
                 health[0].Status != sample.Status ||
                 !StringComparer.Ordinal.Equals(health[0].IdentityHash, sample.HealthEvidenceHash))
+            {
                 errors.Add(new("baseline-exclusion-evidence",
                     "Every excluded launch must bind the exact matching non-healthy launch-health audit."));
+            }
         }
         return errors;
     }
@@ -1200,9 +1342,15 @@ public static class BaselineArtifactValidator
             var schemaResult = CheckedArtifactSchemas.Baseline.Evaluate(
                 document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schemaResult.IsValid)
+            {
                 errors.Add(new("json-schema", "Baseline artifact does not match the closed checked schema."));
+            }
+
             errors.AddRange(EvidenceHygieneValidator.Validate(json));
-            if (errors.Count != 0) return new(null, errors);
+            if (errors.Count != 0)
+            {
+                return new(null, errors);
+            }
 
             CheckedBaselineVector? artifact;
             try
@@ -1213,7 +1361,11 @@ public static class BaselineArtifactValidator
             {
                 return new(null, [new("deserialize", "Baseline artifact could not be deserialized after schema validation.")]);
             }
-            if (artifact is null) return new(null, [new("deserialize", "Baseline artifact deserialized to null.")]);
+            if (artifact is null)
+            {
+                return new(null, [new("deserialize", "Baseline artifact deserialized to null.")]);
+            }
+
             errors.AddRange(EvidenceValidator.Validate(evidence));
             errors.AddRange(BaselineValidator.Validate(artifact, evidence));
             return new(artifact, errors);

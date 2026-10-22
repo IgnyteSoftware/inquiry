@@ -1,10 +1,11 @@
+using System.Collections;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -19,7 +20,7 @@ public sealed class BatchRuntimeEvidenceTests
         var affected = await pipeline.ExecuteBatchAsync(RowCommand(), Enumerable.Range(1, 5));
 
         Assert.Equal(5, affected);
-        Assert.Equal(new[] { 2, 2, 1 }, state.ExecutedBatchSizes);
+        Assert.Equal([2, 2, 1], state.ExecutedBatchSizes);
         Assert.Equal(3, state.BatchCreateCount);
         Assert.Equal(3, state.BatchDisposeCount);
         Assert.Equal(0, state.CommandExecuteCount);
@@ -66,7 +67,7 @@ public sealed class BatchRuntimeEvidenceTests
             new IInquiryCommandInterceptor[] { interceptor },
             new InquiryOptions { MaxBatchSize = 2 });
 
-        var affected = await pipeline.ExecuteBatchAsync(SelectableRowCommand(), new[] { 1, 2, 3 });
+        var affected = await pipeline.ExecuteBatchAsync(SelectableRowCommand(), [1, 2, 3]);
 
         Assert.Equal(3, affected);
         Assert.Equal(0, state.BatchCreateCount);
@@ -75,12 +76,11 @@ public sealed class BatchRuntimeEvidenceTests
         Assert.Equal(3, state.CommandExecuteCount);
         Assert.Equal(3, state.CommandDisposeCount);
         Assert.Equal(
-            new[]
-            {
+            [
                 "initialized:1", "executing:1", "executed:1:1",
                 "initialized:2", "executing:2", "executed:2:1",
                 "initialized:3", "executing:3", "executed:3:1",
-            },
+            ],
             interceptor.Events);
         Assert.Equal(1, state.TransactionCommitCount);
         Assert.Equal(0, state.TransactionRollbackCount);
@@ -99,7 +99,7 @@ public sealed class BatchRuntimeEvidenceTests
             new InquiryOptions { MaxBatchSize = 3 });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => pipeline.ExecuteBatchAsync(SelectableRowCommand(), new[] { 1, 2, 3 }, cancellation.Token));
+            () => pipeline.ExecuteBatchAsync(SelectableRowCommand(), [1, 2, 3], cancellation.Token));
 
         Assert.Equal(0, state.BatchCreateCount);
         Assert.Empty(state.ExecutedBatchSizes);
@@ -107,11 +107,10 @@ public sealed class BatchRuntimeEvidenceTests
         Assert.Equal(1, state.CommandExecuteCount);
         Assert.Equal(2, state.CommandDisposeCount);
         Assert.Equal(
-            new[]
-            {
+            [
                 "initialized:1", "executing:1", "executed:1:1",
                 "initialized:2", "executing:2", "failed:2:OperationCanceledException",
-            },
+            ],
             interceptor.Events);
         Assert.Equal(0, state.TransactionCommitCount);
         Assert.Equal(1, state.TransactionRollbackCount);
@@ -227,19 +226,23 @@ public sealed class BatchRuntimeEvidenceTests
             var transaction = new RecordingTransaction(connection, state);
             var pipeline = new TransactedInquiryRequestPipeline(
                 connection, transaction, Array.Empty<IInquiryCommandInterceptor>(), factory, options);
-            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), new[] { 1 });
+            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), [1]);
         }
         else
         {
             var pipeline = new InquiryRequestPipeline(
                 factory, Array.Empty<IInquiryCommandInterceptor>(), options);
-            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), new[] { 1 });
+            execute = () => pipeline.ExecuteBatchAsync(PreferredRowCommand(), [1]);
         }
 
         if (cancel)
+        {
             await Assert.ThrowsAnyAsync<OperationCanceledException>(execute);
+        }
         else
+        {
             await Assert.ThrowsAsync<InvalidOperationException>(execute);
+        }
 
         Assert.Equal(1, state.CommandCreateCount);
         Assert.Equal(1, state.CommandPrepareCount);
@@ -296,11 +299,11 @@ public sealed class BatchRuntimeEvidenceTests
         if (throwOnExecute)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => pipeline.ExecuteBatchAsync(RowCommand(), new[] { 1, 2, 3 }));
+                () => pipeline.ExecuteBatchAsync(RowCommand(), [1, 2, 3]));
         }
         else
         {
-            Assert.Equal(3, await pipeline.ExecuteBatchAsync(RowCommand(), new[] { 1, 2, 3 }));
+            Assert.Equal(3, await pipeline.ExecuteBatchAsync(RowCommand(), [1, 2, 3]));
         }
 
         var assignedTransactions = mode == InquiryBatchExecutionMode.DbBatch
@@ -329,7 +332,7 @@ public sealed class BatchRuntimeEvidenceTests
             maxItemsPerCommand: 1000);
 
         Assert.Equal(1001, await pipeline.ExecuteBatchAsync(command, Enumerable.Range(1, 1001)));
-        Assert.Equal(new[] { 1000, 1 }, state.InitializedChunkSizes);
+        Assert.Equal([1000, 1], state.InitializedChunkSizes);
     }
 
     [Fact]
@@ -345,8 +348,8 @@ public sealed class BatchRuntimeEvidenceTests
         Assert.Equal(5, await CreatePipeline(wholeSourceState, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2)
             .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: true, chunk => boundSource = chunk), items));
 
-        Assert.Equal(new[] { 2, 2, 1 }, chunkedState.InitializedChunkSizes);
-        Assert.Equal(new[] { 5 }, wholeSourceState.InitializedChunkSizes);
+        Assert.Equal([2, 2, 1], chunkedState.InitializedChunkSizes);
+        Assert.Equal([5], wholeSourceState.InitializedChunkSizes);
         Assert.Equal(1, wholeSourceState.CommandExecuteCount);
         Assert.Same(items, boundSource);
     }
@@ -363,7 +366,7 @@ public sealed class BatchRuntimeEvidenceTests
             .ExecuteBatchAsync(WholeSourceCommand(ignoresMaxBatchSize: true, _ => producedAtBind = produced), Source()));
 
         Assert.Equal(5, producedAtBind);
-        Assert.Equal(new[] { 5 }, state.InitializedChunkSizes);
+        Assert.Equal([5], state.InitializedChunkSizes);
         Assert.Equal(1, disposed);
 
         IEnumerable<int> Source()
@@ -405,7 +408,11 @@ public sealed class BatchRuntimeEvidenceTests
             {
                 for (var i = 1; i <= 5; i++)
                 {
-                    if (i == 4) cancellation.Cancel();
+                    if (i == 4)
+                    {
+                        cancellation.Cancel();
+                    }
+
                     yield return i;
                 }
             }
@@ -445,9 +452,9 @@ public sealed class BatchRuntimeEvidenceTests
 
         Assert.Equal(1001, await pipeline.ExecuteBatchAsync(
             AdaptiveTenParameterCommand(), Enumerable.Range(1, 1001)));
-        Assert.Equal(new[] { 1 }, state.InitializedChunkSizes);
+        Assert.Equal([1], state.InitializedChunkSizes);
         Assert.Equal(1, state.BatchCreateCount);
-        Assert.Equal(new[] { 1000 }, state.ExecutedBatchSizes);
+        Assert.Equal([1000], state.ExecutedBatchSizes);
     }
 
     [Theory]
@@ -472,7 +479,7 @@ public sealed class BatchRuntimeEvidenceTests
             state, InquiryBatchExecutionMode.DbBatch, maxBatchSize: 1000, maxParametersPerCommand: 9);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => pipeline.ExecuteBatchAsync(AdaptiveTenParameterCommand(), new[] { 1 }));
+            () => pipeline.ExecuteBatchAsync(AdaptiveTenParameterCommand(), [1]));
         Assert.Equal(0, state.CommandCreateCount);
         Assert.Equal(0, state.BatchCreateCount);
     }
@@ -523,7 +530,7 @@ public sealed class BatchRuntimeEvidenceTests
             ThrowOnConnectionDispose = true,
         };
         var pipeline = CreatePipeline(state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2);
-        var source = new ThrowingDisposeEnumerable(new[] { 1 });
+        var source = new ThrowingDisposeEnumerable([1]);
 
         var exception = await Assert.ThrowsAsync<AggregateException>(
             () => pipeline.ExecuteBatchAsync(RowCommand(), source));
@@ -540,7 +547,7 @@ public sealed class BatchRuntimeEvidenceTests
             item => Assert.Equal("transaction dispose failed", item.Message),
             item => Assert.Equal("connection dispose failed", item.Message));
         Assert.Equal(
-            new[] { "command-dispose", "transaction-rollback", "transaction-dispose", "connection-dispose" },
+            ["command-dispose", "transaction-rollback", "transaction-dispose", "connection-dispose"],
             state.CleanupEvents);
     }
 
@@ -767,6 +774,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal RecordingConnection(RecordingState state) => _state = state;
 
         public override bool CanCreateBatch => _state.CanCreateBatch;
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -796,7 +804,10 @@ public sealed class BatchRuntimeEvidenceTests
             if (disposing)
             {
                 _state.CleanupEvents.Add("connection-dispose");
-                if (_state.ThrowOnConnectionDispose) throw new InvalidOperationException("connection dispose failed");
+                if (_state.ThrowOnConnectionDispose)
+                {
+                    throw new InvalidOperationException("connection dispose failed");
+                }
             }
 
             base.Dispose(disposing);
@@ -817,23 +828,39 @@ public sealed class BatchRuntimeEvidenceTests
         public override IsolationLevel IsolationLevel => IsolationLevel.ReadCommitted;
         protected override DbConnection DbConnection => _connection;
         public override void Commit() => _state.TransactionCommitCount++;
-        public override void Rollback()
-        {
-            _state.TransactionRollbackCount++;
-            _state.CleanupEvents.Add("transaction-rollback");
-            if (_state.ThrowOnRollback) throw new InvalidOperationException("transaction rollback failed");
-        }
         public override Task CommitAsync(CancellationToken cancellationToken = default)
         {
             _state.TransactionCommitCount++;
             return Task.CompletedTask;
         }
 
+        public override void Rollback()
+        {
+            _state.TransactionRollbackCount++;
+            _state.CleanupEvents.Add("transaction-rollback");
+            if (_state.ThrowOnRollback)
+            {
+                throw new InvalidOperationException("transaction rollback failed");
+            }
+        }
+
+        public override void Rollback(string savepointName) => _state.SavepointRollbackCount++;
+
         public override Task RollbackAsync(CancellationToken cancellationToken = default)
         {
             _state.TransactionRollbackCount++;
             _state.CleanupEvents.Add("transaction-rollback");
-            if (_state.ThrowOnRollback) throw new InvalidOperationException("transaction rollback failed");
+            if (_state.ThrowOnRollback)
+            {
+                throw new InvalidOperationException("transaction rollback failed");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
+        {
+            _state.SavepointRollbackCount++;
             return Task.CompletedTask;
         }
 
@@ -841,13 +868,6 @@ public sealed class BatchRuntimeEvidenceTests
         public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default)
         {
             _state.SavepointCreateCount++;
-            return Task.CompletedTask;
-        }
-
-        public override void Rollback(string savepointName) => _state.SavepointRollbackCount++;
-        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default)
-        {
-            _state.SavepointRollbackCount++;
             return Task.CompletedTask;
         }
 
@@ -863,7 +883,10 @@ public sealed class BatchRuntimeEvidenceTests
             if (disposing)
             {
                 _state.CleanupEvents.Add("transaction-dispose");
-                if (_state.ThrowOnTransactionDispose) throw new InvalidOperationException("transaction dispose failed");
+                if (_state.ThrowOnTransactionDispose)
+                {
+                    throw new InvalidOperationException("transaction dispose failed");
+                }
             }
 
             base.Dispose(disposing);
@@ -878,6 +901,7 @@ public sealed class BatchRuntimeEvidenceTests
         internal RecordingCommand(RecordingState state) => _state = state;
         internal int AffectedRows { get; set; } = 1;
 
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
@@ -903,16 +927,29 @@ public sealed class BatchRuntimeEvidenceTests
         public override void Prepare()
         {
             _state.CommandPrepareCount++;
-            if (_state.CancelOnCommandPrepare) throw new OperationCanceledException();
-            if (_state.ThrowOnCommandPrepare) throw new InvalidOperationException("command prepare failed");
+            if (_state.CancelOnCommandPrepare)
+            {
+                throw new OperationCanceledException();
+            }
+
+            if (_state.ThrowOnCommandPrepare)
+            {
+                throw new InvalidOperationException("command prepare failed");
+            }
         }
         public override Task PrepareAsync(CancellationToken cancellationToken = default)
         {
             _state.CommandPrepareCount++;
             if (_state.CancelOnCommandPrepare)
+            {
                 return Task.FromException(new OperationCanceledException(cancellationToken));
+            }
+
             if (_state.ThrowOnCommandPrepare)
+            {
                 return Task.FromException(new InvalidOperationException("command prepare failed"));
+            }
+
             return Task.CompletedTask;
         }
 
@@ -928,7 +965,10 @@ public sealed class BatchRuntimeEvidenceTests
             {
                 _state.CommandDisposeCount++;
                 _state.CleanupEvents.Add("command-dispose");
-                if (_state.ThrowOnCommandDispose) throw new InvalidOperationException("command dispose failed");
+                if (_state.ThrowOnCommandDispose)
+                {
+                    throw new InvalidOperationException("command dispose failed");
+                }
             }
             base.Dispose(disposing);
         }
@@ -936,7 +976,11 @@ public sealed class BatchRuntimeEvidenceTests
         private int Execute()
         {
             _state.CommandExecuteCount++;
-            if (_state.ThrowOnCommandExecute) throw new InvalidOperationException("command execute failed");
+            if (_state.ThrowOnCommandExecute)
+            {
+                throw new InvalidOperationException("command execute failed");
+            }
+
             return AffectedRows;
         }
     }
@@ -984,7 +1028,7 @@ public sealed class BatchRuntimeEvidenceTests
 
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
-            CommandBehavior behavior, CancellationToken cancellationToken = default)
+            CommandBehavior behavior, CancellationToken cancellationToken)
             => Task.FromException<DbDataReader>(new NotSupportedException());
 
         public override void Dispose()
@@ -995,7 +1039,11 @@ public sealed class BatchRuntimeEvidenceTests
 
         private int Execute()
         {
-            if (_state.ThrowOnBatchExecute) throw new InvalidOperationException("batch execute failed");
+            if (_state.ThrowOnBatchExecute)
+            {
+                throw new InvalidOperationException("batch execute failed");
+            }
+
             _state.ExecutedBatchSizes.Add(_commands.Count);
             return _commands.Count;
         }
@@ -1039,7 +1087,9 @@ public sealed class BatchRuntimeEvidenceTests
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override object? Value { get; set; }
         public override bool SourceColumnNullMapping { get; set; }
@@ -1053,7 +1103,13 @@ public sealed class BatchRuntimeEvidenceTests
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var value in values) Add(value!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var value in values)
+            {
+                Add(value);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => IndexOf(value) >= 0;
@@ -1091,6 +1147,7 @@ public sealed class BatchRuntimeEvidenceTests
             object IEnumerator.Current => Current;
             public bool MoveNext() => ++_index < _items.Count;
             public void Reset() => throw new NotSupportedException();
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose() => throw new InvalidOperationException("enumerator dispose failed");
         }
     }

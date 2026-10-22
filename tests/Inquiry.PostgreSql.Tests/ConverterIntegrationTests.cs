@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.FeatureCatalog;
 using Inquiry.PostgreSql.Tests.Fixtures;
 
@@ -31,8 +30,8 @@ public sealed class ConverterIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(12.50m, loaded!.Balance.Amount);
-        Assert.Equal(new[] { "savings", "primary" }, loaded.Tags);
+        Assert.Equal(12.50m, loaded.Balance.Amount);
+        Assert.Equal(["savings", "primary"], loaded.Tags);
     }
 
     [SkippableFact]
@@ -46,6 +45,6 @@ public sealed class ConverterIntegrationTests
 
         var loaded = await store.GetAsync(1);
         Assert.NotNull(loaded);
-        Assert.Null(loaded!.Tags);
+        Assert.Null(loaded.Tags);
     }
 }

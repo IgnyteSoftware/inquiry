@@ -1,9 +1,8 @@
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
-using Inquiry.Generators;
 using Inquiry.Generators.Models;
 using Json.Schema;
 
@@ -11,7 +10,7 @@ namespace Inquiry.Generators.Tests;
 
 public sealed partial class InquiryGeneratorTests
 {
-    private static readonly Lazy<JsonSchema> s_manifestSchema = new(() =>
+    private static readonly Lazy<JsonSchema> _manifestSchema = new(() =>
         JsonSchema.FromText(File.ReadAllText(RepositoryFile("docs", "schema-manifest-v1.schema.json"))));
     private const string ManifestSource = """
         using Inquiry.Entities; namespace Demo;
@@ -99,7 +98,7 @@ public sealed partial class InquiryGeneratorTests
     private static void AssertValidAgainstCheckedInSchema(string instanceJson)
     {
         using var instance = JsonDocument.Parse(instanceJson);
-        var result = s_manifestSchema.Value.Evaluate(instance.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+        var result = _manifestSchema.Value.Evaluate(instance.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
         Assert.True(result.IsValid, result.ToString());
     }
 
@@ -164,14 +163,14 @@ public sealed partial class InquiryGeneratorTests
     public void ManifestCaseOnlyNamesHaveStableRawOrdinalTieBreak(string dialect)
     {
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"a\")] public sealed class Lower { [InquiryKey] public int Id {get;set;} } [InquiryTable(\"A\")] public sealed class Upper { [InquiryKey] public int Id {get;set;} }";
-        Assert.Equal(new[] { "A", "a" }, ManifestTableNames(RunGenerator(source, dialect: dialect)));
+        Assert.Equal(["A", "a"], ManifestTableNames(RunGenerator(source, dialect: dialect)));
     }
 
     [Fact]
     public void OracleRequiredQuotedNamesPreserveExactOrdinalOrdering()
     {
         const string source = "using Inquiry.Entities; namespace Demo; [InquiryTable(\"a name\")] public sealed class Lower { [InquiryKey] public int Id {get;set;} } [InquiryTable(\"B name\")] public sealed class Upper { [InquiryKey] public int Id {get;set;} }";
-        Assert.Equal(new[] { "B name", "a name" }, ManifestTableNames(RunGenerator(source, dialect: "Oracle")));
+        Assert.Equal(["B name", "a name"], ManifestTableNames(RunGenerator(source, dialect: "Oracle")));
     }
 
     [Fact]
@@ -268,11 +267,23 @@ public sealed partial class InquiryGeneratorTests
         foreach (var handle in metadata.GetAssemblyDefinition().GetCustomAttributes())
         {
             var attribute = metadata.GetCustomAttribute(handle);
-            if (attribute.Constructor.Kind != HandleKind.MemberReference) continue;
+            if (attribute.Constructor.Kind != HandleKind.MemberReference)
+            {
+                continue;
+            }
+
             var member = metadata.GetMemberReference((MemberReferenceHandle)attribute.Constructor);
-            if (member.Parent.Kind != HandleKind.TypeReference) continue;
+            if (member.Parent.Kind != HandleKind.TypeReference)
+            {
+                continue;
+            }
+
             var type = metadata.GetTypeReference((TypeReferenceHandle)member.Parent);
-            if (metadata.GetString(type.Name) != "AssemblyMetadataAttribute") continue;
+            if (metadata.GetString(type.Name) != "AssemblyMetadataAttribute")
+            {
+                continue;
+            }
+
             var blob = metadata.GetBlobReader(attribute.Value);
             Assert.Equal(1, blob.ReadUInt16());
             values[blob.ReadSerializedString()!] = blob.ReadSerializedString()!;
@@ -323,23 +334,36 @@ public sealed partial class InquiryGeneratorTests
 
     private static void AssertManifestShape(JsonElement manifest)
     {
-        Assert.Equal(new[] { "formatVersion", "providerId", "tables", "providerArtifacts" }, manifest.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(["formatVersion", "providerId", "tables", "providerArtifacts"], manifest.EnumerateObject().Select(property => property.Name));
         Assert.Matches("^[a-z][a-z0-9.-]{0,63}$", manifest.GetProperty("providerId").GetString()!);
         foreach (var table in manifest.GetProperty("tables").EnumerateArray())
         {
-            Assert.Equal(new[] { "schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys" }, table.EnumerateObject().Select(property => property.Name));
+            Assert.Equal(["schema", "name", "columns", "primaryKey", "indexes", "checks", "foreignKeys"], table.EnumerateObject().Select(property => property.Name));
             Assert.NotEmpty(table.GetProperty("name").GetString()!);
             foreach (var column in table.GetProperty("columns").EnumerateArray())
-                Assert.Equal(new[] { "name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency" }, column.EnumerateObject().Select(property => property.Name));
+            {
+                Assert.Equal(["name", "storeType", "typeInference", "typeClass", "nullable", "primaryKeyOrdinal", "generation", "defaultExpression", "computedExpression", "concurrency"], column.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var index in table.GetProperty("indexes").EnumerateArray())
-                Assert.Equal(new[] { "name", "unique", "keyColumns", "includeColumns" }, index.EnumerateObject().Select(property => property.Name));
+            {
+                Assert.Equal(["name", "unique", "keyColumns", "includeColumns"], index.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var check in table.GetProperty("checks").EnumerateArray())
-                Assert.Equal(new[] { "name", "expression" }, check.EnumerateObject().Select(property => property.Name));
+            {
+                Assert.Equal(["name", "expression"], check.EnumerateObject().Select(property => property.Name));
+            }
+
             foreach (var foreignKey in table.GetProperty("foreignKeys").EnumerateArray())
-                Assert.Equal(new[] { "name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate" }, foreignKey.EnumerateObject().Select(property => property.Name));
+            {
+                Assert.Equal(["name", "localColumns", "referencedSchema", "referencedTable", "referencedColumns", "onDelete", "onUpdate"], foreignKey.EnumerateObject().Select(property => property.Name));
+            }
         }
         foreach (var artifact in manifest.GetProperty("providerArtifacts").EnumerateArray())
-            Assert.Equal(new[] { "schema", "name", "kind", "signature" }, artifact.EnumerateObject().Select(property => property.Name));
+        {
+            Assert.Equal(["schema", "name", "kind", "signature"], artifact.EnumerateObject().Select(property => property.Name));
+        }
     }
 
     private static void AssertJsonEnum(JsonElement schema, params string[] expected)
@@ -348,8 +372,12 @@ public sealed partial class InquiryGeneratorTests
     private static string RepositoryFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx"))) directory = directory.Parent;
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
         Assert.NotNull(directory);
-        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
     }
 }

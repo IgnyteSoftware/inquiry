@@ -1,14 +1,11 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Xml.Linq;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
-using System.Xml.Linq;
 
 namespace Inquiry.Generators;
 
@@ -106,7 +103,7 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.SelectAllByPredicate:
                 AppendHeader(source, method, parameters, isAsync: method.ReturnsPagedResult);
-                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, selectPlan, entityType, structMat, cancellation, entity.Schema, filterBinder);
+                EmitSelectAllByPredicate(source, sqlBuilder, method, predicatePlan!, selectPlan, entityType, structMat, cancellation, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -181,74 +178,74 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.DeleteOneByKey:
-            {
-                if (entity.SoftDeleteColumn is not null && !method.HardDelete &&
-                    entity.ConcurrencyToken is { RotateConcurrencyToken: true })
                 {
-                    AppendHeader(source, method, parameters, isAsync: true);
-                    EmitRotatingUpdate(source, sqlBuilder, method, entity, firstParameter, entityType, structMat, cancellation, writeFilterBinder, softDelete: true);
-                    source.AppendLine("    }");
-                    break;
-                }
+                    if (entity.SoftDeleteColumn is not null && !method.HardDelete &&
+                        entity.ConcurrencyToken is { RotateConcurrencyToken: true })
+                    {
+                        AppendHeader(source, method, parameters, isAsync: true);
+                        EmitRotatingUpdate(source, sqlBuilder, method, entity, firstParameter, entityType, structMat, cancellation, writeFilterBinder, softDelete: true);
+                        source.AppendLine("    }");
+                        break;
+                    }
 
-                if (method.ReturnsEntity)
-                {
-                    var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
-                        ? "_sqlSoftDeleteReturning"
-                        : "_sqlDeleteReturning";
+                    if (method.ReturnsEntity)
+                    {
+                        var returningField = entity.SoftDeleteColumn is not null && !method.HardDelete
+                            ? "_sqlSoftDeleteReturning"
+                            : "_sqlDeleteReturning";
+                        AppendHeader(source, method, parameters, isAsync: true);
+                        if (entity.ConcurrencyToken is not null)
+                        {
+                            var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
+                            source.AppendLine($"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
+                            source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
+                            source.AppendLine($"                {returningField},");
+                            source.AppendLine($"                {firstParameter},");
+                            AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
+                            source.AppendLine("            ),");
+                            source.AppendLine("            default,");
+                            source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
+                            source.AppendLine("        if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
+                            source.AppendLine("        return _result;");
+                        }
+                        else
+                        {
+                            EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
+                        }
+                        source.AppendLine("    }");
+                        break;
+                    }
+
+                    // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
+                    // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
+                    // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
+                    var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
+                        ? "_sqlHardDeleteByKey"
+                        : "_sqlDeleteByKey";
                     AppendHeader(source, method, parameters, isAsync: true);
                     if (entity.ConcurrencyToken is not null)
                     {
+                        // a concurrency-checked DELETE takes the entity and binds the key + token (the
+                        // DELETE WHERE references both); a 0-row result is a conflict and throws when the
+                        // runtime option is set.
                         var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
-                        source.AppendLine($"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {entityType}, {structMat}>(");
+                        source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
                         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
-                        source.AppendLine($"                {returningField},");
+                        source.AppendLine($"                {deleteField},");
                         source.AppendLine($"                {firstParameter},");
                         AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
                         source.AppendLine("            ),");
-                        source.AppendLine("            default,");
                         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-                        source.AppendLine("        if (_result is null && Inquiry.ThrowOnConcurrencyConflict) throw new global::Inquiry.InquiryConcurrencyException();");
-                        source.AppendLine("        return _result;");
+                        AppendConcurrencyConflictGuard(source, "        ");
+                        source.AppendLine("        return _rows > 0;");
                     }
                     else
                     {
-                        EmitFastQuerySingleByKeys(source, sqlBuilder, entityType, structMat, returningField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
+                        EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
                     }
                     source.AppendLine("    }");
                     break;
                 }
-
-                // the shared _sqlDeleteByKey is the soft UPDATE for a soft-delete entity (or the literal
-                // DELETE otherwise). A HardDelete method on a soft-delete entity uses the separate literal
-                // const. Either way it is a rows-affected ExecuteAsync, so binder/return are unchanged.
-                var deleteField = method.HardDelete && entity.SoftDeleteColumn is not null
-                    ? "_sqlHardDeleteByKey"
-                    : "_sqlDeleteByKey";
-                AppendHeader(source, method, parameters, isAsync: true);
-                if (entity.ConcurrencyToken is not null)
-                {
-                    // a concurrency-checked DELETE takes the entity and binds the key + token (the
-                    // DELETE WHERE references both); a 0-row result is a conflict and throws when the
-                    // runtime option is set.
-                    var deleteColumns = new List<ColumnData>(entity.Keys.AsImmutableArray()) { entity.ConcurrencyToken };
-                    source.AppendLine("        var _rows = await Inquiry.ExecuteAsync(");
-                    source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{entityType}>(");
-                    source.AppendLine($"                {deleteField},");
-                    source.AppendLine($"                {firstParameter},");
-                    AppendBinderLambda(source, sqlBuilder, "_e", deleteColumns, i => $"_e.{deleteColumns[i].PropertyName}", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: writeFilterBinder);
-                    source.AppendLine("            ),");
-                    source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
-                    AppendConcurrencyConflictGuard(source, "        ");
-                    source.AppendLine("        return _rows > 0;");
-                }
-                else
-                {
-                    EmitFastExecuteFromKeys(source, sqlBuilder, deleteField, entity.Keys, method.Parameters, cancellation, indent: "        ", filterBinder: writeFilterBinder);
-                }
-                source.AppendLine("    }");
-                break;
-            }
 
             case StoreOperation.RestoreOneByKey:
                 AppendHeader(source, method, parameters, isAsync: true);
@@ -257,31 +254,31 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.DeleteAll:
-            {
-                AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteAsync({EmptyGeneratedCommand("_sqlDeleteAll_" + method.MemberName, writeFilterBinder)}, {cancellation});");
-                source.AppendLine("    }");
-                break;
-            }
+                {
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    source.AppendLine($"        return Inquiry.ExecuteAsync({EmptyGeneratedCommand("_sqlDeleteAll_" + method.MemberName, writeFilterBinder)}, {cancellation});");
+                    source.AppendLine("    }");
+                    break;
+                }
 
             case StoreOperation.Count:
-            {
-                // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
-                // so the Task is returned directly (no async state machine). A named-filter bypass is
-                // the one per-method Count shape; the matching const is emitted by StoreProcessor
-                // under the same IgnoredFilterNames condition.
-                var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount";
-                AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
-                source.AppendLine("    }");
-                break;
-            }
+                {
+                    // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
+                    // so the Task is returned directly (no async state machine). A named-filter bypass is
+                    // the one per-method Count shape; the matching const is emitted by StoreProcessor
+                    // under the same IgnoredFilterNames condition.
+                    var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount";
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
+                    source.AppendLine("    }");
+                    break;
+                }
 
             case StoreOperation.Exists:
                 // EXISTS returns a 1/0 scalar the runtime coerces to bool; criteria (if any) bind through
                 // the generated command's static binder.
                 AppendHeader(source, method, parameters, isAsync: false);
-                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation, entity.Schema, filterBinder);
+                EmitExists(source, sqlBuilder, method, predicatePlan!, cancellation, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -294,7 +291,7 @@ internal static class StoreOperationEmitter
                 }
                 else
                 {
-                    EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, entity.Schema, filterBinder);
+                    EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, filterBinder);
                     var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
                     source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation});");
                 }
@@ -312,110 +309,112 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.GroupCount:
-            {
-                var groupColumn = entity.Columns.AsImmutableArray().First(column =>
-                    string.Equals(column.PropertyName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(column.ColumnName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase));
-                var keyType = method.GroupCountKeyTypeFqn!;
-                var gcType = $"global::Inquiry.GroupCount<{keyType}>";
-                var matName = "_GroupCountMat_" + method.MemberName;
-                AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, byte, {matName}>(");
-                source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.MemberName, filterBinder)},");
-                source.AppendLine("            default,");
-                source.AppendLine($"            {cancellation});");
-                source.AppendLine("    }");
-                // Emit the inline struct materializer for this GroupCount method.
-                source.AppendLine();
-                source.AppendLine($"    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
-                source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
-                source.AppendLine("    {");
-                source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
-                var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
-                var countType = new TypeData(
-                    "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
-                    SpecialType.None, false, true, false, false);
-                var countRead = MaterializerEmitter.ReadExpression(countType, 1, sqlBuilder, role: ReaderResultRole.Count);
-                source.AppendLine($"            => new {gcType}({keyRead}, {countRead});");
-                source.AppendLine("    }");
-                break;
-            }
+                {
+                    var groupColumn = entity.Columns.AsImmutableArray().First(column =>
+                        string.Equals(column.PropertyName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(column.ColumnName, method.GroupCountColumn, StringComparison.OrdinalIgnoreCase));
+                    var keyType = method.GroupCountKeyTypeFqn!;
+                    var gcType = $"global::Inquiry.GroupCount<{keyType}>";
+                    var matName = "_GroupCountMat_" + method.MemberName;
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    source.AppendLine($"        return Inquiry.QueryListAsync<{gcType}, byte, {matName}>(");
+                    source.AppendLine($"            {EmptyGeneratedCommand("_sqlGroupCount_" + method.MemberName, filterBinder)},");
+                    source.AppendLine("            default,");
+                    source.AppendLine($"            {cancellation});");
+                    source.AppendLine("    }");
+                    // Emit the inline struct materializer for this GroupCount method.
+                    source.AppendLine();
+                    source.AppendLine($"    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+                    source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
+                    source.AppendLine("    {");
+                    source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
+                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
+                    var countType = new TypeData(
+                        "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
+                        SpecialType.None, false, true, false, false);
+                    var countRead = MaterializerEmitter.ReadExpression(countType, 1, sqlBuilder, role: ReaderResultRole.Count);
+                    source.AppendLine($"            => new {gcType}({keyRead}, {countRead});");
+                    source.AppendLine("    }");
+                    break;
+                }
 
             case StoreOperation.FullTextSearch:
-            {
-                // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
-                // full-text predicate over the searched columns.
-                var searchArg = method.Parameters[0].Name;
-                AppendHeader(source, method, parameters, isAsync: false);
-                var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
-                source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
-                source.AppendLine("            new global::Inquiry.Commands.InquiryGeneratedCommand<string>(");
-                source.AppendLine($"                _sqlFts_{method.MemberName},");
-                source.AppendLine($"                {searchArg},");
-                source.AppendLine("                static (_cmd, _arg) =>");
-                source.AppendLine("                {");
-                source.AppendLine("                    var _p = _cmd.CreateParameter();");
-                source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
-                source.AppendLine("                    _p.DbType = global::System.Data.DbType.String;");
-                source.AppendLine("                    _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
-                source.AppendLine("                    _cmd.Parameters.Add(_p);");
-                if (filterBinder is not null) source.AppendLine($"                    {filterBinder}(_cmd);");
-                source.AppendLine("                }),");
-                source.AppendLine("            default,");
-                source.AppendLine($"            {cancellation});");
-                source.AppendLine("    }");
-                break;
-            }
+                {
+                    // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
+                    // full-text predicate over the searched columns.
+                    var searchArg = method.Parameters[0].Name;
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
+                    source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
+                    source.AppendLine("            new global::Inquiry.Commands.InquiryGeneratedCommand<string>(");
+                    source.AppendLine($"                _sqlFts_{method.MemberName},");
+                    source.AppendLine($"                {searchArg},");
+                    source.AppendLine("                static (_cmd, _arg) =>");
+                    source.AppendLine("                {");
+                    source.AppendLine("                    var _p = _cmd.CreateParameter();");
+                    source.AppendLine($"                    _p.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("searchTerm"))}\";");
+                    source.AppendLine("                    _p.DbType = global::System.Data.DbType.String;");
+                    source.AppendLine("                    _p.Value = (object?)_arg ?? global::System.DBNull.Value;");
+                    source.AppendLine("                    _cmd.Parameters.Add(_p);");
+                    if (filterBinder is not null)
+                    {
+                        source.AppendLine($"                    {filterBinder}(_cmd);");
+                    }
+
+                    source.AppendLine("                }),");
+                    source.AppendLine("            default,");
+                    source.AppendLine($"            {cancellation});");
+                    source.AppendLine("    }");
+                    break;
+                }
 
             case StoreOperation.BulkInsert when sqlBuilder.SupportsBulkCopy:
                 EmitBulkInsert(source, method, parameters, entity, entityType, cancellation, sqlBuilder);
                 break;
 
+            // No native bulk-copy API on this dialect — compile down to the batch-insert body.
+            // The method's Task<long> return accepts the body's int expressions (implicit widening).
             case StoreOperation.BulkInsert:
-                // No native bulk-copy API on this dialect — compile down to the batch-insert body.
-                // The method's Task<long> return accepts the body's int expressions (implicit widening).
-                goto case StoreOperation.InsertAll;
-
             case StoreOperation.InsertAll:
-            {
-                // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
-                // atomic chunks from the original enumerable.
-                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
-                var batchDescriptor = BuildBatchDescriptorFieldName(method);
-                if (method.Operation == StoreOperation.BulkInsert)
                 {
-                    AppendHeader(source, method, parameters, isAsync: true);
-                    if (method.Parameters.Count == 3)
+                    // The cached descriptor owns provider SQL and binding while the runtime streams bounded,
+                    // atomic chunks from the original enumerable.
+                    var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
+                    var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                    if (method.Operation == StoreOperation.BulkInsert)
                     {
-                        source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
+                        AppendHeader(source, method, parameters, isAsync: true);
+                        if (method.Parameters.Count == 3)
+                        {
+                            source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
+                        }
+                        source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
                     }
-                    source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
+                    else
+                    {
+                        AppendHeader(source, method, parameters, isAsync: false);
+                        source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
+                    }
+                    source.AppendLine("    }");
+                    break;
                 }
-                else
-                {
-                    AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
-                }
-                source.AppendLine("    }");
-                break;
-            }
 
             case StoreOperation.UpdateAll:
-            {
-                // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
-                var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
-                var batchDescriptor = BuildBatchDescriptorFieldName(method);
-                AppendHeader(source, method, parameters, isAsync: false);
-                source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
-                source.AppendLine("    }");
-                break;
-            }
+                {
+                    // The runtime selects the descriptor's fixed-row, array-bound, or eligible set-based path.
+                    var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
+                    var batchDescriptor = BuildBatchDescriptorFieldName(method);
+                    AppendHeader(source, method, parameters, isAsync: false);
+                    source.AppendLine($"        return Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation});");
+                    source.AppendLine("    }");
+                    break;
+                }
 
             case StoreOperation.UpdateByPredicate:
                 AppendHeader(source, method, parameters, isAsync: false);
                 // Set-based UPDATE composes the active-row predicate, so its SQL carries the
                 // parameterized filter term and the binder must fill it.
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, entity.Schema, filterBinder);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -424,7 +423,7 @@ internal static class StoreOperationEmitter
                 // The SOFT form composes the full active-row predicate (it is an UPDATE); the hard form
                 // drops the activeness terms but still carries the write-enforced ones, so it binds the
                 // narrower write set.
-                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.MemberName, cancellation, entity.Schema,
+                EmitMutationByPredicate(source, sqlBuilder, method, Array.Empty<ColumnData>(), predicatePlan!, "_sqlDeleteWhere_" + method.MemberName, cancellation,
                     entity.SoftDeleteColumn is not null && !method.HardDelete ? filterBinder : writeFilterBinder);
                 source.AppendLine("    }");
                 break;
@@ -451,16 +450,27 @@ internal static class StoreOperationEmitter
             ? $"        var _result = await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {stateType}, {structMat}>("
             : "        var _rows = await Inquiry.ExecuteAsync(");
         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{stateType}>(");
-        var sqlField = softDelete
-            ? method.ReturnsEntity ? "_sqlSoftDeleteReturning" : "_sqlDeleteByKey"
-            : method.ReturnsEntity ? "_sqlUpdateReturning" : "_sqlUpdate";
+        string sqlField;
+        if (softDelete)
+        {
+            sqlField = method.ReturnsEntity ? "_sqlSoftDeleteReturning" : "_sqlDeleteByKey";
+        }
+        else
+        {
+            sqlField = method.ReturnsEntity ? "_sqlUpdateReturning" : "_sqlUpdate";
+        }
+
         source.AppendLine($"                {sqlField},");
         source.AppendLine($"                ({entityParameter}, _newStamp),");
         AppendBinderLambda(source, sqlBuilder, "_state", columns,
             i => i == columns.Count - 1 ? "_state.Stamp" : $"_state.Entity.{columns[i].PropertyName}",
             "                ", trailingComma: false, filterBinder: filterBinder, predicateColumnCount: softDelete ? columns.Count - 1 : 0);
         source.AppendLine("            ),");
-        if (method.ReturnsEntity) source.AppendLine("            default,");
+        if (method.ReturnsEntity)
+        {
+            source.AppendLine("            default,");
+        }
+
         source.AppendLine($"            {cancellation}).ConfigureAwait(false);");
         if (method.ReturnsEntity)
         {
@@ -522,7 +532,7 @@ internal static class StoreOperationEmitter
 
     /// <summary>
     /// Emits the optimistic-concurrency conflict guard for a captured <c>_rows</c> count — a 0-row
-    /// mutation on a token entity throws <see cref="global::Inquiry.InquiryConcurrencyException"/> only
+    /// mutation on a token entity throws <c>global::Inquiry.InquiryConcurrencyException</c> only
     /// when the runtime option is enabled (gated at the call site so non-token entities are unaffected).
     /// </summary>
     private static void AppendConcurrencyConflictGuard(StringBuilder source, string indent)
@@ -624,7 +634,7 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// Returns the <see cref="Inquiry.Parameters.InquiryParameter"/> constructor-argument suffix
+    /// Returns the <c>Inquiry.Parameters.InquiryParameter</c> constructor-argument suffix
     /// (e.g. <c>, size: 64</c> or <c>, precision: 18, scale: 2</c>) carrying a <b>predicate</b> key
     /// parameter's declared <c>Size</c>/<c>Precision</c>/<c>Scale</c>. Used by the eager-load key binders,
     /// which build their parameters inline in an array initializer (no <c>_p</c> variable to set after
@@ -704,7 +714,7 @@ internal static class StoreOperationEmitter
             // partner is lossless (same bit pattern) and the materializer reverses the cast on read.
             var reinterpretedValue = column.Type.SpecialType switch
             {
-                SpecialType.System_SByte  => isNullable
+                SpecialType.System_SByte => isNullable
                     ? $"{accessor}.HasValue ? (object)unchecked((byte){accessor}.Value) : global::System.DBNull.Value"
                     : $"(object)unchecked((byte){accessor})",
                 SpecialType.System_UInt16 => isNullable
@@ -718,11 +728,18 @@ internal static class StoreOperationEmitter
                     : $"(object)unchecked((long){accessor})",
                 _ => null,
             };
-            if (reinterpretedValue is not null) return reinterpretedValue;
+            if (reinterpretedValue is not null)
+            {
+                return reinterpretedValue;
+            }
 
             var nonNullable = NonNullableValueExpression(column.Type, accessor, sourceIsNullable);
             var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, nonNullable);
-            if (bridged == nonNullable) return $"(object?){accessor} ?? global::System.DBNull.Value";
+            if (bridged == nonNullable)
+            {
+                return $"(object?){accessor} ?? global::System.DBNull.Value";
+            }
+
             return isNullable
                 ? $"{accessor}.HasValue ? (object){bridged} : global::System.DBNull.Value"
                 : $"(object){bridged}";
@@ -733,18 +750,18 @@ internal static class StoreOperationEmitter
         // values (e.g. SampleEnumUInt32.AboveIntMax) are preserved as bit patterns rather than throwing.
         var underlying = column.Type.EnumUnderlyingSpecialType switch
         {
-            SpecialType.System_Byte   => ("byte",  false),
-            SpecialType.System_SByte  => ("byte",  true),   // reinterpret: sbyte ↔ byte
-            SpecialType.System_Int16  => ("short", false),
+            SpecialType.System_Byte => ("byte", false),
+            SpecialType.System_SByte => ("byte", true),   // reinterpret: sbyte ↔ byte
+            SpecialType.System_Int16 => ("short", false),
             SpecialType.System_UInt16 => ("short", true),   // reinterpret: ushort ↔ short
-            SpecialType.System_Int32  => ("int",   false),
-            SpecialType.System_UInt32 => ("int",   true),   // reinterpret: uint ↔ int
-            SpecialType.System_Int64  => ("long",  false),
-            SpecialType.System_UInt64 => ("long",  true),   // reinterpret: ulong ↔ long
-            _                         => ("int",   false),
+            SpecialType.System_Int32 => ("int", false),
+            SpecialType.System_UInt32 => ("int", true),   // reinterpret: uint ↔ int
+            SpecialType.System_Int64 => ("long", false),
+            SpecialType.System_UInt64 => ("long", true),   // reinterpret: ulong ↔ long
+            _ => ("int", false),
         };
         var (typeName, needsUnchecked) = underlying;
-        var castExpr      = needsUnchecked ? $"unchecked(({typeName}){accessor})"       : $"({typeName}){accessor}";
+        var castExpr = needsUnchecked ? $"unchecked(({typeName}){accessor})" : $"({typeName}){accessor}";
         var castExprValue = needsUnchecked ? $"unchecked(({typeName}){accessor}.Value)" : $"({typeName}){accessor}.Value";
         return isNullable
             ? $"{accessor}.HasValue ? (object){castExprValue} : global::System.DBNull.Value"
@@ -827,7 +844,9 @@ internal static class StoreOperationEmitter
         }
 
         if (column.EnumAsString)
+        {
             return NonNullableValueExpression(column.Type, accessor) + ".ToString()";
+        }
 
         if (!column.Type.IsEnum)
         {
@@ -857,15 +876,6 @@ internal static class StoreOperationEmitter
             : $"({typeName}){enumValue}";
     }
 
-    private static string BuildInlineParameterValueExpression(ColumnData column, string accessor, SqlBuilder sqlBuilder)
-    {
-        var nonNullable = NonNullableValueExpression(column.Type, accessor);
-        var bridged = BridgeProviderValue(sqlBuilder, column.Type, column.Type.SpecialType, column.Type.NonNullableDisplayName, nonNullable);
-        return column.Converter is null && bridged == nonNullable
-            ? accessor
-            : BuildParameterValueExpression(column, accessor, sqlBuilder);
-    }
-
     /// <summary>
     /// Reinterprets an unsigned/sbyte converter provider value to the same-width storage type the
     /// provider accepts (sbyte→byte, ushort→short, uint→int, ulong→long) via <c>unchecked()</c>,
@@ -875,7 +885,7 @@ internal static class StoreOperationEmitter
     private static string ReinterpretUnsignedProviderValue(SpecialType providerSpecialType, string valueExpression)
         => providerSpecialType switch
         {
-            SpecialType.System_SByte  => $"unchecked((byte)({valueExpression}))",
+            SpecialType.System_SByte => $"unchecked((byte)({valueExpression}))",
             SpecialType.System_UInt16 => $"unchecked((short)({valueExpression}))",
             SpecialType.System_UInt32 => $"unchecked((int)({valueExpression}))",
             SpecialType.System_UInt64 => $"unchecked((long)({valueExpression}))",
@@ -1092,7 +1102,7 @@ internal static class StoreOperationEmitter
     /// <summary>
     /// Emits a <c>SelectAllByPredicate</c> body. Predicate methods route through an immutable generated
     /// command with a static binder, covering both scalar binding and the IN command-text rewrite (the binder runs after the
-    /// pipeline assigns the command text, which is what lets <see cref="global::Inquiry.Parameters.InquiryInExpansion"/>
+    /// pipeline assigns the command text, which is what lets <c>global::Inquiry.Parameters.InquiryInExpansion</c>
     /// expand the sentinel). Buffered methods use the list overload; streaming ones use QueryAsync.
     /// </summary>
     private static void EmitSelectAllByPredicate(
@@ -1104,7 +1114,6 @@ internal static class StoreOperationEmitter
         string entityType,
         string structMat,
         string cancellation,
-        string? owningSchema,
         string? filterBinder = null)
     {
         var paged = selectPlan?.Pagination == Pagination.Offset;
@@ -1117,14 +1126,14 @@ internal static class StoreOperationEmitter
             source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
         }
 
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema, filterBinder, includePaging: paged);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, filterBinder, includePaging: paged);
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
 
         var capacity = paged ? $", capacityHint: {method.Parameters[method.Parameters.Count - 2].Name}" : string.Empty;
         if (method.ReturnsPagedResult)
         {
             source.AppendLine($"        var _items = await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{capacity}).ConfigureAwait(false);");
-            EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlCount_" + method.MemberName, owningSchema, filterBinder, commandVariable: "_countCmd");
+            EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlCount_" + method.MemberName, filterBinder, commandVariable: "_countCmd");
             source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
             source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
         }
@@ -1144,7 +1153,7 @@ internal static class StoreOperationEmitter
     /// parameters to bind, so the command uses a no-op binder; otherwise the
     /// predicate binder runs after the pipeline assigns the command text (as for predicate selects).
     /// </summary>
-    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation, string? owningSchema, string? filterBinder = null)
+    private static void EmitExists(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, ResolvedPredicatePlan plan, string cancellation, string? filterBinder = null)
     {
         var sqlField = "_sqlExists_" + method.MemberName;
         if (plan.Bindings.Count == 0)
@@ -1153,7 +1162,7 @@ internal static class StoreOperationEmitter
             return;
         }
 
-        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, owningSchema, filterBinder);
+        EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, filterBinder);
         source.AppendLine($"        return Inquiry.ExecuteScalarAsync<bool, {new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection)).Type}>(_cmd, {cancellation});");
     }
 
@@ -1168,7 +1177,6 @@ internal static class StoreOperationEmitter
         StoreMethodData method,
         ResolvedPredicatePlan plan,
         string sqlField,
-        string? owningSchema,
         string? filterBinder = null,
         bool includePaging = false,
         string commandVariable = "_cmd")
@@ -1198,13 +1206,12 @@ internal static class StoreOperationEmitter
                 source.AppendLine(CollectionBindingExpression(
                     sqlBuilder,
                     binding.Column,
-                    owningSchema,
                     binding.SqlParameterName,
                     arg,
                     binding.IsNegatedCollection,
                     binding.ElementIsNullable,
                     binding.CollectionResolution,
-                    state.MaxParametersReference));
+                    GeneratedCommandState.MaxParametersReference));
             }
             else
             {
@@ -1241,7 +1248,6 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string cancellation,
-        string? owningSchema,
         string? filterBinder = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
@@ -1296,13 +1302,12 @@ internal static class StoreOperationEmitter
                 source.AppendLine(CollectionBindingExpression(
                     sqlBuilder,
                     binding.Column,
-                    owningSchema,
                     binding.SqlParameterName,
                     arg,
                     binding.IsNegatedCollection,
                     binding.ElementIsNullable,
                     binding.CollectionResolution,
-                    state.MaxParametersReference));
+                    GeneratedCommandState.MaxParametersReference));
             }
             else
             {
@@ -1482,9 +1487,16 @@ internal static class StoreOperationEmitter
             {
                 // On the seek path the cursor is non-null; for a multi-column cursor read its tuple element.
                 var singleReference = single && !plan.KeysetColumns[i].Type.IsValueType;
-                var rawCursorValue = singleReference
-                    ? $"{cursorParam}!"
-                    : single ? $"{cursorParam}.Value" : $"{cursorParam}.Value.Item{i + 1}";
+                string rawCursorValue;
+                if (singleReference)
+                {
+                    rawCursorValue = $"{cursorParam}!";
+                }
+                else
+                {
+                    rawCursorValue = single ? $"{cursorParam}.Value" : $"{cursorParam}.Value.Item{i + 1}";
+                }
+
                 var bridgedCursorValue = BridgeProviderValue(
                     sqlBuilder,
                     plan.KeysetColumns[i].Type,
@@ -1492,13 +1504,19 @@ internal static class StoreOperationEmitter
                     plan.KeysetColumns[i].Type.NonNullableDisplayName,
                     rawCursorValue);
                 var needsProviderTransform = plan.KeysetColumns[i].Converter is not null || bridgedCursorValue != rawCursorValue;
-                var valueExpr = needsProviderTransform
-                    ? (singleReference
-                        ? $"{cursorParam} is not null ? {BuildParameterValueExpression(plan.KeysetColumns[i], rawCursorValue, sqlBuilder)} : global::System.DBNull.Value"
-                        : $"{cursorParam}.HasValue ? {BuildParameterValueExpression(plan.KeysetColumns[i], rawCursorValue, sqlBuilder)} : global::System.DBNull.Value")
-                    : single
+                string valueExpr;
+                if (needsProviderTransform)
+                {
+                    var hasCursorValue = singleReference ? $"{cursorParam} is not null" : $"{cursorParam}.HasValue";
+                    valueExpr = $"{hasCursorValue} ? {BuildParameterValueExpression(plan.KeysetColumns[i], rawCursorValue, sqlBuilder)} : global::System.DBNull.Value";
+                }
+                else
+                {
+                    valueExpr = single
                         ? $"(object?){cursorParam} ?? global::System.DBNull.Value"
                         : $"{cursorParam}.HasValue ? (object){cursorParam}.Value.Item{i + 1} : global::System.DBNull.Value";
+                }
+
                 source.AppendLine($"                    var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                    _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__cursor" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)))}\";");
                 AppendColumnParameterMetadata(source, plan.KeysetColumns[i], sqlBuilder, $"_p{pi}", "                    ", predicate: true);
@@ -1762,49 +1780,17 @@ internal static class StoreOperationEmitter
     }
 
     /// <summary>
-    /// Builds the OUTPUT / RETURN-value <c>InquiryParameter</c> the pipeline reads back. A RETURN
-    /// value is an integer seeded to 0 with <c>ParameterDirection.ReturnValue</c>; an OUTPUT
-    /// parameter starts as <c>DBNull</c> with its DbType (and <c>Size = -1</c> for variable-length
-    /// strings so providers allocate a read-back buffer).
-    /// </summary>
-    private static string BuildProcedureOutputParameter(SqlBuilder sqlBuilder, StoreMethodData method)
-    {
-        var name = "\"" + GeneratorHelpers.Escape(sqlBuilder.StoredProcedureParameterName(method.ProcedureReadBackName!)) + "\"";
-        if (method.ProcedureReturnsValue)
-        {
-            return $"new global::Inquiry.Parameters.InquiryParameter({name}, 0, direction: global::System.Data.ParameterDirection.ReturnValue)";
-        }
-
-        var args = new StringBuilder($"new global::Inquiry.Parameters.InquiryParameter({name}, global::System.DBNull.Value");
-        if (method.ProcedureOutputDbType is not null)
-        {
-            args.Append($", dbType: {method.ProcedureOutputDbType}");
-        }
-
-        args.Append(", direction: global::System.Data.ParameterDirection.Output");
-        if (method.ProcedureOutputIsString)
-        {
-            args.Append(", size: -1");
-        }
-        else if (method.ProcedureOutputIsDecimal)
-        {
-            // SqlClient defaults a decimal output parameter to scale 0 and rounds the read-back
-            // value (19.75 → 20). Stamp a high-fidelity precision/scale: 38/10 preserves money and
-            // typical computed decimals losslessly, with ample integer headroom.
-            args.Append(", precision: (byte)38, scale: (byte)10");
-        }
-
-        return args.Append(')').ToString();
-    }
-
-    /// <summary>
     /// Returns the suffix used in the generated SQL field name for a SelectByField operation
     /// (e.g. "CustomerID_EmployeeID" for a two-column filter). Single-column filters use the
     /// column's property name directly.
     /// </summary>
     public static string BuildFieldSuffix(IReadOnlyList<ColumnData> columns)
     {
-        if (columns.Count == 1) return columns[0].PropertyName;
+        if (columns.Count == 1)
+        {
+            return columns[0].PropertyName;
+        }
+
         return string.Join("_", columns.Select(c => c.PropertyName));
     }
 
@@ -2012,13 +1998,13 @@ internal static class StoreOperationEmitter
     private static void EmitEntityArrayChunkBinder(
         StringBuilder source,
         EntityData entity,
-        IReadOnlyList<ColumnData> columns,
+        ColumnData[] columns,
         SqlBuilder sqlBuilder,
         bool isInsert,
         string indent)
     {
         source.AppendLine($"{indent}{sqlBuilder.BuildArrayBindCountAssignment("_cmd", "_items.Count")}");
-        for (var i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Length; i++)
         {
             source.AppendLine($"{indent}var _values{i} = new object?[_items.Count];");
             if (sqlBuilder.BuildArrayBindSizeExpression($"_values{i}[_i]", $"_value{i}", columns[i]) is not null)
@@ -2034,7 +2020,7 @@ internal static class StoreOperationEmitter
             EmitSequentialGuidAssignment(source, entity, "_it", indent + "    ", sqlBuilder);
         }
         EmitAuditAssignments(source, entity, "_it", isInsert, indent + "    ");
-        for (var i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Length; i++)
         {
             var column = columns[i];
             source.AppendLine($"{indent}    _values{i}[_i] = {BuildParameterValueExpression(column, "_it." + column.PropertyName, sqlBuilder)};");
@@ -2045,7 +2031,7 @@ internal static class StoreOperationEmitter
         }
         source.AppendLine($"{indent}}}");
 
-        for (var i = 0; i < columns.Count; i++)
+        for (var i = 0; i < columns.Length; i++)
         {
             var column = columns[i];
             source.AppendLine($"{indent}var _p{i} = _cmd.CreateParameter();");
@@ -2133,7 +2119,7 @@ internal static class StoreOperationEmitter
     private static void EmitSetBasedUpdateChunk(
         StringBuilder source,
         EntityData entity,
-        IReadOnlyList<ColumnData> updateColumns,
+        ColumnData[] updateColumns,
         IReadOnlyList<ColumnData> setColumns,
         SqlBuilder sqlBuilder,
         IReadOnlyList<string> writeEnforcedTerms,
@@ -2147,7 +2133,7 @@ internal static class StoreOperationEmitter
             entity.Keys.AsImmutableArray(),
             setColumns,
             writeEnforcedTerms);
-        var parametersPerItem = updateColumns.Count;
+        var parametersPerItem = updateColumns.Length;
         // The enforced filter parameters are bound once for the whole chunk, so they come off the top of
         // the command's parameter budget before it is divided into items. Without this an entity whose
         // column count divides the ceiling exactly (65535 / 3) would bind one parameter too many.
@@ -2156,12 +2142,12 @@ internal static class StoreOperationEmitter
         source.AppendLine("        },");
         source.AppendLine("        static _count =>");
         source.AppendLine("        {");
-        var estimatedUpdateRowLength = 18 + updateColumns.Count * 24;
+        var estimatedUpdateRowLength = 18 + updateColumns.Length * 24;
         source.AppendLine($"            var _sql = new global::System.Text.StringBuilder(\"{GeneratorHelpers.Escape(header)}\", {header.Length + footer.Length} + (_count * {estimatedUpdateRowLength}));");
         source.AppendLine("            for (var _r = 0; _r < _count; _r++)");
         source.AppendLine("            {");
         source.AppendLine("                _sql.Append(_r == 0 ? \"SELECT \" : \" UNION ALL SELECT \");");
-        for (var i = 0; i < updateColumns.Count; i++)
+        for (var i = 0; i < updateColumns.Length; i++)
         {
             var column = updateColumns[i];
             if (i > 0)
@@ -2180,7 +2166,7 @@ internal static class StoreOperationEmitter
         source.AppendLine("            {");
         source.AppendLine("                var _it = _items[_r];");
         EmitAuditAssignments(source, entity, "_it", isInsert: false, indent: "                ");
-        for (var i = 0; i < updateColumns.Count; i++)
+        for (var i = 0; i < updateColumns.Length; i++)
         {
             var column = updateColumns[i];
             source.AppendLine("                {");
@@ -2244,7 +2230,11 @@ internal static class StoreOperationEmitter
 
     private static string NonNullableValueExpression(TypeData type, string accessor, bool? sourceIsNullable = null)
     {
-        if (!(sourceIsNullable ?? type.IsNullable)) return accessor;
+        if (!(sourceIsNullable ?? type.IsNullable))
+        {
+            return accessor;
+        }
+
         return type.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
     }
 
@@ -2262,7 +2252,6 @@ internal static class StoreOperationEmitter
     private static string CollectionBindingExpression(
         SqlBuilder sqlBuilder,
         ColumnData column,
-        string? owningSchema,
         string sqlParameterName,
         string arg,
         bool isNegatedCollection,
@@ -2291,7 +2280,10 @@ internal static class StoreOperationEmitter
         if (sqlBuilder.UseArrayInParameters)
         {
             if (resolution is null || !resolution.IsValid)
+            {
                 throw new InvalidOperationException("Collection transport must be resolved once before method emission.");
+            }
+
             return "                " + sqlBuilder.BuildCollectionParameterBinding(
                 new CollectionParameterBindingContext(resolution, "_c", name, projected));
         }
@@ -2317,9 +2309,7 @@ internal static class StoreOperationEmitter
     {
         var nullableModelElement = elementIsNullable
             || (column.Converter is not null && !column.Type.IsValueType);
-        var value = nullableModelElement
-            ? column.Type.IsValueType ? "_e.Value" : "_e"
-            : "_e";
+        var value = nullableModelElement && column.Type.IsValueType ? "_e.Value" : "_e";
         string providerValue;
         string providerTypeName;
         Microsoft.CodeAnalysis.SpecialType providerSpecialType;
@@ -2354,14 +2344,27 @@ internal static class StoreOperationEmitter
         var storage = sqlBuilder.BuildCollectionElementExpression(new CollectionElementExpressionContext(
             providerValue, providerTypeName, providerSpecialType));
         requiresProjection |= storage.IsTransformed;
-        if (!requiresProjection) return arg;
-        if (storage.IsTransformed) nullableResultType = storage.StorageTypeName + "?";
+        if (!requiresProjection)
+        {
+            return arg;
+        }
 
-        var selector = nullableModelElement
-            ? column.Type.IsValueType
+        if (storage.IsTransformed)
+        {
+            nullableResultType = storage.StorageTypeName + "?";
+        }
+
+        string selector;
+        if (!nullableModelElement)
+        {
+            selector = $"static _e => {storage.ValueExpression}";
+        }
+        else
+        {
+            selector = column.Type.IsValueType
                 ? $"static _e => _e.HasValue ? ({nullableResultType ?? storage.StorageTypeName + "?"}){storage.ValueExpression} : null"
-                : $"static _e => _e is null ? ({nullableResultType ?? storage.StorageTypeName + "?"})null : {storage.ValueExpression}"
-            : $"static _e => {storage.ValueExpression}";
+                : $"static _e => _e is null ? ({nullableResultType ?? storage.StorageTypeName + "?"})null : {storage.ValueExpression}";
+        }
         return NullGuardedSelect(arg, selector);
     }
 
@@ -2488,7 +2491,9 @@ internal static class StoreOperationEmitter
                 // The child SELECT names its parameter after this column's property, so bind the same name.
                 var paramName = FindColumn(relationChildEntities[relation.PropertyName], relation.ForeignKeyProperty)!.PropertyName;
                 if (!paramNames.Contains(paramName))
+                {
                     paramNames.Add(paramName);
+                }
             }
         }
 
@@ -2503,7 +2508,11 @@ internal static class StoreOperationEmitter
             var keyValue = BuildParameterValueExpression(entity.Keys[0], "_key", sqlBuilder);
             source.AppendLine($"                    var _p{i} = _c.CreateParameter();");
             source.AppendLine($"                    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(paramNames[i]))}\";");
-            if (keyDbType is not null) source.AppendLine($"                    _p{i}.DbType = {keyDbType};");
+            if (keyDbType is not null)
+            {
+                source.AppendLine($"                    _p{i}.DbType = {keyDbType};");
+            }
+
             AppendSizePrecision(source, entity.Keys[0], sqlBuilder, $"_p{i}", "                    ");
             source.AppendLine($"                    _p{i}.Value = {keyValue};");
             source.AppendLine($"                    _c.Parameters.Add(_p{i});");
@@ -2517,9 +2526,13 @@ internal static class StoreOperationEmitter
         {
             var childEntity = relationChildEntities[relation.PropertyName];
             if (relation.IsCollection || relation.IsManyToMany)
+            {
                 source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadListAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
+            }
             else
+            {
                 source.AppendLine($"            _entity.{relation.PropertyName} = await _grid.ReadGeneratedSingleOrDefaultAsync<{childEntity.FullyQualifiedName}, {childEntity.StructMaterializerFullName}>(default, {cancellation}).ConfigureAwait(false);");
+            }
         }
         source.AppendLine("        }");
         source.AppendLine("        return _entity;");
@@ -2543,7 +2556,11 @@ internal static class StoreOperationEmitter
         source.AppendLine("        {");
         foreach (var relation in entity.Relations)
         {
-            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity)) continue;
+            if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity))
+            {
+                continue;
+            }
+
             var childType = childEntity.FullyQualifiedName;
             var childStructMat = childEntity.StructMaterializerFullName;
             var fieldName = $"_sql_{relation.PropertyName}";
@@ -2633,9 +2650,13 @@ internal static class StoreOperationEmitter
         void AppendChildLoopClose()
         {
             if (useGrid)
+            {
                 source.AppendLine($"        }}, {cancellation}).ConfigureAwait(false);");
+            }
             else
+            {
                 source.AppendLine("        }");
+            }
         }
 
         // Dictionary capacity. On the non-grid path the parent list is materialized first, so its count is
@@ -3052,17 +3073,38 @@ internal static class StoreOperationEmitter
             _ => stream ? "A deferred stream of matching rows." : "Buffered matching results, including page metadata when declared.",
         };
         if (!member.Elements("summary").Any())
+        {
             member.Add(new XElement("summary", $"Executes the generated {method.Operation} operation."));
+        }
+
         if (!member.Elements("returns").Any())
+        {
             member.Add(new XElement("returns", result));
+        }
+
         foreach (var parameter in method.Parameters.AsImmutableArray())
         {
             if (member.Elements("param").Any(element => (string?)element.Attribute("name") == parameter.Name))
+            {
                 continue;
-            var help = parameter.IsCancellationToken ? "Requests cancellation; cancellation does not prove that a write was rolled back."
-                : entityWrite ? "The input entity. Configured client-generated keys and audit values may be assigned before execution; database values and tokens are not copied back."
-                : method.Operation == StoreOperation.StoredProcedure ? "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument."
-                : "The declared key, filter, paging, batch, or option input used by this operation.";
+            }
+
+            string help;
+            if (parameter.IsCancellationToken)
+            {
+                help = "Requests cancellation; cancellation does not prove that a write was rolled back.";
+            }
+            else if (entityWrite)
+            {
+                help = "The input entity. Configured client-generated keys and audit values may be assigned before execution; database values and tokens are not copied back.";
+            }
+            else
+            {
+                help = method.Operation == StoreOperation.StoredProcedure
+                    ? "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument."
+                    : "The declared key, filter, paging, batch, or option input used by this operation.";
+            }
+
             member.Add(new XElement("param", new XAttribute("name", parameter.Name), help));
         }
         var remarks = new XElement("remarks",
@@ -3071,20 +3113,30 @@ internal static class StoreOperationEmitter
                 ? "Database execution and materialization can fail during enumeration after earlier rows have been yielded. Dispose the enumerator within its service scope; disposal can also fail."
                 : "Validation may throw at invocation; database execution, conversion, and cleanup errors can fault the returned task. A write may have executed before a later failure."));
         if (entityWrite || method.Operation is StoreOperation.InsertAll or StoreOperation.UpdateAll or StoreOperation.BulkInsert)
+        {
             remarks.Add(new XElement("para", "Configured SequentialGuid keys are assigned when unset on insert/upsert paths, and applicable audit assignments mutate inputs before execution. Failures do not undo these in-memory assignments. Database-generated identities and concurrency tokens are not copied into inputs."));
+        }
+
         member.Add(remarks);
         AddException("System.OperationCanceledException", "Cancellation is observed; provider timeouts may instead retain their provider exception type.");
         AddException("System.Data.Common.DbException", "The provider reports a database failure; its specific exception type and error details are preserved.");
         AddException("System.AggregateException", "Execution and cleanup both fail, or multiple cleanup operations fail. Inspect the inner exceptions.");
         if (method.Operation == StoreOperation.StoredProcedure && method.ProcedureReturn == ProcedureReturnKind.TaskOfEntity)
+        {
             AddException("System.InvalidOperationException", "The procedure returns more than one row.");
+        }
+
         if (method.HasConcurrencyToken && method.Operation is (StoreOperation.Update or StoreOperation.DeleteOneByKey))
+        {
             AddException("Inquiry.InquiryConcurrencyException", "A concurrency-token mutation matches no row and ThrowOnConcurrencyConflict is enabled.");
+        }
 
         void AddException(string type, string text)
         {
             if (!member.Elements("exception").Any(element => (string?)element.Attribute("cref") == type))
+            {
                 member.Add(new XElement("exception", new XAttribute("cref", type), text));
+            }
         }
     }
 
@@ -3201,9 +3253,12 @@ internal static class StoreOperationEmitter
             var column = insertable[i];
             var accessor = "_e." + column.PropertyName;
             var typedValue = BuildBulkTypedValueExpression(column, accessor, sqlBuilder);
-            var nullPredicate = column.Type.IsNullable
-                ? column.Type.IsValueType ? $", static _e => !{accessor}.HasValue" : $", static _e => {accessor} is null"
-                : string.Empty;
+            var nullPredicate = string.Empty;
+            if (column.Type.IsNullable)
+            {
+                nullPredicate = column.Type.IsValueType ? $", static _e => !{accessor}.HasValue" : $", static _e => {accessor} is null";
+            }
+
             source.AppendLine($"            new global::Inquiry.BulkCopy.InquiryBulkColumnAccessor<{entityType}, {fieldTypeNames[i]}>(static _e => {typedValue}{nullPredicate}),");
         }
         source.AppendLine("        });");
@@ -3212,14 +3267,7 @@ internal static class StoreOperationEmitter
         var hasStamps = HasSequentialGuidKey(entity);
         if (!hasStamps)
         {
-            foreach (var column in entity.Columns.AsImmutableArray())
-            {
-                if (IsCreatedAudit(column) || IsModifiedAudit(column))
-                {
-                    hasStamps = true;
-                    break;
-                }
-            }
+            hasStamps = entity.Columns.AsImmutableArray().Any(column => IsCreatedAudit(column) || IsModifiedAudit(column));
         }
 
         AppendHeader(source, method, parameters, isAsync: false);
@@ -3438,7 +3486,7 @@ internal static class StoreOperationEmitter
                 ? "_args"
                 : "_args.Arg" + parameterIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        public string MaxParametersReference => "_args.MaxParameters";
+        public const string MaxParametersReference = "_args.MaxParameters";
     }
 
     private static string EmptyGeneratedCommand(string sqlField, bool storedProcedure = false)
@@ -3515,7 +3563,10 @@ internal static class StoreOperationEmitter
         {
             for (var i = 0; i < names.Count; i++)
             {
-                if (string.Equals(names[i], name, StringComparison.Ordinal)) return true;
+                if (string.Equals(names[i], name, StringComparison.Ordinal))
+                {
+                    return true;
+                }
             }
 
             return false;
@@ -3534,19 +3585,31 @@ internal static class StoreOperationEmitter
         GlobalFilterSite site = GlobalFilterSite.Read)
     {
         var active = ActiveParameterizedFilters(entity, method, site);
-        if (active.Count == 0) return null;
+        if (active.Count == 0)
+        {
+            return null;
+        }
 
         // The write set is entity-global (no per-method narrowing), so it needs no set suffix and one
         // helper name serves every write in the store.
-        if (site == GlobalFilterSite.Write) return "__BindGlobalFiltersWrite";
+        if (site == GlobalFilterSite.Write)
+        {
+            return "__BindGlobalFiltersWrite";
+        }
 
         var full = 0;
         foreach (var column in entity.Columns)
         {
-            if (column.IsGlobalFilter && column.GlobalFilterContextKey is not null) full++;
+            if (column.IsGlobalFilter && column.GlobalFilterContextKey is not null)
+            {
+                full++;
+            }
         }
 
-        if (active.Count == full) return "__BindGlobalFilters";
+        if (active.Count == full)
+        {
+            return "__BindGlobalFilters";
+        }
 
         // Reduced-set name derived from the SET CONTENT, not the method name: overloads share a
         // method name, and StoreProcessor dedupes helper emission by name — a name that encodes the
@@ -3555,9 +3618,9 @@ internal static class StoreOperationEmitter
         // when property names themselves contain underscores; digits and underscores are valid
         // identifier characters, so the result is always a legal C# method name.
         var suffix = new StringBuilder("__BindGlobalFilters");
-        foreach (var column in active)
+        foreach (var propertyName in active.Select(column => column.PropertyName))
         {
-            suffix.Append('_').Append(column.PropertyName.Length).Append('_').Append(column.PropertyName);
+            suffix.Append('_').Append(propertyName.Length).Append('_').Append(propertyName);
         }
 
         return suffix.ToString();

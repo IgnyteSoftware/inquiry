@@ -16,7 +16,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     private readonly Action _onDetach;
     private readonly Action _onClose;
     private readonly object _lifecycleLock = new();
-    private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _cleanupTimeout = TimeSpan.FromSeconds(5);
     private int _closed;
     private Task? _terminalTask;
     private Task? _disposeTask;
@@ -201,12 +201,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await rollbackTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await rollbackTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider rollback did not complete within {CleanupTimeout.TotalSeconds:0} seconds; cleanup will continue sequentially in the background."));
+                $"Provider rollback did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; cleanup will continue sequentially in the background."));
             _ = ContinueCleanupAfterRollbackAsync(rollbackTask);
             return;
         }
@@ -234,12 +234,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await transactionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await transactionDisposeTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider transaction disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; connection cleanup will continue sequentially in the background."));
+                $"Provider transaction disposal did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; connection cleanup will continue sequentially in the background."));
             _ = ContinueConnectionCleanupAsync(transactionDisposeTask);
             return;
         }
@@ -266,12 +266,12 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
         try
         {
-            await connectionDisposeTask.WaitAsync(CleanupTimeout).ConfigureAwait(false);
+            await connectionDisposeTask.WaitAsync(_cleanupTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             failures.Add(new TimeoutException(
-                $"Provider connection disposal did not complete within {CleanupTimeout.TotalSeconds:0} seconds; it will continue in the background."));
+                $"Provider connection disposal did not complete within {_cleanupTimeout.TotalSeconds:0} seconds; it will continue in the background."));
             _ = ObserveBackgroundAsync(connectionDisposeTask);
         }
         catch (Exception exception)
@@ -282,36 +282,64 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
 
     private async Task ContinueCleanupAfterRollbackAsync(Task rollbackTask)
     {
-        try { await rollbackTask.ConfigureAwait(false); }
-        catch { }
+        try
+        { await rollbackTask.ConfigureAwait(false); }
+        catch
+        {
+            // Background cleanup has no caller to report to; the provider resources are still released below.
+        }
         await DisposeProviderResourcesUnboundedObservedAsync().ConfigureAwait(false);
     }
 
     private async Task ContinueConnectionCleanupAsync(Task transactionDisposeTask)
     {
-        try { await transactionDisposeTask.ConfigureAwait(false); }
-        catch { }
-        try { await _connection.DisposeAsync().ConfigureAwait(false); }
-        catch { }
+        try
+        { await transactionDisposeTask.ConfigureAwait(false); }
+        catch
+        {
+            // Background cleanup has no caller to report to; the connection is still disposed below.
+        }
+        try
+        { await _connection.DisposeAsync().ConfigureAwait(false); }
+        catch
+        {
+            // Background cleanup has no caller to report to.
+        }
     }
 
     private async Task DisposeProviderResourcesUnboundedObservedAsync()
     {
-        try { await _transaction.DisposeAsync().ConfigureAwait(false); }
-        catch { }
-        try { await _connection.DisposeAsync().ConfigureAwait(false); }
-        catch { }
+        try
+        { await _transaction.DisposeAsync().ConfigureAwait(false); }
+        catch
+        {
+            // Background cleanup has no caller to report to; the connection is still disposed below.
+        }
+        try
+        { await _connection.DisposeAsync().ConfigureAwait(false); }
+        catch
+        {
+            // Background cleanup has no caller to report to.
+        }
     }
 
     private static async Task ObserveBackgroundAsync(Task task)
     {
-        try { await task.ConfigureAwait(false); }
-        catch { }
+        try
+        { await task.ConfigureAwait(false); }
+        catch
+        {
+            // Observes a background task so its failure does not surface as an unobserved exception.
+        }
     }
 
     private static void ThrowFailures(List<Exception> failures, string aggregateMessage)
     {
-        if (failures.Count == 0) return;
+        if (failures.Count == 0)
+        {
+            return;
+        }
+
         if (failures.Count == 1)
         {
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failures[0]).Throw();
@@ -326,7 +354,11 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     /// </summary>
     private void Close()
     {
-        if (System.Threading.Interlocked.Exchange(ref _closed, 1) != 0) return;
+        if (System.Threading.Interlocked.Exchange(ref _closed, 1) != 0)
+        {
+            return;
+        }
+
         _pipeline.MarkClosed();
         _onClose();
     }

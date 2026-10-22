@@ -1,4 +1,3 @@
-using Inquiry;
 using Inquiry.FeatureCatalog;
 using Inquiry.Oracle.Tests.Fixtures;
 

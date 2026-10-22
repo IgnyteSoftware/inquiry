@@ -1,8 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 
 namespace Inquiry.DependencyInjection;
 
@@ -27,10 +27,7 @@ public static class InquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions)
     {
-        if (configureOptions is null)
-        {
-            throw new ArgumentNullException(nameof(configureOptions));
-        }
+        ArgumentNullException.ThrowIfNull(configureOptions);
 
         return AddInquiryCore(services, configureOptions);
     }
@@ -44,10 +41,7 @@ public static class InquiryServiceCollectionExtensions
     [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     public static IServiceCollection AddInquiry(this IServiceCollection services, params Assembly[] additionalAssemblies)
     {
-        if (additionalAssemblies is null)
-        {
-            throw new ArgumentNullException(nameof(additionalAssemblies));
-        }
+        ArgumentNullException.ThrowIfNull(additionalAssemblies);
 
         AddInquiryCore(services, configureOptions: null);
         AddGeneratedServices(services, additionalAssemblies);
@@ -63,14 +57,8 @@ public static class InquiryServiceCollectionExtensions
     [RequiresUnreferencedCode(AssemblyScanRequiresUnreferencedCode)]
     public static IServiceCollection AddInquiry(this IServiceCollection services, Action<InquiryOptions> configureOptions, params Assembly[] additionalAssemblies)
     {
-        if (configureOptions is null)
-        {
-            throw new ArgumentNullException(nameof(configureOptions));
-        }
-        if (additionalAssemblies is null)
-        {
-            throw new ArgumentNullException(nameof(additionalAssemblies));
-        }
+        ArgumentNullException.ThrowIfNull(configureOptions);
+        ArgumentNullException.ThrowIfNull(additionalAssemblies);
 
         AddInquiryCore(services, configureOptions);
         AddGeneratedServices(services, additionalAssemblies);
@@ -81,10 +69,7 @@ public static class InquiryServiceCollectionExtensions
         IServiceCollection services,
         Action<InquiryOptions>? configureOptions)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         AddOrConfigureOptions(services, configureOptions);
 

@@ -1,10 +1,10 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.BulkCopy;
 using Inquiry.Connections;
 using Npgsql;
 using NpgsqlTypes;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry.PostgreSql;
 
@@ -35,11 +35,19 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         var npgsqlTypes = MapColumnTypes(definition);
 
         if (context.Options.BatchSize is not null)
+        {
             throw new InvalidOperationException("PostgreSQL bulk insert cannot honor option BatchSize before writing any rows.");
+        }
+
         if (context.Options.TableLock)
+        {
             throw new InvalidOperationException("PostgreSQL bulk insert cannot honor option TableLock before writing any rows.");
+        }
+
         if (context.Options.NotifyAfter is not null || context.Options.RowsCopied is not null)
+        {
             throw new InvalidOperationException("PostgreSQL bulk insert cannot honor options NotifyAfter or RowsCopied before writing any rows.");
+        }
 
         DbConnection? dedicatedConnection = null;
         var rawConnection = context.Connection;
@@ -50,7 +58,11 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         }
         if (rawConnection is not NpgsqlConnection connection)
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
+
             throw new InvalidOperationException(
                 $"PostgreSQL bulk insert requires an NpgsqlConnection but received {rawConnection.GetType().Name}. " +
                 "If using a connection wrapper, unwrap the inner connection first.");
@@ -59,7 +71,11 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         try
         {
             await using var writer = await connection.BeginBinaryImportAsync(sql, cancellationToken).ConfigureAwait(false);
-            if (context.Options.Timeout is { } timeout) writer.Timeout = timeout;
+            if (context.Options.Timeout is { } timeout)
+            {
+                writer.Timeout = timeout;
+            }
+
             var typedWriter = new NpgsqlBulkValueWriter(writer, npgsqlTypes);
             var copyTimestamp = Stopwatch.GetTimestamp();
             long rowCount = 0;
@@ -75,19 +91,29 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
                         {
                             var accessor = typedAccessors[ordinal];
                             if (accessor.IsNull(row))
+                            {
                                 await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                            }
                             else
+                            {
                                 await accessor.WriteAsync(row, typedWriter, ordinal, cancellationToken).ConfigureAwait(false);
+                            }
                         }
                         else
                         {
                             var value = definition.GetValue(row, ordinal);
                             if (value is DBNull)
+                            {
                                 await writer.WriteNullAsync(cancellationToken).ConfigureAwait(false);
+                            }
                             else if (npgsqlTypes is not null)
+                            {
                                 await writer.WriteAsync(value, npgsqlTypes[ordinal], cancellationToken).ConfigureAwait(false);
+                            }
                             else
+                            {
                                 await writer.WriteAsync(value, cancellationToken).ConfigureAwait(false);
+                            }
                         }
                     }
                     rowCount++;
@@ -105,7 +131,10 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         }
         finally
         {
-            if (dedicatedConnection is not null) await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            if (dedicatedConnection is not null)
+            {
+                await dedicatedConnection.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 
@@ -130,7 +159,9 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
         where TEntity : class
     {
         if (definition.ColumnTypes is not { } dbTypes)
+        {
             return null;
+        }
 
         var result = new NpgsqlDbType[dbTypes.Count];
         for (var i = 0; i < dbTypes.Count; i++)

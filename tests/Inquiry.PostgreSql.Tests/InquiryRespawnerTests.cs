@@ -40,7 +40,10 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
         var respawner = useFactory
             ? await InquiryRespawner.CreateAsync(factory, Options)
             : await InquiryRespawner.CreateAsync(connection, Options);
-        if (useFactory) await AssertDisposedAsync(factory.LastConnection!);
+        if (useFactory)
+        {
+            await AssertDisposedAsync(factory.LastConnection!);
+        }
 
         for (var iteration = 0; iteration < 2; iteration++)
         {
@@ -80,7 +83,11 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
             ? respawner.ResetAsync(factory)
             : respawner.ResetAsync(connection));
 
-        if (useFactory) await AssertDisposedAsync(factory.LastConnection!);
+        if (useFactory)
+        {
+            await AssertDisposedAsync(factory.LastConnection!);
+        }
+
         Assert.Equal(ConnectionState.Open, connection.State);
         Assert.Equal(7, await ScalarAsync(connection, "SELECT id FROM lookup"));
     }
@@ -101,7 +108,11 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
             ? InquiryRespawner.CreateAsync(factory, incompatibleOptions)
             : InquiryRespawner.CreateAsync(connection, incompatibleOptions));
 
-        if (useFactory) await AssertDisposedAsync(factory.LastConnection!);
+        if (useFactory)
+        {
+            await AssertDisposedAsync(factory.LastConnection!);
+        }
+
         Assert.Equal(ConnectionState.Open, connection.State);
         Assert.Equal(7, await ScalarAsync(connection, "SELECT id FROM lookup"));
     }
@@ -116,7 +127,7 @@ public sealed class InquiryRespawnerTests(PostgreSqlContainerFixture fixture)
         var respawner = await InquiryRespawner.CreateAsync(connection, Options);
         await ExecuteAsync(connection, "INSERT INTO parent DEFAULT VALUES");
         using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
         var token = cancellation.Token;
         var factory = new RecordingFactory(database.ConnectionString);
 

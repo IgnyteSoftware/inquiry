@@ -40,9 +40,9 @@ public class ColdStartBenchmarks
 
     private static Shipper ReadShipper(System.Data.Common.DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     // ---- ColdPointRead ---------------------------------------------------------------------

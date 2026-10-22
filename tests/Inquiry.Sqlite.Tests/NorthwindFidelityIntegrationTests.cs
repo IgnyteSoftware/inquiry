@@ -1,9 +1,7 @@
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Inquiry.Northwind;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
-using Xunit;
 
 namespace Inquiry.Sqlite.Tests;
 

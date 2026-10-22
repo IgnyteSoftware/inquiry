@@ -28,8 +28,9 @@ public class InListBenchmarks
     private int[][] _idLists = null!;
     private int _cursor;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()

@@ -4,7 +4,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -74,22 +73,22 @@ public sealed class SchemaManifestCatalogIntegrationTests
         }
         await reader.DisposeAsync();
         Assert.Equal(expected.Length, ordinal);
-        Assert.Equal(new[] { "Id" }, table.GetProperty("primaryKey").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["Id"], table.GetProperty("primaryKey").EnumerateArray().Select(value => value.GetString()));
         var columns = table.GetProperty("columns").EnumerateArray().ToDictionary(x => x.GetProperty("name").GetString()!);
         Assert.Equal("identity", columns["Id"].GetProperty("generation").GetString());
         Assert.Equal("7", columns["score"].GetProperty("defaultExpression").GetString());
         Assert.Equal("score + 1", columns["Total"].GetProperty("computedExpression").GetString());
         var index = Assert.Single(table.GetProperty("indexes").EnumerateArray());
         Assert.True(index.GetProperty("unique").GetBoolean());
-        Assert.Equal(new[] { "Name" }, index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
-        Assert.Equal(new[] { "Notes" }, index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Name"], index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Notes"], index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("CK_ManifestWidget_Score", Assert.Single(table.GetProperty("checks").EnumerateArray()).GetProperty("name").GetString());
         var foreignKey = Assert.Single(table.GetProperty("foreignKeys").EnumerateArray());
         Assert.Equal("FK_ManifestWidget_Parent", foreignKey.GetProperty("name").GetString());
-        Assert.Equal(new[] { "ParentId" }, foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["ParentId"], foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(JsonValueKind.Null, foreignKey.GetProperty("referencedSchema").ValueKind);
         Assert.Equal("ManifestParent", foreignKey.GetProperty("referencedTable").GetString());
-        Assert.Equal(new[] { "Id" }, foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Id"], foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("cascade", foreignKey.GetProperty("onDelete").GetString());
         Assert.Equal("no-action", foreignKey.GetProperty("onUpdate").GetString());
         await using var checkExpression = connection.CreateCommand();
@@ -101,19 +100,30 @@ public sealed class SchemaManifestCatalogIntegrationTests
         // The provider intentionally emits SERIAL for generated integer keys. PostgreSQL exposes that
         // as a nextval(...) default rather than information_schema.columns.is_identity = YES.
         facts.CommandText = "SELECT count(*) FILTER (WHERE column_name='Id' AND (is_identity='YES' OR column_default LIKE 'nextval(%')), count(*) FILTER (WHERE column_default='7'::text), count(*) FILTER (WHERE is_generated='ALWAYS'), (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND tablename='ManifestWidget' AND indexname='UX_ManifestWidget_Name' AND indexdef LIKE 'CREATE UNIQUE%INCLUDE%Notes%'), (SELECT count(*) FROM information_schema.table_constraints WHERE table_schema='public' AND table_name='ManifestWidget' AND constraint_name='CK_ManifestWidget_Score' AND constraint_type='CHECK'), (SELECT count(*) FROM information_schema.referential_constraints WHERE constraint_schema='public' AND constraint_name='FK_ManifestWidget_Parent' AND delete_rule='CASCADE' AND update_rule='NO ACTION') FROM information_schema.columns WHERE table_schema='public' AND table_name='ManifestWidget'";
-        await using var factsReader = await facts.ExecuteReaderAsync(); Assert.True(await factsReader.ReadAsync());
-        Assert.Equal(1L, factsReader.GetInt64(0)); Assert.Equal(1L, factsReader.GetInt64(1)); Assert.Equal(1L, factsReader.GetInt64(2));
-        Assert.Equal(1L, factsReader.GetInt64(3)); Assert.Equal(1L, factsReader.GetInt64(4)); Assert.Equal(1L, factsReader.GetInt64(5));
+        await using var factsReader = await facts.ExecuteReaderAsync();
+        Assert.True(await factsReader.ReadAsync());
+        Assert.Equal(1L, factsReader.GetInt64(0));
+        Assert.Equal(1L, factsReader.GetInt64(1));
+        Assert.Equal(1L, factsReader.GetInt64(2));
+        Assert.Equal(1L, factsReader.GetInt64(3));
+        Assert.Equal(1L, factsReader.GetInt64(4));
+        Assert.Equal(1L, factsReader.GetInt64(5));
         await factsReader.DisposeAsync();
 
         await using var structures = connection.CreateCommand();
         structures.CommandText = "SELECT a.attname, x.ordinality > i.indnkeyatts FROM pg_class t JOIN pg_namespace n ON n.oid=t.relnamespace JOIN pg_index i ON i.indrelid=t.oid JOIN pg_class ix ON ix.oid=i.indexrelid CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY x(attnum, ordinality) JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=x.attnum WHERE n.nspname='public' AND t.relname='ManifestWidget' AND ix.relname='UX_ManifestWidget_Name' ORDER BY x.ordinality; SELECT kcu.column_name,ccu.table_schema,ccu.table_name,ccu.column_name,rc.delete_rule,rc.update_rule FROM information_schema.key_column_usage kcu JOIN information_schema.referential_constraints rc ON rc.constraint_schema=kcu.constraint_schema AND rc.constraint_name=kcu.constraint_name JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_schema=rc.unique_constraint_schema AND ccu.constraint_name=rc.unique_constraint_name WHERE kcu.table_schema='public' AND kcu.table_name='ManifestWidget' AND kcu.constraint_name='FK_ManifestWidget_Parent' ORDER BY kcu.ordinal_position";
         await using var structureReader = await structures.ExecuteReaderAsync();
-        var catalogKeys = new List<string>(); var catalogIncludes = new List<string>();
-        while (await structureReader.ReadAsync()) (structureReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(structureReader.GetString(0));
+        var catalogKeys = new List<string>();
+        var catalogIncludes = new List<string>();
+        while (await structureReader.ReadAsync())
+        {
+            (structureReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(structureReader.GetString(0));
+        }
+
         Assert.Equal(index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()), catalogKeys);
         Assert.Equal(index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()), catalogIncludes);
-        Assert.True(await structureReader.NextResultAsync()); Assert.True(await structureReader.ReadAsync());
+        Assert.True(await structureReader.NextResultAsync());
+        Assert.True(await structureReader.ReadAsync());
         Assert.Equal(Assert.Single(foreignKey.GetProperty("localColumns").EnumerateArray()).GetString(), structureReader.GetString(0));
         Assert.Equal("public", structureReader.GetString(1));
         Assert.Equal(foreignKey.GetProperty("referencedTable").GetString(), structureReader.GetString(2));

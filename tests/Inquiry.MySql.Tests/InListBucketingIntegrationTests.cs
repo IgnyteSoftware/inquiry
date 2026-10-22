@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;

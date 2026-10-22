@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Packages are now built under the Ignyte repository template's stricter analyzer rules. The public API and the exceptions it throws, including their messages, are unchanged.
+
 ## [1.0.0-preview.12] - 2026-10-21
 
 ### Fixed

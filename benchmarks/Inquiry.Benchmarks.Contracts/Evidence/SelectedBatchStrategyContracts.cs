@@ -95,8 +95,8 @@ public static class SelectedBatchStrategyValidator
         string SqlShape,
         string ChunkPolicy);
 
-    private static readonly IReadOnlyDictionary<(string Provider, BatchMutationOperation Operation), CheckedOperation>
-        CheckedOperations = new Dictionary<(string, BatchMutationOperation), CheckedOperation>
+    private static readonly Dictionary<(string Provider, BatchMutationOperation Operation), CheckedOperation>
+        _checkedOperations = new Dictionary<(string, BatchMutationOperation), CheckedOperation>
         {
             { ("sqlite", BatchMutationOperation.Insert), new("Insert", "Inquiry_SelectedInsertAll", "generatedReusedRowPreferPrepareOnce", "single-row-insert", "configured-max-batch-size") },
             { ("sqlite", BatchMutationOperation.Update), new("Update", "Inquiry_SelectedUpdateAll", "generatedReusedCommand", "single-row-update", "effective-max-batch-and-parameters") },
@@ -118,7 +118,7 @@ public static class SelectedBatchStrategyValidator
             { ("oracle", BatchMutationOperation.Delete), new("BatchDelete", "Inquiry_SelectedDeleteAll", "generatedSingleStatementPredicate", "json-table-keyset-delete", "none-single-statement") },
         };
 
-    private static readonly IReadOnlyDictionary<string, ComparisonMethodRole> CheckedComparisonRoles =
+    private static readonly Dictionary<string, ComparisonMethodRole> _checkedComparisonRoles =
         new Dictionary<string, ComparisonMethodRole>(StringComparer.Ordinal)
         {
             ["Direct_ReusedPreparedInsert"] = ComparisonMethodRole.DirectDriver,
@@ -177,7 +177,11 @@ public static class SelectedBatchStrategyValidator
         foreach (var provider in manifest.Providers)
         {
             ValidateProvider(provider, errors);
-            if (context?.BenchmarkTypes is not null) ValidateSurface(provider, context, errors);
+            if (context?.BenchmarkTypes is not null)
+            {
+                ValidateSurface(provider, context, errors);
+            }
+
             ValidateEvidence(provider, context?.ResolveEvidence, errors);
         }
 
@@ -188,7 +192,10 @@ public static class SelectedBatchStrategyValidator
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 
@@ -249,7 +256,7 @@ public static class SelectedBatchStrategyValidator
                   string.IsNullOrWhiteSpace(operation.SqlShape) ||
                   string.IsNullOrWhiteSpace(operation.ChunkPolicy),
                 "strategy-operation", $"{prefix} must declare category, selected method, execution mode, SQL shape, and chunk policy.");
-            if (CheckedOperations.TryGetValue((provider.Provider, operation.Operation), out var checkedOperation))
+            if (_checkedOperations.TryGetValue((provider.Provider, operation.Operation), out var checkedOperation))
             {
                 AddIf(operation.BenchmarkCategory != checkedOperation.Category ||
                       operation.SelectedMethod != checkedOperation.SelectedMethod ||
@@ -270,7 +277,7 @@ public static class SelectedBatchStrategyValidator
 
             foreach (var comparison in operation.Comparisons)
             {
-                AddIf(!CheckedComparisonRoles.TryGetValue(comparison.Method, out var checkedRole) ||
+                AddIf(!_checkedComparisonRoles.TryGetValue(comparison.Method, out var checkedRole) ||
                       comparison.Role != checkedRole, "strategy-comparison-role",
                     $"{prefix} comparison '{comparison.Method}' is mislabeled as {comparison.Role}.");
                 AddIf(comparison.CapabilityId is not null &&
@@ -293,12 +300,18 @@ public static class SelectedBatchStrategyValidator
             AddIf(!operation.Cells.Select(static cell => cell.Cardinality)
                     .SequenceEqual(SelectedBatchStrategySchema.Cardinalities),
                 "strategy-cell-order", $"{prefix} cells must use canonical checked cardinality order.");
-            foreach (var cell in operation.Cells) ValidateCell(prefix, provider, operation, cell, errors);
+            foreach (var cell in operation.Cells)
+            {
+                ValidateCell(prefix, provider, operation, cell, errors);
+            }
         }
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 
@@ -314,16 +327,28 @@ public static class SelectedBatchStrategyValidator
             if (cell.Confidence != SelectedStrategyConfidence.Unmeasured || cell.RuntimeCapabilities is not null ||
                 cell.SelectedEvidence is not null ||
                 cell.ComparisonEvidence.Count != 0)
+            {
                 errors.Add(new("strategy-pending", $"{prefix} cardinality {cell.Cardinality} pending cells cannot claim evidence or confidence."));
+            }
+
             return;
         }
 
         if (cell.SelectedEvidence is null)
+        {
             errors.Add(new("strategy-evidence", $"{prefix} cardinality {cell.Cardinality} requires selected-method evidence."));
+        }
+
         if (cell.Status == SelectedStrategyStatus.Provisional && cell.Confidence != SelectedStrategyConfidence.Diagnostic)
+        {
             errors.Add(new("strategy-confidence", $"{prefix} provisional cells must have diagnostic confidence."));
+        }
+
         if (cell.Status == SelectedStrategyStatus.Accepted && cell.Confidence != SelectedStrategyConfidence.Authoritative)
+        {
             errors.Add(new("strategy-confidence", $"{prefix} accepted cells must have authoritative confidence."));
+        }
+
         var expectedCapabilityKeys = provider.Capabilities.Select(static capability => capability.Id)
             .Append("selected-execution-mode")
             .ToHashSet(StringComparer.Ordinal);
@@ -331,19 +356,26 @@ public static class SelectedBatchStrategyValidator
             !cell.RuntimeCapabilities.Keys.ToHashSet(StringComparer.Ordinal).SetEquals(expectedCapabilityKeys) ||
             !cell.RuntimeCapabilities.TryGetValue("selected-execution-mode", out var executionMode) ||
             !StringComparer.Ordinal.Equals(executionMode, operation.ProductionExecutionMode))
+        {
             errors.Add(new("strategy-runtime-capability",
                 $"{prefix} measured cells must bind an exact runtime capability map to the selected execution mode."));
+        }
         else if (provider.Capabilities.Any(capability =>
                      !cell.RuntimeCapabilities.TryGetValue(capability.Id, out var value) ||
                      value != capability.SupportedExecutionMode && value != capability.FallbackExecutionMode))
+        {
             errors.Add(new("strategy-runtime-capability",
                 $"{prefix} measured cells must record every provider capability as its exact supported or fallback execution mode."));
+        }
 
         var comparisonMethods = cell.ComparisonEvidence.Select(static item => item.Method).ToArray();
         if (comparisonMethods.Distinct(StringComparer.Ordinal).Count() != comparisonMethods.Length ||
             comparisonMethods.Any(method => !operation.Comparisons.Any(comparison =>
                 StringComparer.Ordinal.Equals(comparison.Method, method))))
+        {
             errors.Add(new("strategy-comparison-evidence", $"{prefix} cardinality {cell.Cardinality} has duplicate or unknown comparison evidence."));
+        }
+
         if (cell.Status == SelectedStrategyStatus.Accepted)
         {
             var requiredComparisons = operation.Comparisons
@@ -351,16 +383,24 @@ public static class SelectedBatchStrategyValidator
                 .Select(static comparison => comparison.Method)
                 .ToHashSet(StringComparer.Ordinal);
             if (!comparisonMethods.ToHashSet(StringComparer.Ordinal).SetEquals(requiredComparisons))
+            {
                 errors.Add(new("strategy-comparison-evidence",
                     $"{prefix} cardinality {cell.Cardinality} accepted cells require evidence for every non-control comparison."));
+            }
         }
         if (cell.Status == SelectedStrategyStatus.Provisional &&
             !comparisonMethods.Any(method => operation.Comparisons.Any(comparison =>
                 comparison.Role != ComparisonMethodRole.Control &&
                 StringComparer.Ordinal.Equals(comparison.Method, method))))
+        {
             errors.Add(new("strategy-comparison-evidence",
                 $"{prefix} cardinality {cell.Cardinality} provisional cells require non-control comparison evidence."));
-        foreach (var reference in EnumerateReferences(cell)) ValidateReference(reference, errors);
+        }
+
+        foreach (var reference in EnumerateReferences(cell))
+        {
+            ValidateReference(reference, errors);
+        }
     }
 
     private static void ValidateSurface(
@@ -375,7 +415,9 @@ public static class SelectedBatchStrategyValidator
         }
         if (!StringComparer.Ordinal.Equals(type.Assembly.GetName().Name, provider.BenchmarkAssembly) ||
             !StringComparer.Ordinal.Equals(type.FullName, provider.BenchmarkType))
+        {
             errors.Add(new("strategy-benchmark-type", $"Provider '{provider.Provider}' benchmark type identity does not match the manifest."));
+        }
 
         var rows = type.GetField("Rows", BindingFlags.Instance | BindingFlags.Public);
         var values = rows?.GetCustomAttribute<ParamsAttribute>()?.Values?.Select(Convert.ToInt32).ToArray();
@@ -385,14 +427,18 @@ public static class SelectedBatchStrategyValidator
             !values.SequenceEqual(SelectedBatchStrategySchema.Cardinalities) ||
             parameterDimensions.Length != 1 || parameterDimensions[0] is not FieldInfo dimension ||
             dimension.Name != "Rows" || dimension.DeclaringType != type)
+        {
             errors.Add(new("strategy-params",
                 $"Provider '{provider.Provider}' must expose Rows as its sole parameter dimension with exactly [Params(1, 10, 100, 1000)]."));
+        }
 
         foreach (var operation in provider.Operations)
         {
             ValidateMethod(type, operation.SelectedMethod, operation.BenchmarkCategory, true, errors);
             foreach (var comparison in operation.Comparisons)
+            {
                 ValidateMethod(type, comparison.Method, operation.BenchmarkCategory, false, errors);
+            }
 
             var compiledComparisons = type.GetMethods(BindingFlags.Instance | BindingFlags.Public)
                 .Where(method => method.GetCustomAttribute<BenchmarkAttribute>() is not null &&
@@ -403,15 +449,19 @@ public static class SelectedBatchStrategyValidator
                 .Select(static method => method.Name)
                 .ToHashSet(StringComparer.Ordinal);
             if (!compiledComparisons.SetEquals(operation.Comparisons.Select(static comparison => comparison.Method)))
+            {
                 errors.Add(new("strategy-benchmark-surface",
                     $"Provider '{provider.Provider}' category '{operation.BenchmarkCategory}' must declare every compiled comparison benchmark exactly once."));
+            }
         }
         foreach (var capability in provider.Capabilities)
         {
             var property = type.GetProperty(capability.ProbeMember, BindingFlags.Instance | BindingFlags.Public);
             if (property?.PropertyType != typeof(bool) || property.GetMethod is null)
+            {
                 errors.Add(new("strategy-capability-surface",
                     $"Provider '{provider.Provider}' capability '{capability.Id}' must resolve to a public bool property."));
+            }
         }
     }
 
@@ -428,9 +478,14 @@ public static class SelectedBatchStrategyValidator
         if (method is null || method.GetCustomAttribute<BenchmarkAttribute>() is null ||
             method.ReturnType != typeof(Task<int>) || categories is null ||
             !categories.Contains(category, StringComparer.Ordinal))
+        {
             errors.Add(new("strategy-benchmark-method", $"Benchmark method '{type.FullName}.{methodName}' does not match its checked surface contract."));
+        }
+
         if (selected && (!methodName.StartsWith("Inquiry_Selected", StringComparison.Ordinal) || ContainsFloorOrControl(methodName)))
+        {
             errors.Add(new("strategy-selected-method", $"Benchmark method '{type.FullName}.{methodName}' is not a valid selected method."));
+        }
     }
 
     private static void ValidateEvidence(
@@ -439,22 +494,29 @@ public static class SelectedBatchStrategyValidator
         List<ContractError> errors)
     {
         foreach (var operation in provider.Operations)
-        foreach (var cell in operation.Cells.Where(static cell => cell.Status != SelectedStrategyStatus.PendingMeasurement))
         {
-            if (resolver is null)
+            foreach (var cell in operation.Cells.Where(static cell => cell.Status != SelectedStrategyStatus.PendingMeasurement))
             {
-                errors.Add(new("strategy-evidence-context", "Measured strategy cells require an evidence resolver."));
-                continue;
-            }
-            if (cell.SelectedEvidence is not null)
-                ValidateResolved(provider, operation, cell, operation.SelectedMethod, cell.SelectedEvidence, false, resolver, errors);
-            foreach (var comparisonEvidence in cell.ComparisonEvidence)
-            {
-                var comparison = operation.Comparisons.SingleOrDefault(candidate =>
-                    StringComparer.Ordinal.Equals(candidate.Method, comparisonEvidence.Method));
-                if (comparison is not null)
-                    ValidateResolved(provider, operation, cell, comparison.Method, comparisonEvidence.Evidence,
-                        comparison.Role == ComparisonMethodRole.Control, resolver, errors);
+                if (resolver is null)
+                {
+                    errors.Add(new("strategy-evidence-context", "Measured strategy cells require an evidence resolver."));
+                    continue;
+                }
+                if (cell.SelectedEvidence is not null)
+                {
+                    ValidateResolved(provider, operation, cell, operation.SelectedMethod, cell.SelectedEvidence, false, resolver, errors);
+                }
+
+                foreach (var comparisonEvidence in cell.ComparisonEvidence)
+                {
+                    var comparison = operation.Comparisons.SingleOrDefault(candidate =>
+                        StringComparer.Ordinal.Equals(candidate.Method, comparisonEvidence.Method));
+                    if (comparison is not null)
+                    {
+                        ValidateResolved(provider, operation, cell, comparison.Method, comparisonEvidence.Evidence,
+                            comparison.Role == ComparisonMethodRole.Control, resolver, errors);
+                    }
+                }
             }
         }
     }
@@ -477,7 +539,10 @@ public static class SelectedBatchStrategyValidator
         }
         var actualHash = Convert.ToHexString(SHA256.HashData(resolved.Json)).ToLowerInvariant();
         if (!StringComparer.Ordinal.Equals(actualHash, reference.Sha256))
+        {
             errors.Add(new("strategy-evidence-identity", "Measured evidence content hash or case ID does not match its reference."));
+        }
+
         var artifactValidation = EvidenceArtifactValidator.Validate(resolved.Json, resolved.ValidationContext);
         var evidence = artifactValidation.Artifact;
         if (evidence is null)
@@ -487,7 +552,10 @@ public static class SelectedBatchStrategyValidator
             return;
         }
         if (!StringComparer.Ordinal.Equals(evidence.CaseId, reference.CaseId))
+        {
             errors.Add(new("strategy-evidence-identity", "Measured evidence content hash or case ID does not match its reference."));
+        }
+
         if (!StringComparer.OrdinalIgnoreCase.Equals(evidence.CaseKey.Provider, provider.Provider) ||
             !StringComparer.OrdinalIgnoreCase.Equals(evidence.CaseKey.OperationSemantics, operation.Operation.ToString()) ||
             evidence.CaseKey.Cardinality != cell.Cardinality ||
@@ -498,38 +566,61 @@ public static class SelectedBatchStrategyValidator
             evidence.BenchmarkTarget.Parameters.Count != 1 ||
             !evidence.BenchmarkTarget.Parameters.TryGetValue("Rows", out var rows) ||
             rows != cell.Cardinality.ToString(System.Globalization.CultureInfo.InvariantCulture))
+        {
             errors.Add(new("strategy-evidence-target", "Measured evidence provider, cardinality, or benchmark target does not match the strategy cell."));
+        }
+
         if (cell.RuntimeCapabilities is null || !evidence.RuntimeCapabilities.OrderBy(static pair => pair.Key, StringComparer.Ordinal)
                 .SequenceEqual(cell.RuntimeCapabilities.OrderBy(static pair => pair.Key, StringComparer.Ordinal)))
+        {
             errors.Add(new("strategy-evidence-capability", "Measured evidence runtime capabilities do not exactly match the strategy cell."));
+        }
+
         if (artifactValidation.Errors.Count != 0)
+        {
             errors.Add(new("strategy-evidence-invalid", "Measured strategy evidence does not satisfy the production artifact validator."));
+        }
+
         var checkedJob = BenchmarkJobCatalog.Jobs.SingleOrDefault(job =>
             StringComparer.Ordinal.Equals(job.Id, evidence.BenchmarkDotNet.JobId));
         var releaseAuthoritative = evidence.Authoritative && evidence.Source.ReleaseEligible &&
                                    checkedJob is not null &&
                                    StringComparer.Ordinal.Equals(evidence.BenchmarkJobContractHash, checkedJob.IdentityHash);
         if (cell.Status == SelectedStrategyStatus.Accepted && (!releaseAuthoritative || control))
+        {
             errors.Add(new("strategy-evidence-authority", "Accepted strategy evidence must be authoritative and cannot target a control benchmark."));
+        }
+
         if (control && evidence.Authoritative)
+        {
             errors.Add(new("strategy-control-authority", "Control benchmark evidence can never be authoritative."));
+        }
     }
 
     private static IEnumerable<MeasuredEvidenceReference> EnumerateReferences(SelectedStrategyCell cell)
     {
-        if (cell.SelectedEvidence is not null) yield return cell.SelectedEvidence;
-        foreach (var comparison in cell.ComparisonEvidence) yield return comparison.Evidence;
+        if (cell.SelectedEvidence is not null)
+        {
+            yield return cell.SelectedEvidence;
+        }
+
+        foreach (var comparison in cell.ComparisonEvidence)
+        {
+            yield return comparison.Evidence;
+        }
     }
 
     private static void ValidateReference(MeasuredEvidenceReference reference, List<ContractError> errors)
     {
         var safePath = !string.IsNullOrWhiteSpace(reference.RelativeArtifactId) &&
                        reference.RelativeArtifactId == reference.RelativeArtifactId.Trim() &&
-                       !reference.RelativeArtifactId.StartsWith("/", StringComparison.Ordinal) &&
+                       !reference.RelativeArtifactId.StartsWith('/') &&
                        !reference.RelativeArtifactId.Contains('\\') && !reference.RelativeArtifactId.Contains(':') &&
                        reference.RelativeArtifactId.Split('/').All(static segment => segment is not ("" or "." or ".."));
         if (!safePath || !IsSha256(reference.Sha256) || !IsSha256(reference.CaseId))
+        {
             errors.Add(new("strategy-evidence-reference", "Measured evidence references require a safe relative path, SHA-256, and case ID."));
+        }
     }
 
     private static bool ContainsFloorOrControl(string method)
@@ -548,7 +639,8 @@ public static class SelectedBatchStrategyArtifactValidator
         SelectedStrategyValidationContext? context = null)
     {
         JsonDocument document;
-        try { document = JsonDocument.Parse(json); }
+        try
+        { document = JsonDocument.Parse(json); }
         catch (JsonException)
         {
             return new(null, [new("invalid-json", "Selected strategy artifact is not valid JSON.")]);
@@ -559,16 +651,28 @@ public static class SelectedBatchStrategyArtifactValidator
             var schema = CheckedArtifactSchemas.SelectedStrategy.Evaluate(
                 document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schema.IsValid)
+            {
                 return new(null, [new("json-schema", "Selected strategy artifact does not match the closed checked schema.")]);
+            }
+
             var hygiene = EvidenceHygieneValidator.Validate(json);
-            if (hygiene.Count != 0) return new(null, hygiene);
+            if (hygiene.Count != 0)
+            {
+                return new(null, hygiene);
+            }
+
             SelectedBatchStrategyManifest? artifact;
-            try { artifact = document.RootElement.Deserialize<SelectedBatchStrategyManifest>(EvidenceJson.Options); }
+            try
+            { artifact = document.RootElement.Deserialize<SelectedBatchStrategyManifest>(EvidenceJson.Options); }
             catch (Exception exception) when (exception is JsonException or NotSupportedException)
             {
                 return new(null, [new("deserialize", "Selected strategy artifact could not be deserialized after schema validation.")]);
             }
-            if (artifact is null) return new(null, [new("deserialize", "Selected strategy artifact deserialized to null.")]);
+            if (artifact is null)
+            {
+                return new(null, [new("deserialize", "Selected strategy artifact deserialized to null.")]);
+            }
+
             var errors = SelectedBatchStrategyValidator.Validate(artifact, context);
             return new(artifact, errors);
         }

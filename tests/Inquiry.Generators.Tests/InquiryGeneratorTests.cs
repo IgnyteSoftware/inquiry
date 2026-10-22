@@ -1,7 +1,7 @@
+using System.Collections.Immutable;
 using Inquiry.Entities;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using System.Collections.Immutable;
 
 namespace Inquiry.Generators.Tests;
 
@@ -2753,7 +2753,7 @@ public sealed partial class InquiryGeneratorTests
         return new GeneratorTestResult(outputCompilation, generatorDiagnostics, driver.GetRunResult());
     }
 
-    private static IReadOnlyList<MetadataReference> GetReferences()
+    private static List<MetadataReference> GetReferences()
     {
         var references = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))
             ?.Split(Path.PathSeparator)

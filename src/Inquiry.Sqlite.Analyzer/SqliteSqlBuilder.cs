@@ -1,6 +1,4 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.Sqlite.Analyzer;
 
@@ -21,7 +19,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     public override ConstraintNameScope ForeignKeyConstraintNameScope => ConstraintNameScope.Table;
     public override ConstraintNameScope CheckConstraintNameScope => ConstraintNameScope.Table;
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is >= ReferentialActionKind.NoAction and <= ReferentialActionKind.SetDefault;
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
@@ -77,7 +75,7 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         return BuildUpsertSql(context) + " RETURNING " + context.SelectColumns;
     }
 
-    private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
+    private static string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
     {
         var keyColumn = context.QuotedKeyColumns[0];
         var keyParameter = context.KeyParameters[0];

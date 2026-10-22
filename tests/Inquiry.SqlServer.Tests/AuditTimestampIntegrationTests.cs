@@ -1,4 +1,3 @@
-using System;
 using Inquiry.FeatureCatalog;
 using Inquiry.SqlServer.Tests.Fixtures;
 

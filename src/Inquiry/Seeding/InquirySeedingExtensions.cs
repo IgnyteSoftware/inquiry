@@ -1,6 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.Seeding;
 
@@ -18,7 +18,7 @@ public static class InquirySeedingExtensions
     public static IServiceCollection AddInquirySeeder<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TSeeder>(this IServiceCollection services)
         where TSeeder : class, IInquiryDataSeeder
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IInquiryDataSeeder, TSeeder>());
         return services;
@@ -32,7 +32,7 @@ public static class InquirySeedingExtensions
     /// </summary>
     public static async Task SeedInquiryAsync(this IServiceProvider serviceProvider, CancellationToken cancellationToken = default)
     {
-        if (serviceProvider is null) throw new ArgumentNullException(nameof(serviceProvider));
+        ArgumentNullException.ThrowIfNull(serviceProvider);
 
         await using var scope = serviceProvider.CreateAsyncScope();
         foreach (var seeder in scope.ServiceProvider.GetServices<IInquiryDataSeeder>())

@@ -22,7 +22,7 @@ namespace Inquiry.Benchmarks.PostgreSql;
 /// </summary>
 public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static PostgreSqlContainer? _container;
     private static ServiceProvider? _servicesWithoutPreparation;
     private static ServiceProvider? _servicesWithPreparation;
@@ -31,16 +31,22 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 
     private PostgreSqlBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     /// <summary>Number of benchmark rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<PgShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => GetRequiredService<ShipperStore>(PreparedStatementMode.None);
     public BatchMutationBenchmarkStore BatchMutations => GetRequiredService<BatchMutationBenchmarkStore>(PreparedStatementMode.Auto);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public T GetRequiredService<T>(PreparedStatementMode mode)
         where T : notnull
     {
@@ -54,9 +60,10 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The DDL is built only from constants in code; no part comes from input.")]
     public static async Task<PostgreSqlBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -117,7 +124,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new PostgreSqlBenchmarkDatabase(seedRows);
@@ -145,12 +152,12 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO \"Shippers\" (\"CompanyName\", \"Phone\") VALUES (@company, @phone);";
             var pCompany = insert.Parameters.Add("company", NpgsqlTypes.NpgsqlDbType.Text);
-            var pPhone   = insert.Parameters.Add("phone",   NpgsqlTypes.NpgsqlDbType.Text);
+            var pPhone = insert.Parameters.Add("phone", NpgsqlTypes.NpgsqlDbType.Text);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -210,8 +217,8 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
         NpgsqlConnection connection,
         NpgsqlTransaction tx,
         int rowCount,
-        IReadOnlyList<int> categoryIds,
-        IReadOnlyList<int> supplierIds)
+        int[] categoryIds,
+        int[] supplierIds)
     {
         await using var insert = connection.CreateCommand();
         insert.Transaction = tx;
@@ -232,8 +239,8 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
         for (var i = 0; i < rowCount; i++)
         {
             pName.Value = $"Product {i}";
-            pSupplier.Value = supplierIds[i % supplierIds.Count];
-            pCategory.Value = categoryIds[i % categoryIds.Count];
+            pSupplier.Value = supplierIds[i % supplierIds.Length];
+            pCategory.Value = categoryIds[i % categoryIds.Length];
             pQuantity.Value = "12 boxes";
             pPrice.Value = 10m + (i % 100);
             pStock.Value = (short)(i % 100);

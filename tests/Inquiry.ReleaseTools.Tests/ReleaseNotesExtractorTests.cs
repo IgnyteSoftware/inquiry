@@ -99,7 +99,7 @@ public sealed class ReleaseNotesExtractorTests
     {
         var changelogPath = Path.Combine(Path.GetTempPath(), $"inquiry-changelog-{Guid.NewGuid():N}.md");
         var notesPath = Path.Combine(Path.GetTempPath(), $"inquiry-notes-{Guid.NewGuid():N}.md");
-        File.WriteAllText(changelogPath, Changelog);
+        await File.WriteAllTextAsync(changelogPath, Changelog);
         using var output = new StringWriter();
         using var error = new StringWriter();
         try
@@ -108,7 +108,7 @@ public sealed class ReleaseNotesExtractorTests
                 ["extract-notes", changelogPath, "1.0.0-preview.8", notesPath], output, error);
 
             Assert.Equal(0, exitCode);
-            Assert.Equal("- real notes\n- more real notes\n", File.ReadAllText(notesPath));
+            Assert.Equal("- real notes\n- more real notes\n", await File.ReadAllTextAsync(notesPath));
         }
         finally
         {
@@ -122,7 +122,7 @@ public sealed class ReleaseNotesExtractorTests
     {
         var changelogPath = Path.Combine(Path.GetTempPath(), $"inquiry-changelog-{Guid.NewGuid():N}.md");
         var notesPath = Path.Combine(Path.GetTempPath(), $"inquiry-notes-{Guid.NewGuid():N}.md");
-        File.WriteAllText(changelogPath, Changelog);
+        await File.WriteAllTextAsync(changelogPath, Changelog);
         using var output = new StringWriter();
         using var error = new StringWriter();
         try

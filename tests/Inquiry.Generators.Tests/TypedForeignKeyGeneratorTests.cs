@@ -329,12 +329,19 @@ public sealed partial class InquiryGeneratorTests
             static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal));
         var text = schema.GetText().ToString();
         var start = text.IndexOf("CREATE TABLE", StringComparison.Ordinal);
-        if (start < 0) return string.Empty;
+        if (start < 0)
+        {
+            return string.Empty;
+        }
         // Extract from the first CREATE TABLE containing our table name to the end of the DDL const.
         var tableStart = text.IndexOf(tableName, start, StringComparison.Ordinal);
-        if (tableStart < 0) return string.Empty;
+        if (tableStart < 0)
+        {
+            return string.Empty;
+        }
+
         var createStart = text.LastIndexOf("CREATE TABLE", tableStart, StringComparison.Ordinal);
-        var end = text.IndexOf(";", tableStart, StringComparison.Ordinal);
+        var end = text.IndexOf(';', tableStart);
         return end > createStart ? text.Substring(createStart, end - createStart + 1) : string.Empty;
     }
 }

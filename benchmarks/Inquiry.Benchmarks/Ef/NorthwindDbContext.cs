@@ -16,8 +16,8 @@ public sealed class NorthwindDbContext : DbContext
     public NorthwindDbContext(DbContextOptions<NorthwindDbContext> options) : base(options) { }
 
     public DbSet<EfCustomer> Customers => Set<EfCustomer>();
-    public DbSet<EfProduct>  Products  => Set<EfProduct>();
-    public DbSet<EfShipper>  Shippers  => Set<EfShipper>();
+    public DbSet<EfProduct> Products => Set<EfProduct>();
+    public DbSet<EfShipper> Shippers => Set<EfShipper>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

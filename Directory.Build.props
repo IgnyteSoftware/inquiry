@@ -1,13 +1,49 @@
 <Project>
   <PropertyGroup>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Keep these values centralized. Project files should not override them without a documented exception. -->
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>latest</LangVersion>
-    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>10.0-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Deterministic>true</Deterministic>
+
+    <!-- Doc output makes the compiler enforce IDE0005 (unused usings) in the build. CS1591 is
+         suppressed by default; packages that ship a public API opt back in per project (see docs/decisions.md).
+         1701;1702 are the SDK defaults. The SDK sets them only when NoWarn is empty, and this line runs first. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1701;1702;CS1591</NoWarn>
+    <LangVersion Condition="'$(MSBuildProjectExtension)' == '.csproj'">14.0</LangVersion>
+    <OptionStrict Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionStrict>
+    <OptionExplicit Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionExplicit>
+    <OptionInfer Condition="'$(MSBuildProjectExtension)' == '.vbproj'">On</OptionInfer>
+    <OptionCompare Condition="'$(MSBuildProjectExtension)' == '.vbproj'">Binary</OptionCompare>
+
+    <!-- NuGet audit covers direct and transitive dependencies and reports every severity. -->
     <NuGetAudit>true</NuGetAudit>
     <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+
+    <!-- Restore creates packages.lock.json. CI does not use locked mode, because the lock file records SDK-supplied package versions that change with each .NET patch. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- The free SonarAnalyzer packages run during the ordinary build. No SonarScanner or Sonar service is used. -->
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <PackageReference Include="SonarAnalyzer.CSharp" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectExtension)' == '.vbproj'">
+    <PackageReference Include="SonarAnalyzer.VisualBasic" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" ExcludeAssets="none" />
+  </ItemGroup>
+
+  <!-- Repository-specific values. -->
+  <PropertyGroup>
+    <!-- The libraries ship for every supported TFM, including ones the SDK flags as nearing end of life. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
 
     <!-- NuGet package metadata -->
     <RepositoryUrl>https://github.com/IgnyteSoftware/inquiry</RepositoryUrl>

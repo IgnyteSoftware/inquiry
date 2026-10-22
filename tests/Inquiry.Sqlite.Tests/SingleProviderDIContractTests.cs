@@ -1,8 +1,8 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -50,7 +50,8 @@ public sealed class SingleProviderDIContractTests
         var services = new ServiceCollection();
         services.AddInquiry();
 
-        InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
+        var exception = Record.Exception(() => InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite"));
+        Assert.Null(exception);
     }
 
     private sealed class FakeFactory : IInquiryConnectionFactory

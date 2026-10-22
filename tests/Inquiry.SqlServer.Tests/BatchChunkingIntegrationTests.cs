@@ -33,13 +33,13 @@ public sealed class BatchChunkingIntegrationTests
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
         Assert.Equal(5, await store.InsertAllAsync(Items(5)));
-        Assert.Equal(new[] { 2, 2, 1 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2, 1], probe.InitializedChunkSizes);
 
         probe.Reset();
         Assert.Equal(5, await store.UpdateAllAsync(Items(5, valuePrefix: "updated")));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(3, probe.CreateBatchCount);
-        Assert.Equal(new[] { 2, 2, 1 }, probe.ExecutedBatchSizes);
+        Assert.Equal([2, 2, 1], probe.ExecutedBatchSizes);
         Assert.Empty(probe.FinalizedCommands);
 
         probe.Reset();
@@ -65,7 +65,7 @@ public sealed class BatchChunkingIntegrationTests
         await Assert.ThrowsAsync<SqlException>(() => store.InsertAllAsync(items));
 
         Assert.Equal(0, await store.CountAsync());
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2], probe.InitializedChunkSizes);
     }
 
     [SkippableFact]
@@ -103,7 +103,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(1, source.GetEnumeratorCount);
         Assert.Equal(4, source.MoveNextCount);
         Assert.Equal(1, source.DisposeCount);
-        Assert.Equal(new[] { 2, 2 }, probe.InitializedChunkSizes);
+        Assert.Equal([2, 2], probe.InitializedChunkSizes);
     }
 
     [SkippableFact]
@@ -125,9 +125,9 @@ public sealed class BatchChunkingIntegrationTests
 
         Assert.Equal(1001, await store.InsertAllAsync(Items(1001)));
 
-        Assert.Equal(new[] { 1 }, probe.InitializedChunkSizes);
+        Assert.Equal([1], probe.InitializedChunkSizes);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 1000 }, probe.ExecutedBatchSizes);
+        Assert.Equal([1000], probe.ExecutedBatchSizes);
         Assert.Equal(1001, await store.CountAsync());
     }
 
@@ -145,7 +145,7 @@ public sealed class BatchChunkingIntegrationTests
         var store = harness.GetRequiredService<BatchChunkItemStore>();
 
         Assert.Equal(249, await store.InsertAllAsync(Items(249)));
-        Assert.Equal(new[] { 249 }, probe.InitializedChunkSizes);
+        Assert.Equal([249], probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
         Assert.Single(probe.FinalizedCommands);
 
@@ -153,14 +153,14 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(250, await store.InsertAllAsync(Items(250, firstId: 1000)));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 250 }, probe.ExecutedBatchSizes);
+        Assert.Equal([250], probe.ExecutedBatchSizes);
         var executed = Assert.Single(probe.ExecutedBatches);
         Assert.Equal(250, executed.Commands.Count);
         Assert.All(executed.Commands, command =>
         {
             Assert.Equal("INSERT INTO [BatchChunkItem] ([Id], [Value]) VALUES (@Id, @Value)", command.CommandText);
             var metadata = Assert.IsType<InsertBatchMetadata>(command.Metadata);
-            Assert.Equal(new[] { "@Id", "@Value" }, metadata.Names);
+            Assert.Equal(["@Id", "@Value"], metadata.Names);
             Assert.Equal(new[] { DbType.Int32, DbType.String }, metadata.Types);
         });
         Assert.Equal(499, await store.CountAsync());
@@ -182,7 +182,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(250, await store.InsertAllAsync(WideItems(250)));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 250 }, probe.ExecutedBatchSizes);
+        Assert.Equal([250], probe.ExecutedBatchSizes);
         Assert.All(Assert.Single(probe.ExecutedBatches).Commands, command =>
             Assert.Equal(10, Assert.IsType<InsertBatchMetadata>(command.Metadata).Names.Length));
 
@@ -190,7 +190,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Equal(251, await store.InsertAllAsync(WideItems(251, firstId: 1000)));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 251 }, probe.ExecutedBatchSizes);
+        Assert.Equal([251], probe.ExecutedBatchSizes);
         Assert.Equal(501, await store.CountAsync());
     }
 
@@ -208,7 +208,7 @@ public sealed class BatchChunkingIntegrationTests
 
         Assert.Equal(3, await store.InsertAllAsync(DefaultOnlyItems(3)));
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 3 }, probe.ExecutedBatchSizes);
+        Assert.Equal([3], probe.ExecutedBatchSizes);
         Assert.Empty(probe.FinalizedCommands);
         Assert.Equal(3, await store.CountAsync());
     }
@@ -247,7 +247,7 @@ public sealed class BatchChunkingIntegrationTests
             configureServices: probe.Decorate,
             configureOptions: options => options.MaxBatchSize = 2);
 
-    private static object? InspectStructuredParameter(System.Data.Common.DbCommand command)
+    private static StructuredParameterMetadata? InspectStructuredParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<SqlParameter>()
             .SingleOrDefault(candidate => candidate.SqlDbType == SqlDbType.Structured);
@@ -278,7 +278,7 @@ public sealed class BatchChunkingIntegrationTests
     private static DefaultOnlyBatchItem[] DefaultOnlyItems(int count)
         => Enumerable.Range(0, count).Select(static _ => new DefaultOnlyBatchItem()).ToArray();
 
-    private static object InspectInsertBatchCommand(System.Data.Common.DbBatchCommand command)
+    private static InsertBatchMetadata InspectInsertBatchCommand(System.Data.Common.DbBatchCommand command)
     {
         var parameters = command.Parameters.Cast<SqlParameter>().ToArray();
         return new InsertBatchMetadata(

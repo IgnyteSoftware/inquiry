@@ -26,7 +26,8 @@ public static class ReleaseTool
                 case "verify-bundle" when args.Length >= 5:
                     {
                         string? tag = null, expectedVersion = null, expectedBranch = null;
-                        for (var index = 5; index < args.Length; index++)
+                        var index = 5;
+                        while (index < args.Length)
                         {
                             if (args[index] == "--version" && index + 1 < args.Length && expectedVersion is null)
                             {
@@ -44,6 +45,8 @@ public static class ReleaseTool
                             {
                                 return Task.FromResult(Fail(error, "Invalid command or arguments."));
                             }
+
+                            index++;
                         }
 
                         PackageVerifier.VerifyBundle(args[1], args[2], args[3], args[4], tag, expectedVersion, expectedBranch);

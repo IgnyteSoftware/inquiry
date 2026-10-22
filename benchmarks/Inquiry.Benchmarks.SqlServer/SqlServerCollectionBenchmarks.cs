@@ -1,8 +1,8 @@
 using System.Data;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Order;
 using Inquiry.Commands;
 using Inquiry.SqlServer.Parameters;
 using Microsoft.Data.SqlClient;
@@ -15,7 +15,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 [Orderer(SummaryOrderPolicy.Declared, MethodOrderPolicy.Declared)]
 public class SqlServerCollectionBenchmarks
 {
-    private static readonly InquiryTvpDescriptor IntTvpDescriptor =
+    private static readonly InquiryTvpDescriptor _intTvpDescriptor =
         InquiryTvpDescriptor.Get("int", 0, 10, 0, false);
 
     internal const string Projection = """
@@ -77,7 +77,11 @@ public class SqlServerCollectionBenchmarks
 
     internal static async Task<List<ProductResult>> ExecuteTvpAsync(string connectionString, string typeName, int[]? ids)
     {
-        if (ids is null || ids.Length == 0) return [];
+        if (ids is null || ids.Length == 0)
+        {
+            return [];
+        }
+
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -93,7 +97,7 @@ public class SqlServerCollectionBenchmarks
         Exception? primaryException = null;
         try
         {
-            InquiryTvpParameter.Bind(command, "@ids", ids, typeName, IntTvpDescriptor);
+            InquiryTvpParameter.Bind(command, "@ids", ids, typeName, _intTvpDescriptor);
             return await ReadAsync(command).ConfigureAwait(false);
         }
         catch (Exception exception)
@@ -115,7 +119,11 @@ public class SqlServerCollectionBenchmarks
         }
         catch (Exception cleanupException)
         {
-            if (primaryException is null) throw;
+            if (primaryException is null)
+            {
+                throw;
+            }
+
             throw new AggregateException(
                 "Inquiry execution failed and one or more resources also failed to release.",
                 primaryException,
@@ -125,7 +133,11 @@ public class SqlServerCollectionBenchmarks
 
     internal static async Task<List<ProductResult>> ExecuteOpenJsonAsync(string connectionString, int[]? ids)
     {
-        if (ids is null || ids.Length == 0) return [];
+        if (ids is null || ids.Length == 0)
+        {
+            return [];
+        }
+
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -136,7 +148,11 @@ public class SqlServerCollectionBenchmarks
 
     internal static async Task<List<ProductResult>> ExecuteScalarAsync(string connectionString, int[]? ids)
     {
-        if (ids is null || ids.Length == 0) return [];
+        if (ids is null || ids.Length == 0)
+        {
+            return [];
+        }
+
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
@@ -199,7 +215,9 @@ public static class SqlServerCollectionCorrectness
             var scalar = await SqlServerCollectionBenchmarks.ExecuteScalarAsync(database.ConnectionString, ids).ConfigureAwait(false);
             if (tvp.Count != cardinality || !tvp.SequenceEqual(json) || !tvp.SequenceEqual(scalar) ||
                 !tvp.Select(static product => product.ProductId).SequenceEqual(ids))
+            {
                 throw new InvalidOperationException($"Collection transport parity failed at cardinality {cardinality}.");
+            }
         }
 
         var empty = Array.Empty<int>();
@@ -209,17 +227,21 @@ public static class SqlServerCollectionCorrectness
             (await SqlServerCollectionBenchmarks.ExecuteOpenJsonAsync(database.ConnectionString, empty).ConfigureAwait(false)).Count != 0 ||
             (await SqlServerCollectionBenchmarks.ExecuteScalarAsync(database.ConnectionString, null).ConfigureAwait(false)).Count != 0 ||
             (await SqlServerCollectionBenchmarks.ExecuteScalarAsync(database.ConnectionString, empty).ConfigureAwait(false)).Count != 0)
+        {
             throw new InvalidOperationException("Null and empty collection semantics must return zero rows.");
+        }
 
         var duplicates = new[] { 1, 1, 2, 2 };
         var expected = new[] { 1, 2 };
-        foreach (var rows in new[]
+        var duplicateResults = new[]
         {
             await SqlServerCollectionBenchmarks.ExecuteTvpAsync(database.ConnectionString, database.TvpTypeName, duplicates).ConfigureAwait(false),
             await SqlServerCollectionBenchmarks.ExecuteOpenJsonAsync(database.ConnectionString, duplicates).ConfigureAwait(false),
             await SqlServerCollectionBenchmarks.ExecuteScalarAsync(database.ConnectionString, duplicates).ConfigureAwait(false),
-        })
-            if (!rows.Select(static product => product.ProductId).SequenceEqual(expected))
-                throw new InvalidOperationException("Duplicate collection values must produce unique product rows.");
+        };
+        if (duplicateResults.Any(rows => !rows.Select(static product => product.ProductId).SequenceEqual(expected)))
+        {
+            throw new InvalidOperationException("Duplicate collection values must produce unique product rows.");
+        }
     }
 }

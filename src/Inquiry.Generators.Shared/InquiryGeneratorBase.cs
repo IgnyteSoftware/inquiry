@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Immutable;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
@@ -6,10 +6,6 @@ using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
-using System.Threading;
 
 namespace Inquiry.Generators;
 
@@ -196,8 +192,16 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         }
 
-        if (!entities.Any(static entity => entity.IsMapped) && stores.IsEmpty && projections.IsEmpty && adHocs.IsEmpty) return;
-        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower) return;
+        if (!entities.Any(static entity => entity.IsMapped) && stores.IsEmpty && projections.IsEmpty && adHocs.IsEmpty)
+        {
+            return;
+        }
+
+        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower)
+        {
+            return;
+        }
+
         if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectUnknown, null,
@@ -365,24 +369,46 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 var reasons = new List<(LocationData? Location, string Reason)>();
                 foreach (var item in overrides)
                 {
-                    if (!IsValidProviderId(item.ProviderId)) reasons.Add((item.ProviderIdLocation, "provider id is invalid; use lowercase ASCII [a-z][a-z0-9.-]{0,63}"));
-                    if (string.IsNullOrWhiteSpace(item.Expression)) reasons.Add((item.ExpressionLocation, "override expression is empty or whitespace"));
+                    if (!IsValidProviderId(item.ProviderId))
+                    {
+                        reasons.Add((item.ProviderIdLocation, "provider id is invalid; use lowercase ASCII [a-z][a-z0-9.-]{0,63}"));
+                    }
+
+                    if (string.IsNullOrWhiteSpace(item.Expression))
+                    {
+                        reasons.Add((item.ExpressionLocation, "override expression is empty or whitespace"));
+                    }
                 }
                 foreach (var duplicate in overrides.Where(item => IsValidProviderId(item.ProviderId)).GroupBy(static item => item.ProviderId, System.StringComparer.Ordinal).Where(static group => group.Count() > 1))
+                {
                     reasons.Add((duplicate.Skip(1).First().ExpressionLocation, "more than one override declares provider '" + duplicate.Key + "'"));
-                if (overrides.Length > 0 && string.IsNullOrWhiteSpace(fallback)) reasons.Add((overrides[0].ExpressionLocation, "a provider override requires a non-empty InquiryColumn.Computed fallback"));
+                }
+
+                if (overrides.Length > 0 && string.IsNullOrWhiteSpace(fallback))
+                {
+                    reasons.Add((overrides[0].ExpressionLocation, "a provider override requires a non-empty InquiryColumn.Computed fallback"));
+                }
+
                 var providerOverride = overrides.FirstOrDefault(item => item.ProviderId == builder.ProviderId);
-                if (providerOverride is not null) { selected = providerOverride.Expression; selectedLocation = providerOverride.ExpressionLocation; }
+                if (providerOverride is not null)
+                { selected = providerOverride.Expression; selectedLocation = providerOverride.ExpressionLocation; }
                 if (fallback is not null || overrides.Length > 0)
                 {
                     if (string.IsNullOrWhiteSpace(selected))
                     {
-                        if (providerOverride is null) reasons.Add((selectedLocation, "expression is empty or whitespace"));
+                        if (providerOverride is null)
+                        {
+                            reasons.Add((selectedLocation, "expression is empty or whitespace"));
+                        }
                     }
                     else
                     {
                         var failures = builder.ValidateComputedExpression(selected!);
-                        if (failures.Count > 0) reasons.Add((selectedLocation, string.Join("; ", failures)));
+                        if (failures.Count > 0)
+                        {
+                            reasons.Add((selectedLocation, string.Join("; ", failures)));
+                        }
+
                         if (builder.RequiresBoundedComputedStrings && column.TypeClass == DbTypeClass.String)
                         {
                             var maxLength = builder.MaxBoundedStringLength(column.IsUnicode);
@@ -401,9 +427,13 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                     }
                 }
                 foreach (var reason in reasons)
+                {
                     context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ComputedExpressionInvalid,
                         reason.Location?.ToLocation(), entity.FullyQualifiedName + "." + column.PropertyName, builder.ProviderId, reason.Reason));
-                if (reasons.Count > 0) { valid = false; computedInvalidEntityNames.Add(entity.FullyQualifiedName); }
+                }
+
+                if (reasons.Count > 0)
+                { valid = false; computedInvalidEntityNames.Add(entity.FullyQualifiedName); }
                 columns.Add(column with { ComputedExpression = reasons.Count == 0 && selected is not null ? builder.RenderComputedExpression(selected) : selected });
             }
             var finalColumns = columns.ToImmutable();
@@ -422,9 +452,19 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private static bool IsValidProviderId(string value)
     {
-        if (value.Length is < 1 or > 64 || value[0] is < 'a' or > 'z') return false;
+        if (value.Length is < 1 or > 64 || value[0] is < 'a' or > 'z')
+        {
+            return false;
+        }
+
         for (var i = 1; i < value.Length; i++)
-            if (!(value[i] is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-')) return false;
+        {
+            if (!(value[i] is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-'))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -631,7 +671,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // argument, so searching the whole string would render the type as "Product>".
         static string Simplify(string? fullyQualifiedName)
         {
-            if (string.IsNullOrEmpty(fullyQualifiedName)) return "(unknown)";
+            if (string.IsNullOrEmpty(fullyQualifiedName))
+            {
+                return "(unknown)";
+            }
+
             var name = fullyQualifiedName!;
 
             // Only the segment before any type-argument list is scanned: the last '.' in
@@ -639,7 +683,10 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             // '<' leaves nothing to scan — LastIndexOf would be handed a -1 start index and throw,
             // turning a diagnostic into a generator crash — so it is returned whole.
             var openAngle = name.IndexOf('<');
-            if (openAngle == 0) return name;
+            if (openAngle == 0)
+            {
+                return name;
+            }
 
             var searchEnd = openAngle < 0 ? name.Length : openAngle;
             var lastDot = name.LastIndexOf('.', searchEnd - 1, searchEnd);
@@ -694,7 +741,11 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             if (attribute.AttributeClass?.ToDisplayString() != "System.Reflection.AssemblyMetadataAttribute"
                 || attribute.ConstructorArguments.Length == 0
                 || attribute.ConstructorArguments[0].Value is not string key
-                || !key.StartsWith("Inquiry.SchemaManifest.", System.StringComparison.Ordinal)) continue;
+                || !key.StartsWith("Inquiry.SchemaManifest.", System.StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             return ownership with { ManifestMetadataCollisionKey = key };
         }
         return ownership;

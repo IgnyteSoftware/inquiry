@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Inquiry.Benchmarks.Contracts.Evidence;
@@ -45,10 +44,9 @@ public static class RegressionComparator
         IReadOnlyList<BdnBenchmarkCase> currentResults)
     {
         var currentByName = new Dictionary<string, BdnBenchmarkCase>(StringComparer.Ordinal);
-        foreach (var c in currentResults)
+        foreach (var c in currentResults.Where(static c => c.FullName is not null))
         {
-            if (c.FullName is not null)
-                currentByName[c.FullName] = c;
+            currentByName[c.FullName!] = c;
         }
 
         var results = new List<RegressionResult>();
@@ -91,9 +89,14 @@ public static class RegressionComparator
             {
                 var allocDelta = currentAllocatedBytes - expected.AllocatedBytes.Value;
                 // A relative budget cannot scale a zero baseline, so any new allocation exceeds it.
-                allocDeltaPercent = expected.AllocatedBytes.Value > 0
-                    ? ((double)allocDelta / expected.AllocatedBytes.Value) * 100.0
-                    : allocDelta > 0 ? double.PositiveInfinity : 0.0;
+                if (expected.AllocatedBytes.Value > 0)
+                {
+                    allocDeltaPercent = ((double)allocDelta / expected.AllocatedBytes.Value) * 100.0;
+                }
+                else
+                {
+                    allocDeltaPercent = allocDelta > 0 ? double.PositiveInfinity : 0.0;
+                }
 
                 var allocBudget = expected.AllocationRelativeBudget ?? 0.05;
                 allocVerdict = allocDeltaPercent > allocBudget * 100.0
@@ -206,7 +209,9 @@ public static class RegressionBaselineGenerator
         foreach (var benchmark in report.Benchmarks ?? [])
         {
             if (benchmark.FullName is null || benchmark.Statistics is null)
+            {
                 continue;
+            }
 
             cases.Add(new RegressionBaselineCase(
                 benchmark.FullName,

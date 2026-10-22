@@ -1,5 +1,3 @@
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.MariaDb.Tests.Fixtures;
 
@@ -34,7 +32,7 @@ public sealed class JsonPathPredicateIntegrationTests
         await using var _ = harness;
 
         var active = await store.ByStatusAsync("active");
-        Assert.Equal(new[] { "Alpha", "Gamma" }, active.Select(d => d.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Alpha", "Gamma"], active.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 
     [SkippableFact]
@@ -45,7 +43,7 @@ public sealed class JsonPathPredicateIntegrationTests
         await using var _ = harness;
 
         var boston = await store.ByCityAsync("Boston");
-        Assert.Equal(new[] { "Alpha", "Beta" }, boston.Select(d => d.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Alpha", "Beta"], boston.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 
     [SkippableFact]

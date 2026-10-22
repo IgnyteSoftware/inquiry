@@ -1,12 +1,10 @@
-using System.Threading.Tasks;
-using Inquiry.Generated;
 using Inquiry.FeatureCatalog;
+using Inquiry.Generated;
 using Inquiry.IntegrationTesting;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -29,7 +27,7 @@ public sealed class GeneratedDdlIntegrationTests
         var categories = harness.GetRequiredService<CategoryStore>();
         var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
         Assert.NotNull(inserted);
-        Assert.True(inserted!.CategoryID > 0);
+        Assert.True(inserted.CategoryID > 0);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
 
         await using var conn = new NpgsqlConnection(harness.ConnectionString);

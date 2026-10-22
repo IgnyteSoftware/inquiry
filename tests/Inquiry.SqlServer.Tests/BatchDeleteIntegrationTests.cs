@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
@@ -59,7 +56,7 @@ public sealed class BatchDeleteIntegrationTests
         await using var harness = await SeedAsync();
         var store = harness.GetRequiredService<GadgetStore>();
 
-        var affected = await store.DeleteAllAsync(new int[] { 1, 3, 5 });
+        var affected = await store.DeleteAllAsync([1, 3, 5]);
 
         Assert.Equal(3, affected);
         Assert.Equal(2L, await store.CountAsync());

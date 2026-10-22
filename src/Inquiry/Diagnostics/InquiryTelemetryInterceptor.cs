@@ -1,10 +1,10 @@
+using System.Data.Common;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Inquiry.Commands;
 using Inquiry.Interceptors;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
 
 namespace Inquiry.Diagnostics;
 
@@ -48,8 +48,8 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     internal bool RecordCommandText => _options.RecordCommandText;
 
     public bool IsActive
-        => InquiryTelemetry.ActivitySource.HasListeners()
-            || InquiryTelemetry.CommandDuration.Enabled
+        => InquiryTelemetry._activitySource.HasListeners()
+            || InquiryTelemetry._commandDuration.Enabled
             || _logger.IsEnabled(LogLevel.Debug)
             || _logger.IsEnabled(LogLevel.Error);
 
@@ -69,9 +69,9 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             StartTimestamp = Stopwatch.GetTimestamp(),
         };
 
-        if (InquiryTelemetry.ActivitySource.HasListeners())
+        if (InquiryTelemetry._activitySource.HasListeners())
         {
-            var activity = InquiryTelemetry.ActivitySource.StartActivity(state.Operation, ActivityKind.Client);
+            var activity = InquiryTelemetry._activitySource.StartActivity(state.Operation, ActivityKind.Client);
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", state.DbSystem);
@@ -110,7 +110,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         _inflight.Remove(context.Command);
         var elapsed = Stopwatch.GetElapsedTime(state.StartTimestamp);
 
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             elapsed.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", state.DbSystem),
             new KeyValuePair<string, object?>("db.operation.name", state.Operation));
@@ -144,7 +144,7 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         var elapsed = Stopwatch.GetElapsedTime(state.StartTimestamp);
         var errorType = InquiryTelemetry.ErrorType(context.Exception);
 
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             elapsed.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", state.DbSystem),
             new KeyValuePair<string, object?>("db.operation.name", state.Operation),
@@ -208,7 +208,10 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             if (TryKeyword(sql, ref pos, "OR"))
             {
-                if (ReadWord(sql, ref pos).IsEmpty) return null;
+                if (ReadWord(sql, ref pos).IsEmpty)
+                {
+                    return null;
+                }
             }
             else
             {
@@ -222,14 +225,25 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             if (TryKeyword(sql, ref pos, "OR"))
             {
-                if (ReadWord(sql, ref pos).IsEmpty) return null;
+                if (ReadWord(sql, ref pos).IsEmpty)
+                {
+                    return null;
+                }
             }
             else if (TryKeyword(sql, ref pos, "TOP"))
             {
                 pos = SkipTrivia(sql, pos);
-                if (pos >= sql.Length || sql[pos] != '(') return null;
+                if (pos >= sql.Length || sql[pos] != '(')
+                {
+                    return null;
+                }
+
                 pos = SkipParenthesized(sql, pos);
-                if (pos < 0) return null;
+                if (pos < 0)
+                {
+                    return null;
+                }
+
                 TryKeyword(sql, ref pos, "PERCENT");
             }
 
@@ -244,7 +258,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         if (keyword.Equals("SELECT", StringComparison.OrdinalIgnoreCase))
         {
             pos = FindOuterFrom(sql, pos);
-            if (pos < 0) return null;
+            if (pos < 0)
+            {
+                return null;
+            }
+
             var table = ReadTableName(sql, ref pos);
 
             // "FROM name(" is a table-valued function, not a table.
@@ -273,18 +291,34 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             if (c is '\'' or '"' or '[' or '`')
             {
                 pos = SkipDelimited(sql, pos);
-                if (pos < 0) return -1;
+                if (pos < 0)
+                {
+                    return -1;
+                }
             }
             else if (IsWordChar(c))
             {
                 var word = ReadWord(sql, ref pos);
-                if (depth == 0 && word.Equals("FROM", StringComparison.OrdinalIgnoreCase)) return pos;
+                if (depth == 0 && word.Equals("FROM", StringComparison.OrdinalIgnoreCase))
+                {
+                    return pos;
+                }
             }
             else
             {
-                if (c == '(') depth++;
-                else if (c == ')') depth--;
-                else if (c == ';' && depth == 0) return -1;
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    depth--;
+                }
+                else if (c == ';' && depth == 0)
+                {
+                    return -1;
+                }
+
                 pos++;
             }
         }
@@ -299,23 +333,36 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         {
             pos = SkipTrivia(sql, pos);
             var part = ReadNamePart(sql, ref pos);
-            if (part is null) return null;
+            if (part is null)
+            {
+                return null;
+            }
 
             var next = SkipTrivia(sql, pos);
-            if (next >= sql.Length || sql[next] != '.') return part;
+            if (next >= sql.Length || sql[next] != '.')
+            {
+                return part;
+            }
+
             pos = next + 1;
         }
     }
 
     private static string? ReadNamePart(ReadOnlySpan<char> sql, ref int pos)
     {
-        if (pos >= sql.Length) return null;
+        if (pos >= sql.Length)
+        {
+            return null;
+        }
 
         var open = sql[pos];
         if (open is '[' or '"' or '`')
         {
             var end = SkipDelimited(sql, pos);
-            if (end < 0 || end - pos <= 2) return null;
+            if (end < 0 || end - pos <= 2)
+            {
+                return null;
+            }
 
             var close = open == '[' ? ']' : open;
             var raw = sql[(pos + 1)..(end - 1)].ToString();
@@ -336,7 +383,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
         while (true)
         {
             var offset = sql[pos..].IndexOf(close);
-            if (offset < 0) return -1;
+            if (offset < 0)
+            {
+                return -1;
+            }
+
             pos += offset + 1;
             if (pos < sql.Length && sql[pos] == close)
             {
@@ -358,13 +409,23 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
             if (c is '\'' or '"' or '[' or '`')
             {
                 pos = SkipDelimited(sql, pos);
-                if (pos < 0) return -1;
+                if (pos < 0)
+                {
+                    return -1;
+                }
+
                 continue;
             }
 
             pos++;
-            if (c == '(') depth++;
-            else if (c == ')' && --depth == 0) return pos;
+            if (c == '(')
+            {
+                depth++;
+            }
+            else if (c == ')' && --depth == 0)
+            {
+                return pos;
+            }
         }
 
         return -1;
@@ -373,7 +434,11 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     private static bool TryKeyword(ReadOnlySpan<char> sql, ref int pos, string keyword)
     {
         var end = pos;
-        if (!ReadWord(sql, ref end).Equals(keyword, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!ReadWord(sql, ref end).Equals(keyword, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         pos = end;
         return true;
     }
@@ -383,8 +448,16 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
     {
         var start = SkipTrivia(sql, pos);
         var end = start;
-        while (end < sql.Length && IsWordChar(sql[end])) end++;
-        if (end == start) return default;
+        while (end < sql.Length && IsWordChar(sql[end]))
+        {
+            end++;
+        }
+
+        if (end == start)
+        {
+            return default;
+        }
+
         pos = end;
         return sql[start..end];
     }
@@ -420,54 +493,54 @@ internal sealed class InquiryTelemetryInterceptor : IInquiryCommandInterceptor, 
 
     private static class Log
     {
-        private static readonly Action<ILogger, string, string, Exception?> ExecutingMessage =
+        private static readonly Action<ILogger, string, string, Exception?> _executingMessage =
             LoggerMessage.Define<string, string>(
                 LogLevel.Debug,
                 new EventId(1, "InquiryCommandExecuting"),
                 "Executing {Operation}: {CommandText}");
 
-        private static readonly Action<ILogger, string, double, int?, Exception?> ExecutedMessage =
+        private static readonly Action<ILogger, string, double, int?, Exception?> _executedMessage =
             LoggerMessage.Define<string, double, int?>(
                 LogLevel.Debug,
                 new EventId(2, "InquiryCommandExecuted"),
                 "Executed {Operation} in {ElapsedMs:0.###} ms ({RecordsAffected} rows affected)");
 
-        private static readonly Action<ILogger, string, double, Exception?> FailedMessage =
+        private static readonly Action<ILogger, string, double, Exception?> _failedMessage =
             LoggerMessage.Define<string, double>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms");
 
-        private static readonly Action<ILogger, string, double, string, Exception?> FailedRedactedMessage =
+        private static readonly Action<ILogger, string, double, string, Exception?> _failedRedactedMessage =
             LoggerMessage.Define<string, double, string>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType}");
 
-        private static readonly Action<ILogger, string, double, string, string, Exception?> FailedRedactedWithCauseMessage =
+        private static readonly Action<ILogger, string, double, string, string, Exception?> _failedRedactedWithCauseMessage =
             LoggerMessage.Define<string, double, string, string>(
                 LogLevel.Error,
                 new EventId(3, "InquiryCommandFailed"),
                 "Failed {Operation} after {ElapsedMs:0.###} ms with {ErrorType} caused by {CauseType}");
 
         public static void Executing(ILogger logger, string operation, string commandText)
-            => ExecutingMessage(logger, operation, commandText, null);
+            => _executingMessage(logger, operation, commandText, null);
 
         public static void Executed(ILogger logger, string operation, double elapsedMs, int? recordsAffected)
-            => ExecutedMessage(logger, operation, elapsedMs, recordsAffected, null);
+            => _executedMessage(logger, operation, elapsedMs, recordsAffected, null);
 
         public static void Failed(ILogger logger, Exception exception, string operation, double elapsedMs)
-            => FailedMessage(logger, operation, elapsedMs, exception);
+            => _failedMessage(logger, operation, elapsedMs, exception);
 
         public static void FailedRedacted(ILogger logger, string operation, double elapsedMs, string errorType, string? causeType)
         {
             if (causeType is null)
             {
-                FailedRedactedMessage(logger, operation, elapsedMs, errorType, null);
+                _failedRedactedMessage(logger, operation, elapsedMs, errorType, null);
             }
             else
             {
-                FailedRedactedWithCauseMessage(logger, operation, elapsedMs, errorType, causeType, null);
+                _failedRedactedWithCauseMessage(logger, operation, elapsedMs, errorType, causeType, null);
             }
         }
     }

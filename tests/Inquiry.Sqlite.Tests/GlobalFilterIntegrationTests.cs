@@ -1,5 +1,3 @@
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 
@@ -95,7 +93,7 @@ public sealed class GlobalFilterIntegrationTests
 
         // The bypass methods see the live draft but not the deleted one.
         var drafts = await store.AllIncludingDraftsAsync();
-        Assert.Equal(new[] { "Draft", "Published" }, drafts.Select(d => d.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Draft", "Published"], drafts.Select(d => d.Name).OrderBy(n => n).ToArray());
         Assert.Equal(2L, await store.CountIncludingDraftsAsync());
 
         // The unannotated methods still filter — the bypass is per method, not per store.
@@ -123,7 +121,7 @@ public sealed class GlobalFilterIntegrationTests
         // (draft) deleted row stays hidden while both published rows surface.
         var includingDeleted = await store.AllIncludingDeletedAsync();
         Assert.Equal(
-            new[] { "PublishedActive", "PublishedDeleted" },
+            ["PublishedActive", "PublishedDeleted"],
             includingDeleted.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 

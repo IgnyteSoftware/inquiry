@@ -1,4 +1,4 @@
-using System;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -202,7 +202,7 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("DocStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // INSERT omits the rowversion (database supplies it); no version bump in SET (DB advances it);
+        // INSERT omits the rowversion (database supplies it); no version bump in SET (DB advances it).
         // WHERE still composes the token; OUTPUT returns the new value.
         // The rowversion is absent from INSERT (database supplies it); the key is client-supplied here
         // so it is insertable, but [RowVer] is not (and is not bound in the INSERT binder).
@@ -263,7 +263,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source, dialect: "PostgreSql");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
-        Assert.Contains("Provider 'PostgreSql'", diagnostic.GetMessage());
+        Assert.Contains("Provider 'PostgreSql'", diagnostic.GetMessage(CultureInfo.CurrentCulture));
         Assert.NotEqual(Location.None, diagnostic.Location);
         Assert.Equal(8, diagnostic.Location.GetLineSpan().StartLinePosition.Line);
     }
@@ -394,7 +394,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ068");
-        Assert.Contains("Provider 'Sqlite'", diagnostic.GetMessage());
+        Assert.Contains("Provider 'Sqlite'", diagnostic.GetMessage(CultureInfo.CurrentCulture));
         Assert.NotEqual(Location.None, diagnostic.Location);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ006");
     }

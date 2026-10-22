@@ -1,3 +1,7 @@
+using System.Data.Common;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using Inquiry.BulkCopy;
 using Inquiry.Commands;
 using Inquiry.Connections;
@@ -7,19 +11,15 @@ using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Parameters;
 using Inquiry.Pipeline;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Data.Common;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
 
 namespace Inquiry.Tests;
 
 [CollectionDefinition("Inquiry telemetry", DisableParallelization = true)]
-public sealed class InquiryTelemetryCollection
+public sealed class InquiryTelemetryCollectionDefinition
 {
 }
 
@@ -190,7 +190,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, Sentinel, new[] { "Id" }, static (item, _) => item.Id);
+            null, Sentinel, ["Id"], static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }));
@@ -272,11 +272,12 @@ public sealed class InquiryTelemetryTests
                 const string select = $"SELECT * FROM {Sentinel}";
                 await using (await pipeline.QueryMultipleAsync(new InquiryCommand(select)))
                 {
+                    // Open and dispose the grid only. The test checks the command telemetry.
                 }
 
                 break;
             case "batch":
-                await pipeline.ExecuteBatchAsync(sql, new[] { 1 }, static (target, item) =>
+                await pipeline.ExecuteBatchAsync(sql, [1], static (target, item) =>
                 {
                     var p = target.CreateParameter();
                     p.ParameterName = "@id";
@@ -572,7 +573,7 @@ public sealed class InquiryTelemetryTests
         using var listener = CreateActivityListener(activities);
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await using (var grid = await pipeline.QueryMultipleAsync(
             new InquiryCommand("SELECT * FROM Items; SELECT COUNT(*) FROM Items")))
@@ -597,18 +598,27 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await using (var grid = await pipeline.QueryMultipleAsync(new InquiryCommand("SELECT 1")))
         {
@@ -633,18 +643,27 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await Assert.ThrowsAsync<SqliteException>(
             () => pipeline.QueryMultipleAsync(new InquiryCommand("SELECT * FROM NoSuchTable")));
@@ -667,18 +686,27 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(new InquiryTelemetryOptions());
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await pipeline.ExecuteAsync(new InquiryCommand(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (1, 'A', 1), (2, 'B', 0)"));
@@ -704,7 +732,7 @@ public sealed class InquiryTelemetryTests
         using var listener = CreateActivityListener(activities);
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         var total = await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -730,18 +758,27 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -766,23 +803,32 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         await Assert.ThrowsAsync<SqliteException>(() =>
             pipeline.ExecuteBatchAsync(
                 "INSERT INTO NoSuchTable (Id) VALUES (@id)",
-                new[] { 1 },
+                [1],
                 static (target, item) =>
                 {
                     var p = target.CreateParameter();
@@ -805,7 +851,7 @@ public sealed class InquiryTelemetryTests
     public async Task BatchExecutionNoListenerDoesNotAllocateActivity()
     {
         var (pipeline, keeper) = await CreatePipelineAsync(noInterceptors: true);
-        await using var _k = keeper;
+        await using var keeperScope = keeper;
 
         var total = await pipeline.ExecuteBatchAsync(
             "INSERT INTO Items (Id, Name, IsActive) VALUES (@id, @name, @active)",
@@ -826,7 +872,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id", "Name", "IsActive" },
+            null, "Items", ["Id", "Name", "IsActive"],
             static (item, ordinal) => ordinal switch { 0 => item.Id, 1 => item.Name, _ => item.IsActive });
 
         var count = await inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) });
@@ -846,6 +892,7 @@ public sealed class InquiryTelemetryTests
     }
 
     [Fact]
+    [SuppressMessage("Major Bug", "S1244:Floating point numbers should not be tested for equality", Justification = "The fake copier records exactly 1 ms and 2 ms. The test checks that these values reach the metric unchanged.")]
     public async Task BulkInsertRecordsDurationMetric()
     {
         var measurements = new List<(double Value, Dictionary<string, object?> Tags)>();
@@ -856,13 +903,22 @@ public sealed class InquiryTelemetryTests
                 "db.client.operation.duration" or
                 "inquiry.bulk_insert.connection_open.duration" or
                 "inquiry.bulk_insert.copy.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -871,7 +927,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id" },
+            null, "Items", ["Id"],
             static (item, _) => item.Id);
 
         await inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) });
@@ -897,13 +953,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "db.client.operation.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add((value, tagMap));
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add((value, tagMap));
+            }
         });
         meterListener.Start();
 
@@ -912,7 +977,7 @@ public sealed class InquiryTelemetryTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         var definition = new InquiryBulkInsertDefinition<SimpleItem>(
-            null, "Items", new[] { "Id" },
+            null, "Items", ["Id"],
             static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -937,9 +1002,9 @@ public sealed class InquiryTelemetryTests
             services.AddSingleton<IInquiryBulkCopier>(new FakeBulkCopier()));
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
-        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", ["Id"], static (item, _) => item.Id);
         using var cancellation = new CancellationTokenSource();
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }, cancellationToken: cancellation.Token));
@@ -959,13 +1024,22 @@ public sealed class InquiryTelemetryTests
         meterListener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == InquiryTelemetry.MeterName && instrument.Name == "inquiry.bulk_insert.connection_open.duration")
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         meterListener.SetMeasurementEventCallback<double>((instrument, value, tags, state) =>
         {
             var tagMap = new Dictionary<string, object?>();
-            foreach (var tag in tags) tagMap[tag.Key] = tag.Value;
-            lock (measurements) measurements.Add(tagMap);
+            foreach (var tag in tags)
+            {
+                tagMap[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add(tagMap);
+            }
         });
         meterListener.Start();
 
@@ -973,7 +1047,7 @@ public sealed class InquiryTelemetryTests
             services.AddSingleton<IInquiryBulkCopier>(new OpenFailingBulkCopier()));
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
-        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", new[] { "Id" }, static (item, _) => item.Id);
+        var definition = new InquiryBulkInsertDefinition<SimpleItem>(null, "Items", ["Id"], static (item, _) => item.Id);
 
         await Assert.ThrowsAsync<TimeoutException>(() => inquiry.BulkInsertAsync(definition, new[] { new SimpleItem(1, "A", true) }));
 
@@ -1124,7 +1198,7 @@ public sealed class InquiryTelemetryTests
             return new NativeErrorConnection(connection, this);
         }
 
-        internal Task<int> ExecuteAsync()
+        internal Task<int> CancelAndFailAsync()
         {
             Interlocked.Increment(ref _executeCount);
             _cancellation.Cancel();
@@ -1134,7 +1208,7 @@ public sealed class InquiryTelemetryTests
             // pipeline sees cancellation win the race, as it would for a slow driver.
             static async Task<int> FailAsync()
             {
-                await Task.Delay(100);
+                await Task.Delay(100, CancellationToken.None);
                 throw new NativeProviderException($"Operation cancelled by user while writing {Sentinel}.");
             }
         }
@@ -1154,7 +1228,7 @@ public sealed class InquiryTelemetryTests
         [System.Diagnostics.CodeAnalysis.AllowNull]
         public override string ConnectionString { get => _inner.ConnectionString; set => _inner.ConnectionString = value; }
         public override string Database => _inner.Database;
-        public override string DataSource => _inner.DataSource!;
+        public override string DataSource => _inner.DataSource;
         public override string ServerVersion => _inner.ServerVersion;
         public override System.Data.ConnectionState State => _inner.State;
 
@@ -1166,7 +1240,11 @@ public sealed class InquiryTelemetryTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }
@@ -1198,11 +1276,15 @@ public sealed class InquiryTelemetryTests
         protected override DbDataReader ExecuteDbDataReader(System.Data.CommandBehavior behavior) => _inner.ExecuteReader(behavior);
         public override int ExecuteNonQuery() => throw new NotSupportedException();
         public override object? ExecuteScalar() => _inner.ExecuteScalar();
-        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => _factory.ExecuteAsync();
+        public override Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken) => _factory.CancelAndFailAsync();
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

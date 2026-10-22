@@ -52,7 +52,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("static _e => unchecked((global::System.Int32)(_e))", generated);
         Assert.Contains("static _e => unchecked((global::System.Int64)(_e))", generated);
         Assert.Contains("StrongConverter>.Instance.ToProvider(_e)", generated);
-        Assert.True(global::System.Text.RegularExpressions.Regex.Matches(generated, "StrongConverter>.Instance.ToProvider\\(_e\\)").Count == 3);
+        Assert.True(StrongToProviderRegex().Count(generated) == 3);
         Assert.Contains(binder, generated);
         Assert.DoesNotContain("BindUnsupported", generated);
         Assert.DoesNotContain("Convert.ChangeType", generated);
@@ -64,7 +64,7 @@ public sealed partial class InquiryGeneratorTests
             Assert.Contains("AS TABLE ([Value] SMALLINT NOT NULL)", schema);
             Assert.Contains("AS TABLE ([Value] INT NOT NULL)", schema);
             Assert.Contains("AS TABLE ([Value] BIGINT NOT NULL)", schema);
-            Assert.Single(global::System.Text.RegularExpressions.Regex.Matches(schema, "AS TABLE \\(\\[Value\\] INT NOT NULL\\)").Cast<global::System.Text.RegularExpressions.Match>());
+            Assert.Single(IntValueTableTypeRegex().Matches(schema).Cast<global::System.Text.RegularExpressions.Match>());
             Assert.Contains("Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c", schema);
         }
     }
@@ -93,4 +93,10 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "PostgreSql");
         AssertNoErrors(result);
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("StrongConverter>.Instance.ToProvider\\(_e\\)")]
+    private static partial global::System.Text.RegularExpressions.Regex StrongToProviderRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("AS TABLE \\(\\[Value\\] INT NOT NULL\\)")]
+    private static partial global::System.Text.RegularExpressions.Regex IntValueTableTypeRegex();
 }

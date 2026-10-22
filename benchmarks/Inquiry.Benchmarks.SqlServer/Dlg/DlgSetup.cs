@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.Data.SqlClient;
@@ -9,7 +8,7 @@ namespace Inquiry.Benchmarks.SqlServer.Dlg;
 /// Bridges the generated DLG datalayer into the benchmark's Testcontainer: applies DLG's stored
 /// procedures, then writes the <c>.config</c> DLG self-loads via <c>new DatabaseHelper(null)</c>.
 /// </summary>
-public static class DlgSetup
+public static partial class DlgSetup
 {
     // Resource name = {RootNamespace}.{file}. DLG's root namespace is Inquiry.Benchmarks.DLG.
     private const string ScriptResourceName = "Inquiry.Benchmarks.DLG.SQLScript.sql";
@@ -18,7 +17,7 @@ public static class DlgSetup
     public static async Task ApplyStoredProceduresAsync(string connectionString)
     {
         var script = ReadEmbeddedScript();
-        var batches = Regex.Split(script, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        var batches = GoSeparatorPattern().Split(script);
 
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
@@ -26,7 +25,10 @@ public static class DlgSetup
         foreach (var batch in batches)
         {
             var trimmed = batch.Trim();
-            if (trimmed.Length == 0) continue;
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
 
             await using var command = connection.CreateCommand();
             command.CommandText = trimmed;
@@ -84,4 +86,7 @@ public static class DlgSetup
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
+
+    [GeneratedRegex(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
+    private static partial Regex GoSeparatorPattern();
 }

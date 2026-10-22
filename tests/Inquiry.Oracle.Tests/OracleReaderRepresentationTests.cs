@@ -1,6 +1,6 @@
+using System.Data;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
-using System.Data;
 
 namespace Inquiry.Oracle.Tests;
 
@@ -69,7 +69,7 @@ public sealed class OracleReaderRepresentationTests
         Assert.StartsWith("TimeSpan+Time: Execute: ArgumentException: ORA-50028:", rejected[2]);
         Assert.StartsWith("TimeSpan+Object: Execute: ArgumentException: ORA-50028:", rejected[3]);
 
-        await ExecuteAsync(new DateTime(2024, 2, 29), DbType.Date);
+        await ExecuteAsync(new DateTime(2024, 2, 29, 0, 0, 0, DateTimeKind.Unspecified), DbType.Date);
         await ExecuteAsync(TimeSpan.FromTicks(452_961_234_570), null);
         await ExecuteAsync(new DateTimeOffset(2024, 2, 29, 12, 34, 56, TimeSpan.FromMinutes(-270)), DbType.DateTimeOffset);
 
@@ -81,7 +81,11 @@ public sealed class OracleReaderRepresentationTests
             command.CommandText = "SELECT :p FROM dual";
             var parameter = command.CreateParameter();
             parameter.ParameterName = "p";
-            if (dbType.HasValue) parameter.DbType = dbType.Value;
+            if (dbType.HasValue)
+            {
+                parameter.DbType = dbType.Value;
+            }
+
             parameter.Value = value;
             command.Parameters.Add(parameter);
             await command.ExecuteScalarAsync();
@@ -95,12 +99,15 @@ public sealed class OracleReaderRepresentationTests
             command.CommandText = "SELECT :p FROM dual";
             var parameter = command.CreateParameter();
             parameter.ParameterName = "p";
-            try { parameter.DbType = dbType; }
+            try
+            { parameter.DbType = dbType; }
             catch (Exception exception) { return $"{name}: DbType: {exception.GetType().Name}: {exception.Message}"; }
-            try { parameter.Value = value; }
+            try
+            { parameter.Value = value; }
             catch (Exception exception) { return $"{name}: Value: {exception.GetType().Name}: {exception.Message}"; }
             command.Parameters.Add(parameter);
-            try { await command.ExecuteScalarAsync(); }
+            try
+            { await command.ExecuteScalarAsync(); }
             catch (Exception exception) { return $"{name}: Execute: {exception.GetType().Name}: {exception.Message}"; }
             return $"{name}: accepted unexpectedly";
         }
@@ -169,15 +176,18 @@ public sealed class OracleReaderRepresentationTests
 
             if (dbType.HasValue)
             {
-                try { parameter.DbType = dbType.Value; }
+                try
+                { parameter.DbType = dbType.Value; }
                 catch (Exception exception) { return ("DbType", exception); }
             }
 
-            try { parameter.Value = value; }
+            try
+            { parameter.Value = value; }
             catch (Exception exception) { return ("Value", exception); }
 
             command.Parameters.Add(parameter);
-            try { await command.ExecuteNonQueryAsync(); }
+            try
+            { await command.ExecuteNonQueryAsync(); }
             catch (Exception exception) { return ("Execute", exception); }
             return ("Accepted", null);
         }
@@ -197,9 +207,17 @@ public sealed class OracleReaderRepresentationTests
 
             var enabledParameter = command.CreateParameter();
             enabledParameter.ParameterName = "enabled";
-            if (metadataBeforeValue) enabledParameter.DbType = DbType.Int32;
+            if (metadataBeforeValue)
+            {
+                enabledParameter.DbType = DbType.Int32;
+            }
+
             enabledParameter.Value = enabled;
-            if (!metadataBeforeValue) enabledParameter.DbType = DbType.Int32;
+            if (!metadataBeforeValue)
+            {
+                enabledParameter.DbType = DbType.Int32;
+            }
+
             Assert.Equal(enabled, Assert.IsType<bool>(enabledParameter.Value));
             command.Parameters.Add(enabledParameter);
 

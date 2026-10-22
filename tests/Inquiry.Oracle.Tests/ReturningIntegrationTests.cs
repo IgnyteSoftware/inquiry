@@ -27,7 +27,7 @@ public sealed class ReturningIntegrationTests
         var inserted = await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" });
 
         Assert.NotNull(inserted);
-        Assert.True(inserted!.CategoryID > 0);
+        Assert.True(inserted.CategoryID > 0);
         Assert.Equal("Beverages", inserted.CategoryName);
         Assert.NotNull(await categories.SelectByKeyAsync(inserted.CategoryID));
     }
@@ -42,7 +42,7 @@ public sealed class ReturningIntegrationTests
         var inserted = await customers.InsertReturningAsync(new Customer { CustomerID = "ALFKI", CompanyName = "Alfreds", Country = "Germany" });
 
         Assert.NotNull(inserted);
-        Assert.Equal("ALFKI", inserted!.CustomerID);
+        Assert.Equal("ALFKI", inserted.CustomerID);
         Assert.Equal("Alfreds", inserted.CompanyName);
         Assert.Equal("Germany", inserted.Country);
     }
@@ -58,7 +58,7 @@ public sealed class ReturningIntegrationTests
         var updated = await customers.UpdateReturningAsync(new Customer { CustomerID = "UPD01", CompanyName = "Updated", Country = "Canada" });
 
         Assert.NotNull(updated);
-        Assert.Equal("Updated", updated!.CompanyName);
+        Assert.Equal("Updated", updated.CompanyName);
         Assert.Equal("Canada", updated.Country);
     }
 
@@ -83,10 +83,10 @@ public sealed class ReturningIntegrationTests
 
         var inserted = await customers.UpsertReturningAsync(new Customer { CustomerID = "UPS01", CompanyName = "First" });
         Assert.NotNull(inserted);
-        Assert.Equal("First", inserted!.CompanyName);
+        Assert.Equal("First", inserted.CompanyName);
 
         var updated = await customers.UpsertReturningAsync(new Customer { CustomerID = "UPS01", CompanyName = "Second" });
         Assert.NotNull(updated);
-        Assert.Equal("Second", updated!.CompanyName);
+        Assert.Equal("Second", updated.CompanyName);
     }
 }

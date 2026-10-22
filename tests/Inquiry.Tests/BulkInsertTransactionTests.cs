@@ -1,5 +1,4 @@
 using Inquiry.BulkCopy;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -19,7 +18,7 @@ public sealed class BulkInsertTransactionTests
         var definition = new InquiryBulkInsertDefinition<Row>(
             null,
             "Rows",
-            new[] { "Id" },
+            ["Id"],
             static (row, _) => row.Id);
 
         var written = await inquiry.BulkInsertAsync(definition, new[] { new Row(1) });
@@ -42,7 +41,7 @@ public sealed class BulkInsertTransactionTests
         var definition = new InquiryBulkInsertDefinition<Row>(
             null,
             "Rows",
-            new[] { "Id" },
+            ["Id"],
             static (row, _) => row.Id);
         var releaseChild = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -71,7 +70,7 @@ public sealed class BulkInsertTransactionTests
             services => services.AddSingleton<IInquiryBulkCopier>(copier));
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
-        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", new[] { "Id" }, static (row, _) => row.Id);
+        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", ["Id"], static (row, _) => row.Id);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.BulkInsertAsync(
             definition,
@@ -91,7 +90,7 @@ public sealed class BulkInsertTransactionTests
         using var scope = fixture.CreateScope();
         var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
         await using var transaction = await inquiry.BeginTransactionAsync();
-        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", new[] { "Id" }, static (row, _) => row.Id);
+        var definition = new InquiryBulkInsertDefinition<Row>(null, "Rows", ["Id"], static (row, _) => row.Id);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.BulkInsertAsync(
             definition,

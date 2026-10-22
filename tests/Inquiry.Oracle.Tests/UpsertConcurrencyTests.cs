@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
@@ -95,7 +96,7 @@ public sealed class UpsertConcurrencyTests
                   AND BLOCKING_SESSION IS NOT NULL
                 """;
             command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
-            if (Convert.ToInt32(await command.ExecuteScalarAsync(watchdog.Token)) > 0)
+            if (Convert.ToInt32(await command.ExecuteScalarAsync(watchdog.Token), CultureInfo.CurrentCulture) > 0)
             {
                 return;
             }

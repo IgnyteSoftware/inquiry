@@ -1,8 +1,8 @@
+using System.Data;
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.SqlServer.Parameters;
 using Microsoft.Data.SqlClient;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -11,17 +11,29 @@ public sealed class InquiryTvpParameterTests
     private enum UnsignedState : uint { High = 3_000_000_000u, Max = uint.MaxValue }
 
     [Theory]
+#pragma warning disable xUnit1042 // The rows hold descriptors that xUnit cannot serialize, so TheoryData would not enumerate them either.
     [MemberData(nameof(UnsignedCases))]
+#pragma warning restore xUnit1042
     public void DirectUnsignedBinderUsesSignedArtifactMetadataAndRows(object values, SqlDbType expectedType, InquiryTvpDescriptor descriptor, object[] expectedRows)
     {
         using var command = new SqlCommand();
         switch (values)
         {
-            case sbyte[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case ushort[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case uint[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case ulong[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
-            case UnsignedState[] typed: InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor); break;
+            case sbyte[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case ushort[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case uint[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case ulong[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
+            case UnsignedState[] typed:
+                InquiryTvpParameter.Bind(command, "@v", typed, "[dbo].[Inquiry_Tvp_test]", descriptor);
+                break;
         }
 
         var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
@@ -84,7 +96,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(unsignedCommand.Parameters.Cast<SqlParameter>())).Value);
         var unsignedValues = new List<object>();
         foreach (var record in unsignedRecords)
+        {
             unsignedValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(new object[] { 0, int.MinValue, -1, DBNull.Value }, unsignedValues.ToArray());
 
         using var enumCommand = new SqlCommand();
@@ -93,7 +108,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(enumCommand.Parameters.Cast<SqlParameter>())).Value);
         var enumValues = new List<object>();
         foreach (var record in enumRecords)
+        {
             enumValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(new object[] { unchecked((int)3_000_000_000u), -1, DBNull.Value }, enumValues.ToArray());
     }
 
@@ -102,7 +120,7 @@ public sealed class InquiryTvpParameterTests
     {
         using var command = new SqlCommand();
 
-        InquiryTvpParameter.Bind(command, "@ids", new[] { 1, 2 }, "[tenant].[Inquiry_Tvp_test]",
+        InquiryTvpParameter.Bind(command, "@ids", [1, 2], "[tenant].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
 
         Assert.Null(command.Connection);
@@ -139,7 +157,7 @@ public sealed class InquiryTvpParameterTests
     public void BindAcceptsBracketEscapedGeneratedTypeNames(string typeName)
     {
         using var command = new SqlCommand();
-        InquiryTvpParameter.Bind(command, "@ids", new[] { 1 }, typeName,
+        InquiryTvpParameter.Bind(command, "@ids", [1], typeName,
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
         Assert.Equal(typeName, Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>())).TypeName);
     }
@@ -162,7 +180,7 @@ public sealed class InquiryTvpParameterTests
     public void ExactBinderPeeksOnceThenStreamsOnePassWithoutReplay()
     {
         using var command = new SqlCommand();
-        var source = new ProbeEnumerable<int>(new[] { 10, 20, 30 });
+        var source = new ProbeEnumerable<int>([10, 20, 30]);
         var descriptor = InquiryTvpDescriptor.Get("int", 0, 10, 0, false);
 
         InquiryTvpParameter.Bind(command, "@ids", source, "[dbo].[Inquiry_Tvp_test]", descriptor);
@@ -172,7 +190,7 @@ public sealed class InquiryTvpParameterTests
         Assert.Equal(0, source.CurrentCount);
         var parameter = Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>()));
         var records = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(parameter.Value);
-        Assert.Equal(new[] { 10, 20, 30 }, records.Select(record => record.GetInt32(0)).ToArray());
+        Assert.Equal([10, 20, 30], records.Select(record => record.GetInt32(0)).ToArray());
         Assert.Equal(1, source.GetEnumeratorCount);
         Assert.Equal(4, source.MoveNextCount);
         Assert.Equal(3, source.CurrentCount);
@@ -190,7 +208,10 @@ public sealed class InquiryTvpParameterTests
             Assert.IsType<SqlParameter>(Assert.Single(nullableCommand.Parameters.Cast<SqlParameter>())).Value);
         var nullableValues = new List<object>();
         foreach (var record in nullableRecords)
+        {
             nullableValues.Add(record.GetValue(0));
+        }
+
         Assert.Equal(3, nullableValues.Count);
         Assert.Equal(1, nullableValues[0]);
         Assert.Equal(DBNull.Value, nullableValues[1]);
@@ -209,7 +230,7 @@ public sealed class InquiryTvpParameterTests
     public void CommandResourceDisposalReleasesAbandonedSourceExactlyOnce()
     {
         using var command = new SqlCommand();
-        var source = new ProbeEnumerable<int>(new[] { 1, 2 });
+        var source = new ProbeEnumerable<int>([1, 2]);
         InquiryTvpParameter.Bind(command, "@ids", source, "[dbo].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
 
@@ -224,14 +245,14 @@ public sealed class InquiryTvpParameterTests
     public void BindTimeAndStreamingFailuresDisposeWithoutReplay()
     {
         using var firstCommand = new SqlCommand();
-        var first = new ProbeEnumerable<int>(new[] { 1 }, failMoveNextAt: 1);
+        var first = new ProbeEnumerable<int>([1], failMoveNextAt: 1);
         Assert.Throws<ProbeException>(() => InquiryTvpParameter.Bind(firstCommand, "@ids", first, "[dbo].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false)));
         Assert.Equal(1, first.DisposeCount);
         Assert.Empty(firstCommand.Parameters.Cast<SqlParameter>());
 
         using var laterCommand = new SqlCommand();
-        var later = new ProbeEnumerable<int>(new[] { 1, 2 }, failMoveNextAt: 2);
+        var later = new ProbeEnumerable<int>([1, 2], failMoveNextAt: 2);
         InquiryTvpParameter.Bind(laterCommand, "@ids", later, "[dbo].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
         var rows = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
@@ -245,7 +266,7 @@ public sealed class InquiryTvpParameterTests
     public void FirstMoveNextAndDisposeFailuresAreAggregatedPrimaryFirst()
     {
         using var command = new SqlCommand();
-        var source = new ProbeEnumerable<int>(new[] { 1 }, failMoveNextAt: 1, failDispose: true);
+        var source = new ProbeEnumerable<int>([1], failMoveNextAt: 1, failDispose: true);
 
         var exception = Assert.Throws<AggregateException>(() => InquiryTvpParameter.Bind(
             command, "@ids", source, "[dbo].[Inquiry_Tvp_test]",
@@ -280,7 +301,7 @@ public sealed class InquiryTvpParameterTests
     public void CurrentAndDisposeFailuresAreAggregatedPrimaryFirst()
     {
         using var command = new SqlCommand();
-        var source = new ProbeEnumerable<int>(new[] { 1 }, failCurrentAt: 1, failDispose: true);
+        var source = new ProbeEnumerable<int>([1], failCurrentAt: 1, failDispose: true);
         InquiryTvpParameter.Bind(command, "@ids", source, "[dbo].[Inquiry_Tvp_test]",
             InquiryTvpDescriptor.Get("int", 0, 10, 0, false));
         var rows = Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
@@ -298,7 +319,7 @@ public sealed class InquiryTvpParameterTests
     public void ParameterAddAndDisposeFailuresAreAggregatedPrimaryFirst()
     {
         using var command = new RejectingCommand();
-        var source = new ProbeEnumerable<int>(new[] { 1 }, failDispose: true);
+        var source = new ProbeEnumerable<int>([1], failDispose: true);
 
         var exception = Assert.Throws<AggregateException>(() => InquiryTvpParameter.Bind(
             command, "@ids", source, "[dbo].[Inquiry_Tvp_test]",
@@ -341,7 +362,7 @@ public sealed class InquiryTvpParameterTests
         Assert.Same(first, second);
 
         using var command = new SqlCommand();
-        InquiryTvpParameter.Bind(command, "@codes", new[] { "abc" }, "[dbo].[Inquiry_Tvp_test]", first);
+        InquiryTvpParameter.Bind(command, "@codes", ["abc"], "[dbo].[Inquiry_Tvp_test]", first);
         var record = Assert.Single(Assert.IsAssignableFrom<IEnumerable<Microsoft.Data.SqlClient.Server.SqlDataRecord>>(
             Assert.IsType<SqlParameter>(Assert.Single(command.Parameters.Cast<SqlParameter>())).Value));
         var metadata = record.GetSqlMetaData(0);
@@ -353,8 +374,8 @@ public sealed class InquiryTvpParameterTests
     public void CommandResourceDisposalAttemptsEverySourceAndAggregatesFailures()
     {
         using var command = new SqlCommand();
-        var first = new ProbeEnumerable<int>(new[] { 1 }, failDispose: true);
-        var second = new ProbeEnumerable<int>(new[] { 2 }, failDispose: true);
+        var first = new ProbeEnumerable<int>([1], failDispose: true);
+        var second = new ProbeEnumerable<int>([2], failDispose: true);
         var descriptor = InquiryTvpDescriptor.Get("int", 0, 10, 0, false);
         InquiryTvpParameter.Bind(command, "@first", first, "[dbo].[Inquiry_Tvp_test]", descriptor);
         InquiryTvpParameter.Bind(command, "@second", second, "[dbo].[Inquiry_Tvp_test]", descriptor);
@@ -367,6 +388,7 @@ public sealed class InquiryTvpParameterTests
         Assert.Equal(1, second.DisposeCount);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class ProbeException : Exception { }
 
     private sealed class ProbeEnumerable<T> : IEnumerable<T>
@@ -410,7 +432,11 @@ public sealed class InquiryTvpParameterTests
                 get
                 {
                     _owner.CurrentCount++;
-                    if (_owner.CurrentCount == _owner._failCurrentAt) throw new ProbeException();
+                    if (_owner.CurrentCount == _owner._failCurrentAt)
+                    {
+                        throw new ProbeException();
+                    }
+
                     return _owner._values[_index];
                 }
             }
@@ -420,7 +446,11 @@ public sealed class InquiryTvpParameterTests
             public bool MoveNext()
             {
                 _owner.MoveNextCount++;
-                if (_owner.MoveNextCount == _owner._failMoveNextAt) throw new ProbeException();
+                if (_owner.MoveNextCount == _owner._failMoveNextAt)
+                {
+                    throw new ProbeException();
+                }
+
                 _index++;
                 return _index < _owner._values.Count;
             }
@@ -429,14 +459,24 @@ public sealed class InquiryTvpParameterTests
 
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
-                if (_owner._failDispose) throw new ProbeException();
+                if (_owner._failDispose)
+                {
+#pragma warning disable S3877 // The probe throws from Dispose to test that cleanup failures are aggregated.
+                    throw new ProbeException();
+#pragma warning restore S3877
+                }
             }
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class ParameterAddException : Exception;
 
     private sealed class RejectingCommand : DbCommand
@@ -474,8 +514,12 @@ public sealed class InquiryTvpParameterTests
         public override void Remove(object value) { }
         public override void RemoveAt(int index) { }
         public override void RemoveAt(string parameterName) { }
+#pragma warning disable CA2201 // The fake matches ADO.NET providers, which throw IndexOutOfRangeException for a missing parameter.
         protected override DbParameter GetParameter(int index) => throw new IndexOutOfRangeException();
+#pragma warning restore CA2201
+#pragma warning disable CA2201 // The fake matches ADO.NET providers, which throw IndexOutOfRangeException for a missing parameter.
         protected override DbParameter GetParameter(string parameterName) => throw new IndexOutOfRangeException();
+#pragma warning restore CA2201
         protected override void SetParameter(int index, DbParameter value) => throw new ParameterAddException();
         protected override void SetParameter(string parameterName, DbParameter value) => throw new ParameterAddException();
     }

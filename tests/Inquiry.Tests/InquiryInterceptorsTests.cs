@@ -1,16 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Commands;
 using Inquiry.DependencyInjection;
 using Inquiry.Interceptors;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Xunit;
 
 namespace Inquiry.Tests;
 
@@ -155,7 +149,7 @@ public sealed class InquiryInterceptorsTests
         // The tag is execution-side only — results are unaffected, and the comment carried both keys.
         Assert.Equal(1L, count);
         Assert.Contains("application='checkout-api'", harness.Captured.LastCommandText);
-        Assert.Contains("traceparent='00-" + activity!.TraceId + "-", harness.Captured.LastCommandText);
+        Assert.Contains("traceparent='00-" + activity.TraceId + "-", harness.Captured.LastCommandText);
     }
 
     [Fact]
@@ -252,9 +246,14 @@ public sealed class InquiryInterceptorsTests
         {
             // Each execution gets a different traceparent, but the fingerprint should match.
             using (source.StartActivity("op1"))
+            {
                 await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            }
+
             using (source.StartActivity("op2"))
+            {
                 await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+            }
         }
 
         var warning = Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));

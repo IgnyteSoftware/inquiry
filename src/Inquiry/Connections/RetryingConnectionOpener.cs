@@ -52,10 +52,7 @@ internal sealed class RetryingConnectionOpener
         Func<double>? jitter = null,
         TimeSpan? maxDelay = null)
     {
-        if (detector is null)
-        {
-            throw new ArgumentNullException(nameof(detector));
-        }
+        ArgumentNullException.ThrowIfNull(detector);
 
         if (maxAttempts < 1)
         {
@@ -90,12 +87,10 @@ internal sealed class RetryingConnectionOpener
         Func<CancellationToken, ValueTask<DbConnection>> open,
         CancellationToken cancellationToken = default)
     {
-        if (open is null)
-        {
-            throw new ArgumentNullException(nameof(open));
-        }
+        ArgumentNullException.ThrowIfNull(open);
 
-        for (var attempt = 1; ; attempt++)
+        var attempt = 1;
+        while (true)
         {
             try
             {
@@ -105,6 +100,8 @@ internal sealed class RetryingConnectionOpener
             {
                 await _delay(NextDelay(attempt), cancellationToken).ConfigureAwait(false);
             }
+
+            attempt++;
         }
     }
 

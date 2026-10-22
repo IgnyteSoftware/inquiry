@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -8,8 +10,6 @@ using Inquiry.Parameters;
 using Inquiry.Stores;
 using Inquiry.Transactions;
 using Microsoft.Data.Sqlite;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Benchmarks;
 
@@ -30,6 +30,7 @@ namespace Inquiry.Benchmarks;
 [DisassemblyDiagnoser(maxDepth: 4, printSource: true)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes these fields in the [GlobalCleanup] method.")]
 public class ParameterBindingBenchmarks
 {
     private const string ParameterlessSql =
@@ -40,7 +41,7 @@ public class ParameterBindingBenchmarks
         "SELECT CASE WHEN EXISTS(SELECT 1 FROM \"ParameterBindingProbe\" WHERE \"Filter1\" = @Filter1 AND \"Filter2\" = @Filter2 AND \"Filter3\" = @Filter3 AND \"Filter4\" = @Filter4 AND \"Filter5\" = @Filter5 AND \"Filter6\" = @Filter6 AND \"Filter7\" = @Filter7 AND \"Filter8\" = @Filter8) THEN 1 ELSE 0 END";
     private const string CollectionSql =
         "SELECT CASE WHEN EXISTS(SELECT 1 FROM \"ParameterBindingProbe\" WHERE \"Filter1\" IN (SELECT value FROM json_each(@Filter1))) THEN 1 ELSE 0 END";
-    private static readonly IReadOnlyList<int> CollectionValues = new[] { 1, 2, 3 };
+    private static readonly IReadOnlyList<int> _collectionValues = new[] { 1, 2, 3 };
 
     private ParameterBindingSink _sink = null!;
     private ParameterBindingProbeStore _store = null!;
@@ -101,7 +102,7 @@ public class ParameterBindingBenchmarks
 
     [BenchmarkCategory("Collection"), Benchmark(Baseline = true)]
     public int Collection_DirectStaticBinderFloor()
-        => _sink.BindDirect(CollectionSql, CollectionValues, BindCollection);
+        => _sink.BindDirect(CollectionSql, _collectionValues, BindCollection);
 
     [BenchmarkCategory("Collection"), Benchmark]
     public int Collection_GeneratedStore()
@@ -120,7 +121,7 @@ public class ParameterBindingBenchmarks
         => _ = _store.ExistsByEightFiltersAsync(1, 2, 3, 4, 5, 6, 7, 8).GetAwaiter().GetResult();
 
     private void RunGeneratedCollection()
-        => _ = _store.ExistsByFilter1InAsync(CollectionValues).GetAwaiter().GetResult();
+        => _ = _store.ExistsByFilter1InAsync(_collectionValues).GetAwaiter().GetResult();
 
     private void AssertBound(string expectedSql, int expectedParameters)
     {
@@ -194,7 +195,7 @@ internal sealed class ParameterBindingProbe
     public int Filter8 { get; set; }
 }
 
-internal partial class ParameterBindingProbeStore : InquiryStore<ParameterBindingProbe>
+internal sealed partial class ParameterBindingProbeStore : InquiryStore<ParameterBindingProbe>
 {
     [InquiryExists]
     public partial Task<bool> AnyAsync(CancellationToken cancellationToken = default);
@@ -232,7 +233,7 @@ internal partial class ParameterBindingProbeStore : InquiryStore<ParameterBindin
 
 internal sealed class ParameterBindingSink : IInquiry, IDisposable
 {
-    private static readonly Task<bool> FalseTask = Task.FromResult(false);
+    private static readonly Task<bool> _falseTask = Task.FromResult(false);
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
     private readonly DbCommand _command;
 
@@ -257,25 +258,13 @@ internal sealed class ParameterBindingSink : IInquiry, IDisposable
 
         if (typeof(T) == typeof(bool))
         {
-            return (Task<T>)(object)FalseTask;
+            return (Task<T>)(object)_falseTask;
         }
 
         throw new InvalidOperationException($"Unexpected generated scalar type {typeof(T)}.");
     }
 
     public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => throw BoxedPathUsed();
-
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        => throw BoxedPathUsed();
-
-    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         InquiryCommand command,
         CancellationToken cancellationToken = default)
         where TEntity : class
@@ -289,6 +278,12 @@ internal sealed class ParameterBindingSink : IInquiry, IDisposable
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
         => throw BoxedPathUsed();
 
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        => throw BoxedPathUsed();
+
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
         InquiryCommand command,
         TMaterializer materializer,
@@ -296,6 +291,12 @@ internal sealed class ParameterBindingSink : IInquiry, IDisposable
         int capacityHint = -1)
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => throw BoxedPathUsed();
+
+    public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
         => throw BoxedPathUsed();
 
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(

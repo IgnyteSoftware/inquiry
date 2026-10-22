@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Npgsql;
-using System.Data.Common;
 
 namespace Inquiry.PostgreSql;
 
@@ -51,10 +51,7 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        if (options is null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         _connectionString = connectionString;
 

@@ -33,7 +33,7 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
         Assert.Equal(5, probe.FinalizedCommands.Count);
-        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, updates.ObservedExecutionCounts);
+        Assert.Equal([0, 0, 2, 2, 4, 4, 5], updates.ObservedExecutionCounts);
 
         probe.Reset();
         Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
@@ -142,7 +142,7 @@ public sealed class BatchChunkingIntegrationTests
             configureOptions: options => options.MaxBatchSize = 2,
             configureServices: probe.Decorate);
 
-    private static object? InspectJsonParameter(System.Data.Common.DbCommand command)
+    private static JsonParameterMetadata? InspectJsonParameter(System.Data.Common.DbCommand command)
     {
         var parameter = command.Parameters.Cast<SqliteParameter>()
             .SingleOrDefault(candidate => candidate.ParameterName == "@Id" && candidate.Value is string);

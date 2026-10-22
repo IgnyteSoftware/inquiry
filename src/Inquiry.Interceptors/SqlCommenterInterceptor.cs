@@ -1,7 +1,7 @@
-using Inquiry.Commands;
 using System.Data;
 using System.Diagnostics;
 using System.Text;
+using Inquiry.Commands;
 
 namespace Inquiry.Interceptors;
 
@@ -31,13 +31,13 @@ public sealed class SqlCommenterInterceptor : IInquiryCommandInterceptor
     {
         _staticFragment = string.IsNullOrWhiteSpace(applicationName)
             ? null
-            : "application='" + Escape(applicationName!) + "'";
+            : "application='" + Escape(applicationName) + "'";
     }
 
     /// <inheritdoc />
     public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
     {
-        if (context is null) throw new ArgumentNullException(nameof(context));
+        ArgumentNullException.ThrowIfNull(context);
 
         var text = context.Command.CommandText;
         if (text.Length == 0

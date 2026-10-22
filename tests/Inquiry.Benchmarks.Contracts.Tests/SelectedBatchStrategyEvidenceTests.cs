@@ -58,7 +58,8 @@ public sealed class SelectedBatchStrategyEvidenceTests
         {
             Authoritative = true,
             BenchmarkDotNet = Evidence(provider, operation, cell, operation.SelectedMethod, capabilities, releaseSource: true)
-                .BenchmarkDotNet with { JobId = "ShortRun" },
+                .BenchmarkDotNet with
+            { JobId = "ShortRun" },
         };
         var reference = Reference("evidence/short-run.json", evidence);
         var accepted = cell with
@@ -227,7 +228,7 @@ public sealed class SelectedBatchStrategyEvidenceTests
         };
     }
 
-    private static IReadOnlyDictionary<string, string> Capabilities(SelectedOperationStrategy operation)
+    private static Dictionary<string, string> Capabilities(SelectedOperationStrategy operation)
         => new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["selected-execution-mode"] = operation.ProductionExecutionMode,

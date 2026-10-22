@@ -1,3 +1,6 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -5,9 +8,6 @@ using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Inquiry.Transactions;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry;
 
@@ -136,6 +136,26 @@ internal sealed class DefaultInquiry : IInquiry
         where TEntity : class
         => ActivePipeline.QueryAsync(command, GetMaterializer<TEntity>(), cancellationToken);
 
+    // ---- Struct-materializer overloads (generated-store path) ------------------------------
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
+
     /// <inheritdoc />
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(
         FormattableString commandText,
@@ -151,6 +171,26 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QueryListAsync(command, GetMaterializer<TEntity>(), cancellationToken);
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TMaterializer>(command, materializer, cancellationToken, capacityHint);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where TEntity : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
+        => ActivePipeline.QueryListAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken, capacityHint);
+
+    /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(
         FormattableString commandText,
         CancellationToken cancellationToken = default)
@@ -164,27 +204,6 @@ internal sealed class DefaultInquiry : IInquiry
         where TEntity : class
         => ActivePipeline.QuerySingleOrDefaultAsync(command, GetMaterializer<TEntity>(), cancellationToken);
 
-    // ---- Struct-materializer overloads (generated-store path) ------------------------------
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => ActivePipeline.QueryAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => ActivePipeline.QueryListAsync<TEntity, TMaterializer>(command, materializer, cancellationToken, capacityHint);
-
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(
         InquiryCommand command,
@@ -193,31 +212,6 @@ internal sealed class DefaultInquiry : IInquiry
         where TEntity : class
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TMaterializer>(command, materializer, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<InquiryGridReader> QueryMultipleAsync(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => ActivePipeline.QueryAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where TEntity : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
-        => ActivePipeline.QueryListAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken, capacityHint);
 
     /// <inheritdoc />
     public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
@@ -229,6 +223,18 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QuerySingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
 
     /// <inheritdoc />
+    public Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<TEntity?> QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
         TMaterializer materializer,
@@ -238,12 +244,6 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.QueryGeneratedSingleOrDefaultAsync<TEntity, TArgs, TMaterializer>(command, materializer, cancellationToken);
 
     /// <inheritdoc />
-    public Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => ActivePipeline.QueryMultipleAsync(command, cancellationToken);
-
-    /// <inheritdoc />
     public async Task<long> BulkInsertAsync<TEntity>(
         Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity> definition,
         IEnumerable<TEntity> rows,
@@ -251,8 +251,9 @@ internal sealed class DefaultInquiry : IInquiry
         CancellationToken cancellationToken = default)
         where TEntity : class
     {
-        if (definition is null) throw new ArgumentNullException(nameof(definition));
-        if (rows is null) throw new ArgumentNullException(nameof(rows));
+        ArgumentNullException.ThrowIfNull(definition);
+
+        ArgumentNullException.ThrowIfNull(rows);
 
         options ??= new Inquiry.BulkCopy.InquiryBulkInsertOptions();
         options.Validate();
@@ -266,10 +267,15 @@ internal sealed class DefaultInquiry : IInquiry
         var pipeline = ambientSlot?.Pipeline;
         if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireAmbientTransaction
             && pipeline is null)
+        {
             throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires an ambient Inquiry transaction, but none is active.");
+        }
+
         if (options.ConnectionBehavior == Inquiry.BulkCopy.InquiryBulkInsertConnectionBehavior.RequireDedicatedConnection
             && pipeline is not null)
+        {
             throw new InvalidOperationException("Bulk insert option ConnectionBehavior requires a dedicated connection, but an ambient Inquiry transaction is active.");
+        }
 
         var copier = _serviceProvider.GetService<Inquiry.BulkCopy.IInquiryBulkCopier>()
             ?? throw new InvalidOperationException(
@@ -284,11 +290,14 @@ internal sealed class DefaultInquiry : IInquiry
             options,
             (duration, openError) => RecordBulkConnectionOpen(activity, dbSystem, enlisted, duration, openError),
             (duration, rowCount) => RecordBulkCopy(activity, dbSystem, enlisted, duration, rowCount));
-        IDisposable? operationLease = null;
+        Inquiry.Pipeline.TransactedInquiryRequestPipeline.InFlightLease? operationLease = null;
         try
         {
             operationLease = pipeline?.EnterExclusiveOperation();
-            if (enlisted) context.RecordConnectionOpened(TimeSpan.Zero);
+            if (enlisted)
+            {
+                context.RecordConnectionOpened(TimeSpan.Zero);
+            }
             // Same cancellation contract as the command pipeline (#282/#283): a driver-native error
             // surfaced after the caller's token fired (MySqlConnector wraps the cancel in a
             // MySqlException during LOAD DATA LOCAL INFILE) normalizes to an OCE carrying the
@@ -318,18 +327,20 @@ internal sealed class DefaultInquiry : IInquiry
 
     private (Activity? activity, long startTimestamp, string dbSystem) StartBulkInsertActivity(string table, bool enlisted)
     {
-        if (!Diagnostics.InquiryTelemetry.ActivitySource.HasListeners()
-            && !Diagnostics.InquiryTelemetry.CommandDuration.Enabled
-            && !Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Enabled
-            && !Diagnostics.InquiryTelemetry.BulkCopyDuration.Enabled)
+        if (!Diagnostics.InquiryTelemetry._activitySource.HasListeners()
+            && !Diagnostics.InquiryTelemetry._commandDuration.Enabled
+            && !Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Enabled
+            && !Diagnostics.InquiryTelemetry._bulkCopyDuration.Enabled)
+        {
             return (null, 0, "");
+        }
 
         var dbSystem = Diagnostics.InquiryTelemetry.MapDbSystem(_connectionFactory);
         var startTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         Activity? activity = null;
-        if (Diagnostics.InquiryTelemetry.ActivitySource.HasListeners())
+        if (Diagnostics.InquiryTelemetry._activitySource.HasListeners())
         {
-            activity = Diagnostics.InquiryTelemetry.ActivitySource.StartActivity("BULK_INSERT", ActivityKind.Client);
+            activity = Diagnostics.InquiryTelemetry._activitySource.StartActivity("BULK_INSERT", ActivityKind.Client);
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", dbSystem);
@@ -348,9 +359,12 @@ internal sealed class DefaultInquiry : IInquiry
 
     private static void RecordBulkInsertCompletion(Activity? activity, long startTimestamp, string dbSystem, bool enlisted, long rowCount)
     {
-        if (startTimestamp == 0) return;
+        if (startTimestamp == 0)
+        {
+            return;
+        }
 
-        Diagnostics.InquiryTelemetry.CommandDuration.Record(
+        Diagnostics.InquiryTelemetry._commandDuration.Record(
             System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
@@ -369,7 +383,7 @@ internal sealed class DefaultInquiry : IInquiry
 
         if (startTimestamp != 0)
         {
-            Diagnostics.InquiryTelemetry.CommandDuration.Record(
+            Diagnostics.InquiryTelemetry._commandDuration.Record(
                 System.Diagnostics.Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 new KeyValuePair<string, object?>("db.operation.name", "BULK_INSERT"),
@@ -381,7 +395,10 @@ internal sealed class DefaultInquiry : IInquiry
         {
             Diagnostics.InquiryTelemetry.SetError(activity, exception, _recordTelemetryDetails);
             if (exception is Inquiry.BulkCopy.InquiryBulkInsertWarningException warning)
+            {
                 activity.SetTag("db.response.affected_rows", warning.RowsWritten);
+            }
+
             activity.Dispose();
         }
     }
@@ -392,7 +409,7 @@ internal sealed class DefaultInquiry : IInquiry
         if (openError is not null)
         {
             var errorType = openError.GetType().FullName ?? openError.GetType().Name;
-            Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+            Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Record(
                 duration.TotalSeconds,
                 new KeyValuePair<string, object?>("db.system.name", dbSystem),
                 connectionMode,
@@ -407,7 +424,7 @@ internal sealed class DefaultInquiry : IInquiry
             return;
         }
 
-        Diagnostics.InquiryTelemetry.BulkConnectionOpenDuration.Record(
+        Diagnostics.InquiryTelemetry._bulkConnectionOpenDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             connectionMode);
@@ -421,7 +438,7 @@ internal sealed class DefaultInquiry : IInquiry
 
     private static void RecordBulkCopy(Activity? activity, string dbSystem, bool enlisted, TimeSpan duration, long? rowCount)
     {
-        Diagnostics.InquiryTelemetry.BulkCopyDuration.Record(
+        Diagnostics.InquiryTelemetry._bulkCopyDuration.Record(
             duration.TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("inquiry.bulk_insert.connection_mode", enlisted ? "enlisted" : "dedicated"));
@@ -480,6 +497,12 @@ internal sealed class DefaultInquiry : IInquiry
         => ActivePipeline.ExecuteScalarAsync<T>(command, cancellationToken);
 
     /// <inheritdoc />
+    public Task<T> ExecuteScalarAsync<T, TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => ActivePipeline.ExecuteScalarAsync<T, TArgs>(command, cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> ExecuteProcedureScalarAsync<T>(
         InquiryCommand command,
         string readBackParameterName,
@@ -492,12 +515,6 @@ internal sealed class DefaultInquiry : IInquiry
         string readBackParameterName,
         CancellationToken cancellationToken = default)
         => ActivePipeline.ExecuteProcedureScalarAsync<T, TArgs>(command, readBackParameterName, cancellationToken);
-
-    /// <inheritdoc />
-    public Task<T> ExecuteScalarAsync<T, TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => ActivePipeline.ExecuteScalarAsync<T, TArgs>(command, cancellationToken);
 
     /// <inheritdoc />
     public Task<IInquiryTransaction> BeginTransactionAsync(

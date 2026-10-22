@@ -1,4 +1,4 @@
-using System;
+using System.Globalization;
 
 namespace Inquiry.Generators.Tests;
 
@@ -249,7 +249,7 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics,
-            d => d.Id == "INQ051" && d.GetMessage().Contains("UnmappedDto"));
+            d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("UnmappedDto"));
     }
 
     [Fact]

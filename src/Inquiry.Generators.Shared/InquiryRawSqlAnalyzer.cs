@@ -1,8 +1,8 @@
+using System.Collections.Immutable;
 using Inquiry.Generators.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Operations;
-using System.Collections.Immutable;
 
 namespace Inquiry.Generators;
 

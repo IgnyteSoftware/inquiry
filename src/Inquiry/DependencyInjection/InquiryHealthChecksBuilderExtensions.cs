@@ -31,10 +31,7 @@ public static class InquiryHealthChecksBuilderExtensions
         HealthStatus? failureStatus = null,
         IEnumerable<string>? tags = null)
     {
-        if (builder is null)
-        {
-            throw new ArgumentNullException(nameof(builder));
-        }
+        ArgumentNullException.ThrowIfNull(builder);
 
         return builder.Add(new HealthCheckRegistration(
             name,

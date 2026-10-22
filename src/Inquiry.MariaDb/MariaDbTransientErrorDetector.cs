@@ -16,7 +16,7 @@ internal sealed class MariaDbTransientErrorDetector : ITransientErrorDetector
     /// cloud providers (AWS RDS, Azure Database for MariaDB, SkySQL). These errors commonly
     /// surface during scaling events, maintenance windows, and failover.
     /// </summary>
-    private static readonly HashSet<int> TransientErrorNumbers = new()
+    private static readonly HashSet<int> _transientErrorNumbers = new()
     {
         1040,   // ER_CON_COUNT_ERROR — Too many connections.
         1042,   // ER_BAD_HOST_ERROR — Can't get hostname for your address.
@@ -31,6 +31,6 @@ internal sealed class MariaDbTransientErrorDetector : ITransientErrorDetector
     public bool IsTransient(Exception exception)
     {
         return exception is MySqlException mysqlException
-            && TransientErrorNumbers.Contains(mysqlException.Number);
+            && _transientErrorNumbers.Contains(mysqlException.Number);
     }
 }

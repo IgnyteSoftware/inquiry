@@ -4,7 +4,6 @@ using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.SqlServer.Tests.Fixtures;
 using Microsoft.Data.SqlClient;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -62,14 +61,17 @@ public sealed class SchemaManifestCatalogIntegrationTests
             var column = expected[ordinal++];
             Assert.Equal(column.GetProperty("name").GetString(), reader.GetString(0));
             if (column.GetProperty("storeType").ValueKind != JsonValueKind.Null)
+            {
                 Assert.Equal(column.GetProperty("storeType").GetString(), reader.GetString(1), ignoreCase: true);
+            }
+
             Assert.Equal(column.GetProperty("nullable").GetBoolean(), reader.GetBoolean(2));
             var pk = column.GetProperty("primaryKeyOrdinal");
             Assert.Equal(pk.ValueKind == JsonValueKind.Null ? (int?)null : pk.GetInt32(), reader.IsDBNull(3) ? (int?)null : reader.GetInt32(3));
         }
         await reader.DisposeAsync();
         Assert.Equal(expected.Length, ordinal);
-        Assert.Equal(new[] { "Id" }, table.GetProperty("primaryKey").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Id"], table.GetProperty("primaryKey").EnumerateArray().Select(x => x.GetString()));
 
         var columns = table.GetProperty("columns").EnumerateArray().ToDictionary(x => x.GetProperty("name").GetString()!);
         Assert.Equal("identity", columns["Id"].GetProperty("generation").GetString());
@@ -118,15 +120,15 @@ public sealed class SchemaManifestCatalogIntegrationTests
 
         var index = Assert.Single(table.GetProperty("indexes").EnumerateArray());
         Assert.True(index.GetProperty("unique").GetBoolean());
-        Assert.Equal(new[] { "Name" }, index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
-        Assert.Equal(new[] { "Notes" }, index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Name"], index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Notes"], index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("CK_ManifestWidget_Score", Assert.Single(table.GetProperty("checks").EnumerateArray()).GetProperty("name").GetString());
         var foreignKey = Assert.Single(table.GetProperty("foreignKeys").EnumerateArray());
         Assert.Equal("FK_ManifestWidget_Parent", foreignKey.GetProperty("name").GetString());
-        Assert.Equal(new[] { "ParentId" }, foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["ParentId"], foreignKey.GetProperty("localColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(JsonValueKind.Null, foreignKey.GetProperty("referencedSchema").ValueKind);
         Assert.Equal("ManifestParent", foreignKey.GetProperty("referencedTable").GetString());
-        Assert.Equal(new[] { "Id" }, foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(["Id"], foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal("cascade", foreignKey.GetProperty("onDelete").GetString());
         Assert.Equal("no-action", foreignKey.GetProperty("onUpdate").GetString());
 
@@ -139,8 +141,13 @@ public sealed class SchemaManifestCatalogIntegrationTests
         await using var indexColumns = connection.CreateCommand();
         indexColumns.CommandText = "SELECT c.name, ic.is_included_column FROM sys.tables t JOIN sys.indexes i ON i.object_id=t.object_id JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id WHERE t.name='ManifestWidget' AND i.name='UX_ManifestWidget_Name' ORDER BY CASE WHEN ic.is_included_column=0 THEN ic.key_ordinal ELSE 2147483647 END, ic.index_column_id";
         await using var indexReader = await indexColumns.ExecuteReaderAsync();
-        var catalogKeys = new List<string>(); var catalogIncludes = new List<string>();
-        while (await indexReader.ReadAsync()) (indexReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(indexReader.GetString(0));
+        var catalogKeys = new List<string>();
+        var catalogIncludes = new List<string>();
+        while (await indexReader.ReadAsync())
+        {
+            (indexReader.GetBoolean(1) ? catalogIncludes : catalogKeys).Add(indexReader.GetString(0));
+        }
+
         Assert.Equal(index.GetProperty("keyColumns").EnumerateArray().Select(x => x.GetString()), catalogKeys);
         Assert.Equal(index.GetProperty("includeColumns").EnumerateArray().Select(x => x.GetString()), catalogIncludes);
     }

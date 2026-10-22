@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Inquiry.Entities;
 using Inquiry.Oracle.Tests.Fixtures;
 using Inquiry.Stores;
@@ -87,7 +88,7 @@ public sealed class BatchChunkArrayBindingIntegrationTests
 
         await Assert.ThrowsAsync<OracleException>(() => context.Store.InsertAllAsync(items));
 
-        Assert.Equal(new[] { 2, 2 }, context.Probe.InitializedChunkSizes);
+        Assert.Equal([2, 2], context.Probe.InitializedChunkSizes);
         Assert.Equal(2, context.Probe.FinalizedCommands.Count);
         Assert.Equal(1, context.Probe.BeginTransactionCount);
         Assert.Empty(await ReadAllAsync(context.Harness.ConnectionString));
@@ -102,7 +103,7 @@ public sealed class BatchChunkArrayBindingIntegrationTests
         await using (var transaction = await inquiry.BeginTransactionAsync())
         {
             Assert.Equal(5, await context.Store.InsertAllAsync(CreateItems(5, "Ambient")));
-            Assert.Equal(new[] { 2, 2, 1 }, context.Probe.InitializedChunkSizes);
+            Assert.Equal([2, 2, 1], context.Probe.InitializedChunkSizes);
             Assert.Equal(1, context.Probe.BeginTransactionCount);
         }
 
@@ -126,7 +127,7 @@ public sealed class BatchChunkArrayBindingIntegrationTests
         Assert.Equal(1, source.GetEnumeratorCount);
         Assert.Equal(3, source.MoveNextCount);
         Assert.Equal(1, source.DisposeCount);
-        Assert.Equal(new[] { 2 }, context.Probe.InitializedChunkSizes);
+        Assert.Equal([2], context.Probe.InitializedChunkSizes);
         Assert.Single(context.Probe.FinalizedCommands);
         Assert.Equal(1, context.Probe.BeginTransactionCount);
         Assert.Empty(await ReadAllAsync(context.Harness.ConnectionString));
@@ -244,7 +245,7 @@ public sealed class BatchChunkArrayBindingIntegrationTests
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            items.Add(Item(Convert.ToInt32(reader.GetValue(0)), reader.GetString(1)));
+            items.Add(Item(Convert.ToInt32(reader.GetValue(0), CultureInfo.CurrentCulture), reader.GetString(1)));
         }
 
         return items.ToArray();

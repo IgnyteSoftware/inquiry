@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.Northwind;
@@ -5,7 +6,6 @@ using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.SqlServer.Tests.Fixtures;
 
@@ -83,9 +83,14 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
 
             var serviceCollection = new ServiceCollection();
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GuidItemStore).Assembly, typeof(VersionedItemStore).Assembly);
+            }
+
             serviceCollection.AddInquirySqlServer(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -143,7 +148,9 @@ internal sealed class SqlServerTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)

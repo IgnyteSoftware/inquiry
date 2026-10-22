@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-
 namespace Inquiry;
 
 /// <summary>
@@ -14,7 +11,7 @@ namespace Inquiry;
 /// </summary>
 public static class InquiryFilterContext
 {
-    private static readonly AsyncLocal<ScopeFrame?> Current = new();
+    private static readonly AsyncLocal<ScopeFrame?> _current = new();
 
     /// <summary>
     /// Sets the ambient filter values for the current async flow and returns a scope that restores
@@ -25,7 +22,7 @@ public static class InquiryFilterContext
     /// </summary>
     public static Scope BeginScope(IReadOnlyDictionary<string, object> values)
     {
-        if (values is null) throw new System.ArgumentNullException(nameof(values));
+        ArgumentNullException.ThrowIfNull(values);
         // Snapshot rather than alias: AsyncLocal isolates the REFERENCE per async flow, not the
         // contents. A caller that reused or later mutated its dictionary (a pooled scratch dict, a
         // singleton field) would otherwise hand every concurrent request the same mutable tenant
@@ -36,8 +33,8 @@ public static class InquiryFilterContext
             snapshot[pair.Key] = pair.Value;
         }
 
-        var frame = new ScopeFrame(snapshot, Current.Value);
-        Current.Value = frame;
+        var frame = new ScopeFrame(snapshot, _current.Value);
+        _current.Value = frame;
         return new Scope(frame);
     }
 
@@ -51,7 +48,7 @@ public static class InquiryFilterContext
     /// </summary>
     public static T GetRequired<T>(string contextKey)
     {
-        var values = Current.Value?.Value;
+        var values = _current.Value?._value;
         if (values is null)
         {
             throw new InquiryFilterValueMissingException(
@@ -75,13 +72,13 @@ public static class InquiryFilterContext
 
     internal sealed class ScopeFrame
     {
-        internal readonly IReadOnlyDictionary<string, object> Value;
-        internal readonly ScopeFrame? Previous;
+        internal readonly IReadOnlyDictionary<string, object> _value;
+        internal readonly ScopeFrame? _previous;
 
         internal ScopeFrame(IReadOnlyDictionary<string, object> value, ScopeFrame? previous)
         {
-            Value = value;
-            Previous = previous;
+            _value = value;
+            _previous = previous;
         }
     }
 
@@ -100,18 +97,27 @@ public static class InquiryFilterContext
         /// </exception>
         public void Dispose()
         {
-            if (_frame is null) return;
-            var current = Current.Value;
-            if (ReferenceEquals(current, _frame))
+            if (_frame is null)
             {
-                Current.Value = _frame.Previous;
                 return;
             }
 
-            for (var frame = current; frame is not null; frame = frame.Previous)
+            var current = _current.Value;
+            if (ReferenceEquals(current, _frame))
+            {
+                _current.Value = _frame._previous;
+                return;
+            }
+
+            for (var frame = current; frame is not null; frame = frame._previous)
             {
                 if (ReferenceEquals(frame, _frame))
+                {
+                    // Disposing out of order would corrupt the ambient stack, so misuse fails loudly.
+#pragma warning disable S3877
                     throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+#pragma warning restore S3877
+                }
             }
         }
     }

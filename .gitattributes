@@ -1,14 +1,14 @@
-# Line endings, pinned rather than left to each machine.
-#
-# This tree is accessed by BOTH Windows git (core.autocrlf=true, checks out CRLF) and
-# WSL/Linux git (native = LF). `text=auto` alone resolves "native" per-platform, so the
-# same working tree looks clean to one git and shows every file modified to the other --
-# all false positives, with no content change. eol=crlf makes both agree.
-#
-# Repo content stays LF. Working tree is CRLF on every platform.
-* text=auto eol=crlf
+* text=auto eol=lf
 
-# Shell scripts must stay LF or they fail to execute.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+
+# Shell scripts and pinned evidence files are always text with LF endings.
 *.sh text eol=lf
 *.bash text eol=lf
 

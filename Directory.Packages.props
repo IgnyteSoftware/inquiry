@@ -1,6 +1,8 @@
 <Project>
   <!-- Enable transitive pinning so we can override transitive package versions. -->
   <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
@@ -56,8 +58,37 @@
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!-- Build-time tooling (applied via Directory.Build.props) -->
+    <!-- Update this intentionally with the analyzer/toolchain policy. Do not put Version on PackageReference. -->
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.34.0.3385" />
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
+  </ItemGroup>
+
+  <!-- Project-specific versions. These replace per-project VersionOverride, which central package management now rejects. -->
+  <!-- The benchmarks build against a newer Roslyn than the generator's compatibility floor. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Contracts' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MariaDb' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MySql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Oracle' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.PostgreSql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.SqlServer'">
+    <PackageVersion Update="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+  <!-- The provider benchmarks compare against the pinned EF Core 8 cohort. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MariaDb' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MySql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Oracle' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.PostgreSql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.SqlServer'">
+    <PackageVersion Update="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- Transitive pinning turns a pinned transitive package into a direct dependency of every package that
+       pulls it in, so the hosting versions stay scoped to the projects that reference them. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire'">
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire.Tests'">
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+  </ItemGroup>
+
+  <!-- A central entry would pin System.Collections.Immutable for the analyzers too, so only this project gets it. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Contracts.Tests'">
+    <PackageVersion Include="System.Collections.Immutable" Version="10.0.11" />
   </ItemGroup>
 </Project>

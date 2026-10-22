@@ -1,6 +1,5 @@
 using System.Collections;
 using Inquiry.Benchmarks.Contracts;
-using Inquiry.Benchmarks.SqlServer;
 using Inquiry.SqlServer.Parameters;
 using Microsoft.Data.SqlClient;
 
@@ -83,14 +82,19 @@ public sealed class CollectionTransportBenchmarkIntegrationTests
             object IEnumerator.Current => Current;
             public bool MoveNext() => inner.MoveNext();
             public void Reset() => inner.Reset();
+
+            [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3877", Justification = "The probe throws from Dispose on purpose to test cleanup failure handling.")]
             public void Dispose()
             {
                 inner.Dispose();
                 owner.DisposeCount++;
-                if (owner.FailDispose) throw new CleanupProbeException();
+                if (owner.FailDispose)
+                {
+                    throw new CleanupProbeException();
+                }
             }
         }
     }
 
-    private sealed class CleanupProbeException : Exception;
+    public sealed class CleanupProbeException : Exception;
 }

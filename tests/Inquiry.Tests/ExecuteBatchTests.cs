@@ -1,12 +1,13 @@
+using System.Collections;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -91,7 +92,7 @@ public sealed class ExecuteBatchTests
             new[] { (1, "Alpha"), (2, "Beta") },
             static (target, item) => BindItem(target, item));
 
-        Assert.Equal(new[] { 9, 9 }, interceptor.ObservedTimeouts);
+        Assert.Equal([9, 9], interceptor.ObservedTimeouts);
     }
 
     [Fact]
@@ -145,7 +146,7 @@ public sealed class ExecuteBatchTests
             new[] { (1, "A"), (2, "B"), (3, "C"), (4, "D"), (5, "E") });
 
         Assert.Equal(5, total);
-        Assert.Equal(new[] { "initialize:2", "bind:2", "initialize:2", "bind:2", "initialize:1", "bind:1" }, events);
+        Assert.Equal(["initialize:2", "bind:2", "initialize:2", "bind:2", "initialize:1", "bind:1"], events);
         Assert.Equal(5, await CountItemsAsync(keeper));
     }
 
@@ -191,7 +192,7 @@ public sealed class ExecuteBatchTests
         var (connectionString, keeper) = await CreateDatabaseAsync();
         await using var _ = keeper;
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
         var source = new CancellingEnumerable(cts, cancelAtMove: int.MaxValue);
         var factory = new BatchTestConnectionFactory(connectionString);
         var pipeline = new InquiryRequestPipeline(factory, Array.Empty<IInquiryCommandInterceptor>());
@@ -341,7 +342,7 @@ public sealed class ExecuteBatchTests
 
         await pipeline.ExecuteBatchAsync(command, new[] { (1, "A"), (2, "B") });
 
-        Assert.Equal(new[] { "initialize:1", "bind:1", "initialize:1", "bind:1" }, events);
+        Assert.Equal(["initialize:1", "bind:1", "initialize:1", "bind:1"], events);
     }
 
     [Fact]
@@ -386,9 +387,18 @@ public sealed class ExecuteBatchTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            if (terminalOperation == "commit") await transaction.CommitAsync();
-            else if (terminalOperation == "rollback") await transaction.RollbackAsync();
-            else await transaction.DisposeAsync();
+            if (terminalOperation == "commit")
+            {
+                await transaction.CommitAsync();
+            }
+            else if (terminalOperation == "rollback")
+            {
+                await transaction.RollbackAsync();
+            }
+            else
+            {
+                await transaction.DisposeAsync();
+            }
         });
 
         blocker.Release.TrySetResult();
@@ -498,7 +508,7 @@ public sealed class ExecuteBatchTests
             new IsolationRecordingFactory(connection), Array.Empty<IInquiryCommandInterceptor>());
         var command = new InquiryBatchCommand<int>("work", static (_, _) => { });
 
-        await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ExecuteBatchAsync(command, new[] { 1 }));
+        await Assert.ThrowsAsync<NotSupportedException>(() => pipeline.ExecuteBatchAsync(command, [1]));
 
         Assert.Equal(IsolationLevel.ReadCommitted, connection.RequestedIsolationLevel);
     }
@@ -622,7 +632,11 @@ public sealed class ExecuteBatchTests
 
         public async ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
         {
-            if (Interlocked.Exchange(ref _entered, 1) != 0) return;
+            if (Interlocked.Exchange(ref _entered, 1) != 0)
+            {
+                return;
+            }
+
             Entered.TrySetResult();
             await Release.Task.WaitAsync(cancellationToken);
         }
@@ -661,7 +675,11 @@ public sealed class ExecuteBatchTests
             public bool MoveNext()
             {
                 _owner.MoveCount++;
-                if (_owner.MoveCount == _owner._cancelAtMove) _owner._cts.Cancel();
+                if (_owner.MoveCount == _owner._cancelAtMove)
+                {
+                    _owner._cts.Cancel();
+                }
+
                 return _owner.MoveCount <= 5;
             }
 
@@ -700,6 +718,7 @@ public sealed class ExecuteBatchTests
             public bool MoveNext() => ++_index < _owner._items.Count;
             public void Reset() => throw new NotSupportedException();
 
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose()
             {
                 _owner._disposeEntered?.TrySetResult();
@@ -722,6 +741,7 @@ public sealed class ExecuteBatchTests
     private sealed class IsolationRecordingConnection : DbConnection
     {
         public IsolationLevel? RequestedIsolationLevel { get; private set; }
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";

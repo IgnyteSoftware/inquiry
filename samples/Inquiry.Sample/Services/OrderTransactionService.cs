@@ -5,7 +5,7 @@ namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Inserts an <see cref="Order"/> together with its <c>Order Details</c> rows inside a single
-/// <see cref="IInquiryTransaction"/>. Demonstrates that generated stores automatically
+/// <c>IInquiryTransaction</c>. Demonstrates that generated stores automatically
 /// participate in the active transaction — both the IDENTITY-keyed <see cref="OrderStore"/>
 /// (via <c>InsertReturning</c> to surface the new <c>OrderID</c>) and the composite-key
 /// <see cref="OrderDetailStore"/> are called normally, with the ambient transaction wiring

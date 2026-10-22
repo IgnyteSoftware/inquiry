@@ -32,14 +32,15 @@ public class ShipperBenchmarks
     private SqlServerBenchmarkDatabase _db = null!;
 
     // Single fixed target: ShipperID = 1 (always present after seeding).
-    private const int    TargetShipperId   = 1;
+    private const int TargetShipperId = 1;
     private const string TargetCompanyName = "Shipper 0";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
-    private const string SelectAllSql     = "SELECT [ShipperID], [CompanyName], [Phone] FROM [Shippers]";
-    private const string SelectByKeySql   = SelectAllSql + " WHERE [ShipperID] = @id";
+    private const string SelectAllSql = "SELECT [ShipperID], [CompanyName], [Phone] FROM [Shippers]";
+    private const string SelectByKeySql = SelectAllSql + " WHERE [ShipperID] = @id";
     private const string SelectByFieldSql = SelectAllSql + " WHERE [CompanyName] = @c";
 
     [GlobalSetup]
@@ -52,9 +53,9 @@ public class ShipperBenchmarks
 
     private static Shipper ReadShipper(System.Data.Common.DbDataReader reader) => new Shipper
     {
-        ShipperID   = reader.GetInt32(0),
+        ShipperID = reader.GetInt32(0),
         CompanyName = reader.GetString(1),
-        Phone       = reader.IsDBNull(2) ? null : reader.GetString(2),
+        Phone = reader.IsDBNull(2) ? null : reader.GetString(2),
     };
 
     private SqlConnection OpenConnection() => new SqlConnection(_db.ConnectionString);
@@ -70,7 +71,11 @@ public class ShipperBenchmarks
         command.CommandText = SelectAllSql;
         var list = new List<Shipper>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -97,6 +102,7 @@ public class ShipperBenchmarks
     }
 
     [BenchmarkCategory("SelectAll"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> SelectAll_Dlg()
     {
         var list = await DlgLib.Shipper.SelectAllAsync();
@@ -138,6 +144,7 @@ public class ShipperBenchmarks
         => await _db.Shippers.SelectByKeyAsync(TargetShipperId);
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<DlgLib.Shipper?> SelectByKey_Dlg()
         => await DlgLib.Shipper.SelectOneAsync(TargetShipperId);
 
@@ -153,7 +160,11 @@ public class ShipperBenchmarks
         command.Parameters.AddWithValue("@c", TargetCompanyName);
         var list = new List<Shipper>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadShipper(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadShipper(reader));
+        }
+
         return list.Count;
     }
 
@@ -182,6 +193,7 @@ public class ShipperBenchmarks
     }
 
     [BenchmarkCategory("SelectByField"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> SelectByField_Dlg()
     {
         var list = await DlgLib.Shipper.SelectByFieldAsync(DlgLib.ShipperFields.CompanyName, TargetCompanyName);
@@ -199,7 +211,7 @@ public class ShipperBenchmarks
         // ShipperID is IDENTITY — do not supply it.
         command.CommandText = "INSERT INTO [Shippers] ([CompanyName], [Phone]) VALUES (@company, @phone);";
         command.Parameters.AddWithValue("@company", "Bench Shipper");
-        command.Parameters.AddWithValue("@phone",   "555-0000");
+        command.Parameters.AddWithValue("@phone", "555-0000");
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -226,6 +238,7 @@ public class ShipperBenchmarks
         => await _db.Shippers.InsertAsync(new Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" });
 
     [BenchmarkCategory("Insert"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Insert_Dlg()
         => await new DlgLib.Shipper { CompanyName = "Bench Shipper", Phone = "555-0000" }.InsertAsync();
 
@@ -238,9 +251,9 @@ public class ShipperBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE [Shippers] SET [CompanyName] = @company, [Phone] = @phone WHERE [ShipperID] = @id;";
-        command.Parameters.AddWithValue("@id",      TargetShipperId);
+        command.Parameters.AddWithValue("@id", TargetShipperId);
         command.Parameters.AddWithValue("@company", "Updated Shipper");
-        command.Parameters.AddWithValue("@phone",   "555-9999");
+        command.Parameters.AddWithValue("@phone", "555-9999");
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -260,7 +273,7 @@ public class ShipperBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Shippers.FirstAsync(s => s.ShipperID == TargetShipperId);
         entity.CompanyName = "Updated Shipper";
-        entity.Phone       = "555-9999";
+        entity.Phone = "555-9999";
         return await ctx.SaveChangesAsync();
     }
 
@@ -268,12 +281,13 @@ public class ShipperBenchmarks
     public async Task<bool> Update_Inquiry()
         => await _db.Shippers.UpdateAsync(new Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Updated Shipper",
-            Phone       = "555-9999",
+            Phone = "555-9999",
         });
 
     [BenchmarkCategory("Update"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Update_Dlg()
     {
         // DLG dirty-tracking: set the identity key, TakeSnapshot() to baseline it, THEN mutate the
@@ -309,9 +323,9 @@ public class ShipperBenchmarks
             "WHEN NOT MATCHED THEN " +
             "    INSERT ([CompanyName], [Phone]) " +
             "    VALUES (source.[CompanyName], source.[Phone]);";
-        command.Parameters.AddWithValue("@id",      TargetShipperId);
+        command.Parameters.AddWithValue("@id", TargetShipperId);
         command.Parameters.AddWithValue("@company", "Upserted Shipper");
-        command.Parameters.AddWithValue("@phone",   "555-1234");
+        command.Parameters.AddWithValue("@phone", "555-1234");
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -352,12 +366,13 @@ public class ShipperBenchmarks
     public async Task<int> Upsert_Inquiry()
         => await _db.Shippers.UpsertAsync(new Shipper
         {
-            ShipperID   = TargetShipperId,
+            ShipperID = TargetShipperId,
             CompanyName = "Upserted Shipper",
-            Phone       = "555-1234",
+            Phone = "555-1234",
         });
 
     [BenchmarkCategory("Upsert"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<bool> Upsert_Dlg()
     {
         var shipper = new DlgLib.Shipper();

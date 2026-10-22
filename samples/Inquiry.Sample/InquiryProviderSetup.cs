@@ -12,12 +12,16 @@ internal static class InquiryProviderSetup
     {
         var provider = builder.Configuration["Inquiry:Provider"] ?? "Sqlite";
         if (!provider.Equals("Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
             throw new InvalidOperationException("This sample uses SQLite-generated stores. Set Inquiry:Provider to Sqlite. Other dialects require separately generated stores; see the sample README.");
+        }
 
         var connectionString = Environment.GetEnvironmentVariable("INQUIRY_SAMPLE_DB");
         if (string.IsNullOrWhiteSpace(connectionString))
+        {
             connectionString = builder.Configuration.GetConnectionString("InquirySample.Sqlite")
                 ?? throw new InvalidOperationException("Set ConnectionStrings:InquirySample.Sqlite or INQUIRY_SAMPLE_DB.");
+        }
 
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();

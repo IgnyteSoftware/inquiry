@@ -53,7 +53,10 @@ public sealed class FixtureContractTests
         var rows = NorthwindFixtureGenerator.Generate(
             "Orders", FixtureTier.Tiny, NorthwindFixtureCatalog.Seed).Take(20).ToArray();
         using var accumulator = new FixtureChecksumAccumulator();
-        foreach (var row in rows) accumulator.Append(row);
+        foreach (var row in rows)
+        {
+            accumulator.Append(row);
+        }
 
         Assert.Equal(FixtureChecksum.Compute(rows), accumulator.GetHashAndReset());
     }

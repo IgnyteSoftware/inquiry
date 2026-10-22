@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -65,7 +62,7 @@ public sealed class EmptyUpsertSetIntegrationTests
         // A returning upsert with a null key takes the generate path and returns the freshly inserted row.
         var inserted = await store.UpsertReturningAsync(new PgKeyOnlyItem { Id = null });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.Id);
+        Assert.NotNull(inserted.Id);
         Assert.Equal(2, (await store.AllAsync()).Count);
     }
 }

@@ -24,8 +24,8 @@ public sealed class GeneratedKeyUpsertTests
 
         var saved = await store.UpsertReturningAsync(new GeneratedItem { Id = null, Name = "A" });
         Assert.NotNull(saved);
-        Assert.NotNull(saved!.Id);
-        Assert.True(saved.Id!.Value > 0);
+        Assert.NotNull(saved.Id);
+        Assert.True(saved.Id.Value > 0);
     }
 
     [SkippableFact]
@@ -46,13 +46,13 @@ public sealed class GeneratedKeyUpsertTests
         // Insert a NEW row with an explicit, non-contiguous key.
         var inserted = await store.UpsertReturningAsync(new GeneratedItem { Id = 9999, Name = "explicit" });
         Assert.NotNull(inserted);
-        Assert.Equal(9999L, inserted!.Id!.Value);
+        Assert.Equal(9999L, inserted.Id!.Value);
         Assert.Equal("explicit", inserted.Name);
 
         // Upserting the same explicit key again updates and returns that same row (ON DUPLICATE branch).
         var updated = await store.UpsertReturningAsync(new GeneratedItem { Id = 9999, Name = "explicit-v2" });
         Assert.NotNull(updated);
-        Assert.Equal(9999L, updated!.Id!.Value);
+        Assert.Equal(9999L, updated.Id!.Value);
         Assert.Equal("explicit-v2", updated.Name);
     }
 

@@ -78,7 +78,7 @@ public sealed class TransactionIntegrationTests
 
         var loaded = await store.SelectByKeyAsync("HELP1");
         Assert.NotNull(loaded);
-        Assert.Equal("USA", loaded!.Country);
+        Assert.Equal("USA", loaded.Country);
     }
 
     [SkippableFact]
@@ -172,7 +172,8 @@ public sealed class TransactionIntegrationTests
 
         var tx = await inquiry.BeginTransactionAsync();
         await tx.DisposeAsync();
-        await tx.DisposeAsync(); // must not throw
+        var exception = await Record.ExceptionAsync(async () => await tx.DisposeAsync());
+        Assert.Null(exception);
     }
 
     // ---- Nested transactions / savepoints --------------------------------------------
@@ -504,6 +505,6 @@ public sealed class TransactionIntegrationTests
         var loaded = await tx.QuerySingleOrDefaultAsync<Customer>(SelectCustomer("READ1"));
 
         Assert.NotNull(loaded);
-        Assert.Equal("Read Me", loaded!.CompanyName);
+        Assert.Equal("Read Me", loaded.CompanyName);
     }
 }

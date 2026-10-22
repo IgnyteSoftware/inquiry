@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Inquiry.IntegrationTesting;
 
 /// <summary>The single source of truth for what a faithful Northwind schema must contain.
@@ -17,27 +15,27 @@ public static class ExpectedNorthwindSchema
         new TableSnapshot("Categories",
             new[] { R("CategoryID"), R("CategoryName"), N("Description"), N("Picture") },
             new[] { "CategoryID" },
-            new ForeignKeySnapshot[0],
+            Array.Empty<ForeignKeySnapshot>(),
             new[] { Ix("CategoryName") }),
 
         new TableSnapshot("Region",
             new[] { R("RegionID"), R("RegionDescription") },
             new[] { "RegionID" },
-            new ForeignKeySnapshot[0],
-            new IndexSnapshot[0]),
+            Array.Empty<ForeignKeySnapshot>(),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("Territories",
             new[] { R("TerritoryID"), R("TerritoryDescription"), R("RegionID") },
             new[] { "TerritoryID" },
             new[] { Fk("RegionID", "Region", "RegionID") },
-            new IndexSnapshot[0]),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("Suppliers",
             new[] { R("SupplierID"), R("CompanyName"), N("ContactName"), N("ContactTitle"),
                     N("Address"), N("City"), N("Region"), N("PostalCode"), N("Country"),
                     N("Phone"), N("Fax"), N("HomePage") },
             new[] { "SupplierID" },
-            new ForeignKeySnapshot[0],
+            Array.Empty<ForeignKeySnapshot>(),
             new[] { Ix("CompanyName"), Ix("PostalCode") }),
 
         new TableSnapshot("Customers",
@@ -45,21 +43,21 @@ public static class ExpectedNorthwindSchema
                     N("Address"), N("City"), N("Region"), N("PostalCode"), N("Country"),
                     N("Phone"), N("Fax") },
             new[] { "CustomerID" },
-            new ForeignKeySnapshot[0],
+            Array.Empty<ForeignKeySnapshot>(),
             new[] { Ix("City"), Ix("CompanyName"), Ix("PostalCode"), Ix("Region") }),
 
         new TableSnapshot("CustomerDemographics",
             new[] { R("CustomerTypeID"), N("CustomerDesc") },
             new[] { "CustomerTypeID" },
-            new ForeignKeySnapshot[0],
-            new IndexSnapshot[0]),
+            Array.Empty<ForeignKeySnapshot>(),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("CustomerCustomerDemo",
             new[] { R("CustomerID"), R("CustomerTypeID") },
             new[] { "CustomerID", "CustomerTypeID" },
             new[] { Fk("CustomerID", "Customers", "CustomerID"),
                     Fk("CustomerTypeID", "CustomerDemographics", "CustomerTypeID") },
-            new IndexSnapshot[0]),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("Employees",
             new[] { R("EmployeeID"), R("LastName"), R("FirstName"), N("Title"), N("TitleOfCourtesy"),
@@ -75,13 +73,13 @@ public static class ExpectedNorthwindSchema
             new[] { "EmployeeID", "TerritoryID" },
             new[] { Fk("EmployeeID", "Employees", "EmployeeID"),
                     Fk("TerritoryID", "Territories", "TerritoryID") },
-            new IndexSnapshot[0]),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("Shippers",
             new[] { R("ShipperID"), R("CompanyName"), N("Phone") },
             new[] { "ShipperID" },
-            new ForeignKeySnapshot[0],
-            new IndexSnapshot[0]),
+            Array.Empty<ForeignKeySnapshot>(),
+            Array.Empty<IndexSnapshot>()),
 
         new TableSnapshot("Products",
             new[] { R("ProductID"), R("ProductName"), N("SupplierID"), N("CategoryID"),

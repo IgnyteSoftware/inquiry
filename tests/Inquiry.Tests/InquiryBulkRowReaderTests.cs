@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using Inquiry.BulkCopy;
-using Xunit;
 
 namespace Inquiry.Tests;
 
@@ -20,7 +17,7 @@ public sealed class InquiryBulkRowReaderTests
         public string Text { get; init; } = string.Empty;
     }
 
-    private static readonly InquiryBulkInsertDefinition<Row> Definition = new(
+    private static readonly InquiryBulkInsertDefinition<Row> _definition = new(
         schema: null,
         table: "Rows",
         columns: new[] { "Name", "Count", "Data", "Text" },
@@ -46,7 +43,7 @@ public sealed class InquiryBulkRowReaderTests
     public void ReadsRowsForwardOnlyAndCountsThem()
     {
         var rows = new List<Row> { new() { Name = "a", Count = 1 }, new() { Name = "b", Count = null } };
-        using var reader = new InquiryBulkRowReader<Row>(Definition, rows);
+        using var reader = new InquiryBulkRowReader<Row>(_definition, rows);
 
         Assert.Equal(4, reader.FieldCount);
 
@@ -72,7 +69,7 @@ public sealed class InquiryBulkRowReaderTests
         var definition = new InquiryBulkInsertDefinition<TypedRow>(
             null,
             "TypedRows",
-            new[] { "Boolean", "Byte", "Char", "DateTime", "Decimal", "Double", "Single", "Guid", "Int16", "Int32", "Int64", "String" },
+            ["Boolean", "Byte", "Char", "DateTime", "Decimal", "Double", "Single", "Guid", "Int16", "Int32", "Int64", "String"],
             static (row, ordinal) => ordinal switch
             {
                 0 => row.Boolean,
@@ -133,7 +130,7 @@ public sealed class InquiryBulkRowReaderTests
         var definition = new InquiryBulkInsertDefinition<Row>(
             null,
             "T",
-            new[] { "Name", "Count" },
+            ["Name", "Count"],
             static (row, i) => i switch
             {
                 0 => (object?)row.Name ?? DBNull.Value,
@@ -167,7 +164,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void ResolvesColumnNamesCaseInsensitively()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, Array.Empty<Row>());
+        using var reader = new InquiryBulkRowReader<Row>(_definition, Array.Empty<Row>());
 
         Assert.Equal("Name", reader.GetName(0));
         Assert.Equal(1, reader.GetOrdinal("count"));
@@ -177,7 +174,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void ValueAccessBeforeReadThrows()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[] { new Row { Name = "x" } });
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[] { new Row { Name = "x" } });
         Assert.Throws<InvalidOperationException>(() => reader.GetValue(0));
     }
 
@@ -185,17 +182,17 @@ public sealed class InquiryBulkRowReaderTests
     public void DefinitionValidatesArguments()
     {
         Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", Array.Empty<string>(), static (_, _) => DBNull.Value));
-        Assert.Throws<ArgumentNullException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, null!));
-        Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, static (_, _) => 1, Array.Empty<System.Data.DbType>()));
-        Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "C" }, static (_, _) => 1, new[] { System.Data.DbType.Int32 }, Array.Empty<Type>()));
+        Assert.Throws<ArgumentNullException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", ["C"], null!));
+        Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", ["C"], static (_, _) => 1, Array.Empty<System.Data.DbType>()));
+        Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(null, "T", ["C"], static (_, _) => 1, new[] { System.Data.DbType.Int32 }, Array.Empty<Type>()));
         Assert.Throws<ArgumentException>(() => new InquiryBulkInsertDefinition<Row>(
-            null, "T", new[] { "C" }, static (_, _) => 1, null, null, new IInquiryBulkColumnAccessor<Row>[] { null! }));
+            null, "T", ["C"], static (_, _) => 1, null, null, new IInquiryBulkColumnAccessor<Row>[] { null! }));
     }
 
     [Fact]
     public void GeneratedFieldTypesAreStableBeforeDuringAndAfterRows()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[]
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[]
         {
             new Row { Name = "first", Count = null },
             new Row { Name = "second", Count = 2 },
@@ -217,7 +214,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void ManualDefinitionFallsBackToCurrentValueType()
     {
-        var definition = new InquiryBulkInsertDefinition<Row>(null, "T", new[] { "Name" }, static (row, _) => row.Name);
+        var definition = new InquiryBulkInsertDefinition<Row>(null, "T", ["Name"], static (row, _) => row.Name);
         using var reader = new InquiryBulkRowReader<Row>(definition, new[] { new Row { Name = "value" } });
 
         Assert.Equal(typeof(object), reader.GetFieldType(0));
@@ -230,7 +227,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void GetBytesSupportsLengthProbesOffsetsPartialCopiesAndEmptyValues()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[]
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[]
         {
             new Row { Data = new byte[] { 10, 20, 30, 40 } },
             new Row { Data = Array.Empty<byte>() },
@@ -257,7 +254,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void GetCharsSupportsLengthProbesOffsetsPartialCopiesAndEmptyValues()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[]
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[]
         {
             new Row { Text = "abcd" },
             new Row { Text = string.Empty },
@@ -268,7 +265,7 @@ public sealed class InquiryBulkRowReaderTests
         Assert.Equal(4, reader.GetChars(3, long.MaxValue, null, 0, 0));
         var destination = new[] { 'x', 'x', 'x', 'x', 'x', 'x' };
         Assert.Equal(2, reader.GetChars(3, 1, destination, 2, 2));
-        Assert.Equal(new[] { 'x', 'x', 'b', 'c', 'x', 'x' }, destination);
+        Assert.Equal(['x', 'x', 'b', 'c', 'x', 'x'], destination);
         Assert.Equal(1, reader.GetChars(3, 3, destination, 0, 4));
         Assert.Equal(0, reader.GetChars(3, 4, destination, 0, 4));
         Assert.Equal(0, reader.GetChars(3, long.MaxValue, destination, 0, 4));
@@ -284,7 +281,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void StreamAccessRejectsInvalidOrdinalsTypesNullsAndRanges()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[] { new Row { Count = null } });
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[] { new Row { Count = null } });
         Assert.True(reader.Read());
 
         Assert.Throws<IndexOutOfRangeException>(() => reader.GetBytes(-1, 0, null, 0, 0));
@@ -303,7 +300,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void HasRowsUsesSingleLookaheadWithoutCountingUntilRead()
     {
-        using var reader = new InquiryBulkRowReader<Row>(Definition, new[] { new Row { Name = "first" }, new Row { Name = "second" } });
+        using var reader = new InquiryBulkRowReader<Row>(_definition, new[] { new Row { Name = "first" }, new Row { Name = "second" } });
 
         Assert.True(reader.HasRows);
         Assert.True(reader.HasRows);
@@ -321,7 +318,7 @@ public sealed class InquiryBulkRowReaderTests
     [Fact]
     public void EmptyReaderReportsNoRowsAndDisposalClosesReader()
     {
-        var reader = new InquiryBulkRowReader<Row>(Definition, Array.Empty<Row>());
+        var reader = new InquiryBulkRowReader<Row>(_definition, Array.Empty<Row>());
         Assert.False(reader.HasRows);
         Assert.Equal(0, reader.RowsRead);
         Assert.False(reader.Read());

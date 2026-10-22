@@ -1,8 +1,6 @@
-using System;
-using System.Linq;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Microsoft.CodeAnalysis;
 
@@ -99,7 +97,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var ddl = ExtractSchemaDdl(result);
 
-        Assert.Equal(2, Regex.Matches(ddl, "ALTER TABLE", RegexOptions.CultureInvariant).Count);
+        Assert.Equal(2, AlterTableInvariantRegex().Count(ddl));
         Assert.Contains($"FOREIGN KEY ({open}RootId{close}) REFERENCES {open}CycleRoot{close}({open}Id{close})", ddl);
 
         var finalCreate = ddl.LastIndexOf("CREATE TABLE", StringComparison.Ordinal);
@@ -163,7 +161,7 @@ public sealed partial class InquiryGeneratorTests
 
         var first = ExtractSchemaDdl(RunGenerator(source, dialect: "SqlServer"));
         var second = ExtractSchemaDdl(RunGenerator(source, dialect: "SqlServer"));
-        var names = Regex.Matches(first, @"ADD CONSTRAINT \[([^]]+)\]")
+        var names = AddConstraintNameRegex().Matches(first)
             .Cast<Match>().Select(m => m.Groups[1].Value).ToArray();
         Assert.Equal(2, names.Length);
         Assert.All(names, name =>
@@ -171,7 +169,7 @@ public sealed partial class InquiryGeneratorTests
             Assert.True(Encoding.UTF8.GetByteCount(name) <= 63);
             Assert.Matches("_[0-9a-f]{16}$", name);
         });
-        Assert.Equal(names, Regex.Matches(second, @"ADD CONSTRAINT \[([^]]+)\]").Cast<Match>().Select(m => m.Groups[1].Value));
+        Assert.Equal(names, AddConstraintNameRegex().Matches(second).Cast<Match>().Select(m => m.Groups[1].Value));
     }
 
     [Fact]
@@ -223,7 +221,7 @@ public sealed partial class InquiryGeneratorTests
         var ddl = ExtractSchemaDdl(result);
         Assert.Contains("CREATE TABLE IF NOT EXISTS \"Upper\".\"Node\"", ddl);
         Assert.Contains("CREATE TABLE IF NOT EXISTS \"upper\".\"node\"", ddl);
-        Assert.Equal(2, Regex.Matches(ddl, "ALTER TABLE").Count);
+        Assert.Equal(2, AlterTableRegex().Count(ddl));
     }
 
     [Fact]
@@ -237,7 +235,7 @@ public sealed partial class InquiryGeneratorTests
         var b = CyclicSchemaSource.Substring(bStart);
         var first = ExtractSchemaDdl(RunGenerator(root + a + b, dialect: "SqlServer"));
         var second = ExtractSchemaDdl(RunGenerator(root + b + a, dialect: "SqlServer"));
-        Assert.Equal(first.Substring(first.IndexOf("ALTER TABLE", StringComparison.Ordinal)), second.Substring(second.IndexOf("ALTER TABLE", StringComparison.Ordinal)));
+        Assert.Equal(first.AsSpan(first.IndexOf("ALTER TABLE", StringComparison.Ordinal)), second.AsSpan(second.IndexOf("ALTER TABLE", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -261,8 +259,8 @@ public sealed partial class InquiryGeneratorTests
         var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ069").ToArray();
         Assert.Equal(2, diagnostics.Length);
         Assert.All(diagnostics, diagnostic => Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location));
-        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage().Contains("Table 'CycleA' foreign-key column 'BId'", StringComparison.Ordinal));
-        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage().Contains("Table 'CycleB' foreign-key column 'AId'", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.CurrentCulture).Contains("Table 'CycleA' foreign-key column 'BId'", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.CurrentCulture).Contains("Table 'CycleB' foreign-key column 'AId'", StringComparison.Ordinal));
         var ddl = ExtractSchemaDdl(result);
         Assert.DoesNotContain("ALTER TABLE", ddl);
         Assert.DoesNotContain("FOREIGN KEY (\"BId\")", ddl);
@@ -950,6 +948,15 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("\"Id\" BIGSERIAL PRIMARY KEY", ddl);
         Assert.Contains("\"Name\" TEXT NOT NULL", ddl);
     }
+
+    [GeneratedRegex("ALTER TABLE", RegexOptions.CultureInvariant)]
+    private static partial Regex AlterTableInvariantRegex();
+
+    [GeneratedRegex("ALTER TABLE")]
+    private static partial Regex AlterTableRegex();
+
+    [GeneratedRegex(@"ADD CONSTRAINT \[([^]]+)\]")]
+    private static partial Regex AddConstraintNameRegex();
 }
 
 internal sealed class FallbackInquiryGenerator : InquiryGeneratorBase

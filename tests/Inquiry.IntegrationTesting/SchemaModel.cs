@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Inquiry.IntegrationTesting;
 
 public sealed record ColumnSnapshot(string Name, bool IsNullable);

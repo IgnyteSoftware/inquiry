@@ -1,4 +1,3 @@
-using System.Linq;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.PostgreSql.Tests.Fixtures;
@@ -32,7 +31,7 @@ public sealed class BatchIntegrationTests
 
         Assert.Equal(3, affected);
         var all = await regions.SelectAllAsync().ToListAsync();
-        Assert.Equal(new[] { 1, 2, 3 }, all.Select(r => r.RegionID).OrderBy(x => x).ToArray());
+        Assert.Equal([1, 2, 3], all.Select(r => r.RegionID).OrderBy(x => x).ToArray());
     }
 
     [SkippableFact]
@@ -71,11 +70,11 @@ public sealed class BatchIntegrationTests
             await regions.InsertAsync(new Region { RegionID = i, RegionDescription = "R" + i });
         }
 
-        var affected = await regions.DeleteByKeysAsync(new[] { 1, 3, 5 });
+        var affected = await regions.DeleteByKeysAsync([1, 3, 5]);
 
         Assert.Equal(3, affected);
         var remaining = await regions.SelectAllAsync().ToListAsync();
-        Assert.Equal(new[] { 2, 4 }, remaining.Select(r => r.RegionID).OrderBy(x => x).ToArray());
+        Assert.Equal([2, 4], remaining.Select(r => r.RegionID).OrderBy(x => x).ToArray());
     }
 
     [SkippableFact]

@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using MySqlConnector;
-using System.Data.Common;
 
 namespace Inquiry.MariaDb;
 
@@ -47,10 +47,7 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
         }
 
-        if (options is null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
+        ArgumentNullException.ThrowIfNull(options);
 
         _connectionString = connectionString;
 

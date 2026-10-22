@@ -1,8 +1,7 @@
-using Inquiry.Commands;
-using Inquiry.Materialization;
-using Inquiry.Pipeline;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Commands;
+using Inquiry.Pipeline;
 
 namespace Inquiry.Transactions;
 
@@ -65,7 +64,9 @@ internal abstract class InquiryTransactionBase : IInquiryTransaction
         // commit/rollback/dispose cannot reach the provider after its handle closes.
         ThrowIfClosed();
         await foreach (var item in source.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
             yield return item;
+        }
     }
 
     public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(

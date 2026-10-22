@@ -1,5 +1,3 @@
-using System;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -449,14 +447,12 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
-        var matches = global::System.Text.RegularExpressions.Regex.Matches(
-            text,
-            @"private static readonly global::Inquiry\.Commands\.InquiryBatchCommand<global::Demo\.Thing> (_batch_SaveAll_[0-9a-f]{16}) = new\(");
+        var matches = BatchSaveAllFieldRegex().Matches(text);
 
         Assert.Equal(2, matches.Count);
         Assert.NotEqual(matches[0].Groups[1].Value, matches[1].Groups[1].Value);
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(text, matches[0].Groups[1].Value).Count);
-        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Matches(text, matches[1].Groups[1].Value).Count);
+        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Count(text, matches[0].Groups[1].Value));
+        Assert.Equal(2, global::System.Text.RegularExpressions.Regex.Count(text, matches[1].Groups[1].Value));
     }
 
     [Fact]
@@ -501,9 +497,13 @@ public sealed partial class InquiryGeneratorTests
         var text = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("ThingStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
 
-        Assert.Equal(3, global::System.Text.RegularExpressions.Regex.Matches(
-            text,
-            @"\(\(global::System\.Collections\.Generic\.IEnumerable<global::Demo\.Thing>\?\)items\) \?\? global::System\.Array\.Empty<global::Demo\.Thing>\(\)").Count);
+        Assert.Equal(3, NullableItemsFallbackRegex().Count(text));
         Assert.DoesNotContain("Enumerable.ToList", text);
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex(@"private static readonly global::Inquiry\.Commands\.InquiryBatchCommand<global::Demo\.Thing> (_batch_SaveAll_[0-9a-f]{16}) = new\(")]
+    private static partial global::System.Text.RegularExpressions.Regex BatchSaveAllFieldRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex(@"\(\(global::System\.Collections\.Generic\.IEnumerable<global::Demo\.Thing>\?\)items\) \?\? global::System\.Array\.Empty<global::Demo\.Thing>\(\)")]
+    private static partial global::System.Text.RegularExpressions.Regex NullableItemsFallbackRegex();
 }

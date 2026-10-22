@@ -38,7 +38,7 @@ public sealed class PaginationIntegrationTests
         var ordered = await products.SelectAllOrderedByNameAsync();
 
         Assert.Equal(
-            new[] { "Alpha", "Bravo", "Charlie", "Delta", "Echo" },
+            ["Alpha", "Bravo", "Charlie", "Delta", "Echo"],
             ordered.Select(p => p.ProductName).ToArray());
     }
 
@@ -52,8 +52,8 @@ public sealed class PaginationIntegrationTests
         var page1 = await products.PageByIdAsync(offset: 0, limit: 2);
         var page2 = await products.PageByIdAsync(offset: 2, limit: 2);
 
-        Assert.Equal(new[] { "Echo", "Alpha" }, page1.Select(p => p.ProductName).ToArray());
-        Assert.Equal(new[] { "Delta", "Bravo" }, page2.Select(p => p.ProductName).ToArray());
+        Assert.Equal(["Echo", "Alpha"], page1.Select(p => p.ProductName).ToArray());
+        Assert.Equal(["Delta", "Bravo"], page2.Select(p => p.ProductName).ToArray());
     }
 
     [Fact]
@@ -87,13 +87,13 @@ public sealed class PaginationIntegrationTests
 
         // Null first page selects from the start; HasMore true with rows remaining.
         var page1 = await products.KeysetByIdAsync(afterProductID: null, pageSize: 2);
-        Assert.Equal(new[] { "Echo", "Alpha" }, page1.Items.Select(p => p.ProductName).ToArray());
+        Assert.Equal(["Echo", "Alpha"], page1.Items.Select(p => p.ProductName).ToArray());
         Assert.True(page1.HasMore);
         Assert.Equal(2, page1.NextCursor);
 
         // Round-trip the cursor into the next page.
         var page2 = await products.KeysetByIdAsync(afterProductID: page1.NextCursor, pageSize: 2);
-        Assert.Equal(new[] { "Delta", "Bravo" }, page2.Items.Select(p => p.ProductName).ToArray());
+        Assert.Equal(["Delta", "Bravo"], page2.Items.Select(p => p.ProductName).ToArray());
         Assert.True(page2.HasMore);
         Assert.Equal(4, page2.NextCursor);
 
@@ -129,12 +129,12 @@ public sealed class PaginationIntegrationTests
 
         var page1 = await products.KeysetByNameThenIdAsync(after: null, pageSize: 2);
         // Two "Alpha" rows order by ascending ProductID: original (id 2) then the new one (id 6).
-        Assert.Equal(new[] { "Alpha", "Alpha" }, page1.Items.Select(p => p.ProductName).ToArray());
-        Assert.Equal(new[] { 2, 6 }, page1.Items.Select(p => p.ProductID!.Value).ToArray());
+        Assert.Equal(["Alpha", "Alpha"], page1.Items.Select(p => p.ProductName).ToArray());
+        Assert.Equal([2, 6], page1.Items.Select(p => p.ProductID!.Value).ToArray());
         Assert.True(page1.HasMore);
 
         var page2 = await products.KeysetByNameThenIdAsync(after: page1.NextCursor, pageSize: 2);
-        Assert.Equal(new[] { "Bravo", "Charlie" }, page2.Items.Select(p => p.ProductName).ToArray());
+        Assert.Equal(["Bravo", "Charlie"], page2.Items.Select(p => p.ProductName).ToArray());
     }
 
     [Fact]

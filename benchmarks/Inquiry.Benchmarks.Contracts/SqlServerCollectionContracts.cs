@@ -35,7 +35,10 @@ public static class SqlServerCollectionScenarioCatalog
     {
         var errors = new List<ContractError>();
         if (!Cardinalities.Contains(scenario.Cardinality))
+        {
             errors.Add(new("collection-cardinality", "Collection cardinality must be one of 1, 10, 100, or 1000."));
+        }
+
         if (scenario.Buffering != BufferingMode.Buffered ||
             scenario.ConnectionLifecycle != ConnectionLifecycle.PerOperation ||
             scenario.Pooling != PoolingMode.Pooled ||
@@ -43,7 +46,10 @@ public static class SqlServerCollectionScenarioCatalog
             scenario.Temperature != TemperatureMode.Warm ||
             scenario.Transaction != TransactionMode.None ||
             scenario.ProjectedColumnCount != 10 || scenario.CommandCount != 1)
+        {
             errors.Add(new("collection-semantics", "Collection scenarios must preserve the checked SQL Server read boundary."));
+        }
+
         return errors;
     }
 }
@@ -80,7 +86,7 @@ public sealed record SqlServerCollectionEvidence(
 
 public static class SqlServerCollectionEvidenceValidator
 {
-    private static readonly Lazy<JsonSchema> Schema = new(() =>
+    private static readonly Lazy<JsonSchema> _schema = new(() =>
     {
         var assembly = typeof(SqlServerCollectionEvidenceValidator).Assembly;
         var name = assembly.GetManifestResourceNames().Single(static value =>
@@ -96,9 +102,12 @@ public static class SqlServerCollectionEvidenceValidator
         try
         {
             using var document = JsonDocument.Parse(json);
-            var schema = Schema.Value.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            var schema = _schema.Value.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             if (!schema.IsValid)
+            {
                 return [new("json-schema", "SQL Server collection evidence does not match the closed schema.")];
+            }
+
             var evidence = document.RootElement.Deserialize<SqlServerCollectionEvidence>(EvidenceJson.Options);
             return evidence is null ? [new("deserialize", "SQL Server collection evidence deserialized to null.")] : Validate(evidence);
         }
@@ -114,7 +123,9 @@ public static class SqlServerCollectionEvidenceValidator
         if (evidence.SchemaVersion != SqlServerCollectionEvidenceSchema.Version ||
             evidence.CollectedAtUtc.Offset != TimeSpan.Zero || !IsHash(evidence.FixtureIdentityHash) ||
             !DatabaseImageCatalog.GetRequired("sqlserver").Digest.Equals(evidence.ImageDigest, StringComparison.Ordinal))
+        {
             errors.Add(new("collection-envelope", "Collection evidence must identify the checked schema, UTC collection time, fixture, and pinned image."));
+        }
 
         var expected = SqlServerCollectionScenarioCatalog.Scenarios
             .Select(static item => (item.Transport, item.Cardinality)).ToHashSet();
@@ -122,20 +133,30 @@ public static class SqlServerCollectionEvidenceValidator
         var plans = evidence.PlanStability.Select(static item => (item.Transport, item.Cardinality)).ToArray();
         if (logical.Length != expected.Count || logical.Distinct().Count() != logical.Length || !expected.SetEquals(logical) ||
             plans.Length != expected.Count || plans.Distinct().Count() != plans.Length || !expected.SetEquals(plans))
+        {
             errors.Add(new("collection-matrix", "Logical-read and plan-stability evidence must exactly cover the 3 by 4 checked matrix."));
+        }
+
         if (evidence.LogicalReads.Any(static item => item.LastLogicalReads < 0 || item.ExecutionCount != 2 ||
                 !IsHash(item.QueryHash) || !IsHash(item.PlanHash)))
+        {
             errors.Add(new("collection-logical-reads", "Logical-read evidence must contain non-negative reads, exactly one prime plus one measured execution, and canonical hashes."));
+        }
+
         if (evidence.PlanStability.Any(static item => item.CachedPlanCount <= 0 || !IsHash(item.SqlHash) ||
                 !IsHash(item.ParameterSignature) || !IsHash(item.QueryHash) || !IsHash(item.PlanHash)))
+        {
             errors.Add(new("collection-plans", "Plan evidence must contain cached-plan counts and canonical hashes."));
+        }
 
         var expectedCachedPlanCounts = new Dictionary<int, int> { [1] = 1, [10] = 2, [100] = 3, [1_000] = 4 };
         if (evidence.PlanStability.Any(item => item.CachedPlanCount !=
                 (item.Transport == SqlServerCollectionTransport.ScalarExpansion
                     ? expectedCachedPlanCounts.GetValueOrDefault(item.Cardinality)
                     : 1)))
+        {
             errors.Add(new("collection-plan-counts", "TVP and OPENJSON require one cached plan; scalar expansion requires cumulative counts 1, 2, 3, and 4."));
+        }
 
         foreach (var transport in new[] { SqlServerCollectionTransport.Tvp, SqlServerCollectionTransport.OpenJson })
         {
@@ -143,11 +164,16 @@ public static class SqlServerCollectionEvidenceValidator
             var structuralShapes = transportPlans.Select(static item => (item.SqlHash, item.ParameterSignature)).Distinct().Count();
             var compiledShapes = transportPlans.Select(static item => (item.QueryHash, item.PlanHash)).Distinct().Count();
             if (structuralShapes != 1 || compiledShapes != 1)
+            {
                 errors.Add(new("collection-plan-stability", $"{transport} must retain one SQL, parameter, query, and plan shape across cardinalities."));
+            }
         }
         if (evidence.PlanStability.Where(static item => item.Transport == SqlServerCollectionTransport.ScalarExpansion)
             .Select(static item => (item.SqlHash, item.ParameterSignature)).Distinct().Count() != 4)
+        {
             errors.Add(new("collection-scalar-shapes", "Scalar expansion must retain exactly four cardinality-dependent structural shapes."));
+        }
+
         return errors;
     }
 

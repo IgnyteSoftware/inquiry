@@ -1,6 +1,6 @@
-using Inquiry.Pipeline;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Pipeline;
 
 namespace Inquiry.Transactions;
 
@@ -83,7 +83,7 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     public override void ThrowIfClosed()
     {
         // _closed is set as soon as this handle accepts commit, rollback, or disposal. The outer
-        // pipeline's IsClosed covers out-of-order teardown while this savepoint is still held;
+        // pipeline's IsClosed covers out-of-order teardown while this savepoint is still held, and
         // without it the interop getters could expose a closing or disposed provider pair.
         if (_closed || _outerPipeline.IsClosed)
         {
@@ -123,7 +123,11 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     {
         lock (_lifecycleLock)
         {
-            if (_disposeTask is not null) return new ValueTask(_disposeTask);
+            if (_disposeTask is not null)
+            {
+                return new ValueTask(_disposeTask);
+            }
+
             if (_outerPipeline.IsClosed)
             {
                 _closed = true;
@@ -186,20 +190,33 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
 
     private async Task DisposeActiveCoreAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
     {
-        try { await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false); }
+        try
+        { await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false); }
         finally { lease.Dispose(); }
     }
 
     private async Task DisposeAfterTerminalAsync(Task terminalTask)
     {
-        try { await terminalTask.ConfigureAwait(false); } catch { }
-        if (_terminalSucceeded || _cleanupAttempted || _outerPipeline.IsClosed) return;
+        try
+        { await terminalTask.ConfigureAwait(false); }
+        catch
+        {
+            // The terminal call already reported its failure to its own caller; cleanup continues below.
+        }
+        if (_terminalSucceeded || _cleanupAttempted || _outerPipeline.IsClosed)
+        {
+            return;
+        }
+
         try
         {
             using var lease = _outerPipeline.EnterExclusiveOperation();
             await CleanupWithOwnedLeaseAsync(lease).ConfigureAwait(false);
         }
-        catch { }
+        catch
+        {
+            // Best-effort background cleanup has no caller to report to.
+        }
     }
 
     private async Task CleanupWithOwnedLeaseAsync(TransactedInquiryRequestPipeline.InFlightLease lease)
@@ -209,6 +226,9 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
         {
             await _outerPipeline.RollbackToSavepointAsync(_savepointName, lease, CancellationToken.None).ConfigureAwait(false);
         }
-        catch { }
+        catch
+        {
+            // Best-effort background cleanup has no caller to report to.
+        }
     }
 }

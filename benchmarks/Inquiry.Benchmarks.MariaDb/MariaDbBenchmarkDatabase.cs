@@ -12,7 +12,7 @@ namespace Inquiry.Benchmarks.MariaDb;
 
 public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static MariaDbContainer? _container;
     private static ServiceProvider? _services;
     private static string? _connectionString;
@@ -20,18 +20,26 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
 
     private MariaDbBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<MariaDbShipperContext> DbContextFactory => _dbContextFactory!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     public static async Task<MariaDbBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -77,13 +85,13 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
                         _services?.Dispose();
                         _container?.DisposeAsync().AsTask().GetAwaiter().GetResult();
                     }
-                    catch { }
+                    catch { /* best-effort; the Testcontainers reaper cleans up the container too */ }
                 };
             }
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new MariaDbBenchmarkDatabase(seedRows);
@@ -100,12 +108,12 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = tx;
             insert.CommandText = "INSERT INTO `Shippers` (`CompanyName`, `Phone`) VALUES (@company, @phone);";
             var pCompany = insert.Parameters.AddWithValue("company", "");
-            var pPhone   = insert.Parameters.AddWithValue("phone",   "");
+            var pPhone = insert.Parameters.AddWithValue("phone", "");
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

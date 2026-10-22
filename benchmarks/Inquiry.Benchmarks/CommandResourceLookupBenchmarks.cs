@@ -1,9 +1,9 @@
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Order;
 using Inquiry.Commands;
 using Microsoft.Data.Sqlite;
-using System.Runtime.CompilerServices;
 
 namespace Inquiry.Benchmarks;
 
@@ -11,6 +11,7 @@ namespace Inquiry.Benchmarks;
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 [Orderer(SummaryOrderPolicy.Declared, MethodOrderPolicy.Declared)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes the commands in the [GlobalCleanup] method; the no-op resource holds nothing.")]
 public class CommandResourceLookupBenchmarks
 {
     private readonly ConditionalWeakTable<SqliteCommand, LegacyResourceSet> _legacyResources = new();
@@ -68,7 +69,11 @@ public class CommandResourceLookupBenchmarks
 
     private void LegacyDispose(SqliteCommand command)
     {
-        if (!_legacyResources.TryGetValue(command, out var set)) return;
+        if (!_legacyResources.TryGetValue(command, out var set))
+        {
+            return;
+        }
+
         _legacyResources.Remove(command);
         set.Dispose();
     }
@@ -87,7 +92,7 @@ public class CommandResourceLookupBenchmarks
         {
             lock (_gate)
             {
-                if (_items is null) throw new ObjectDisposedException(nameof(LegacyResourceSet));
+                ObjectDisposedException.ThrowIf(_items is null, this);
                 _items.Add(resource);
             }
         }
@@ -100,7 +105,11 @@ public class CommandResourceLookupBenchmarks
                 items = _items;
                 _items = null;
             }
-            if (items is null) return;
+            if (items is null)
+            {
+                return;
+            }
+
             List<Exception>? exceptions = null;
             for (var i = items.Count - 1; i >= 0; i--)
             {

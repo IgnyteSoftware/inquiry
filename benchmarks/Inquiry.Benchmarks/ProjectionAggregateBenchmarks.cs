@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using Dapper;
@@ -38,7 +39,7 @@ public class ProjectionAggregateBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -173,7 +174,7 @@ public class ProjectionAggregateBenchmarks
         command.CommandText = SumSql;
         var scalar = await command.ExecuteScalarAsync();
         // SQLite returns SUM over a NUMERIC column as a floating value; normalise to decimal.
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Sum"), Benchmark]
@@ -199,7 +200,7 @@ public class ProjectionAggregateBenchmarks
         return await RepoDb.DbConnectionExtension.SumAllAsync<RdProduct>(connection, new RepoDb.Field("UnitPrice"));
     }
 
-    // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal;
+    // note: EF Core's SQLite provider cannot translate a decimal aggregate (UnitPrice is decimal, and
     // SqliteQueryableAggregateMethodTranslator throws). The EF Sum arm is omitted on SQLite — it is
     // included on the networked dialects (PostgreSQL/MySQL/SQL Server have real decimal types).
     [BenchmarkCategory("Sum"), Benchmark]
@@ -217,7 +218,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = AvgSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Avg"), Benchmark]
@@ -259,7 +260,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = MinSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Min"), Benchmark]
@@ -301,7 +302,7 @@ public class ProjectionAggregateBenchmarks
         await using var command = connection.CreateCommand();
         command.CommandText = MaxSql;
         var scalar = await command.ExecuteScalarAsync();
-        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar);
+        return scalar is null or DBNull ? null : Convert.ToDecimal(scalar, CultureInfo.CurrentCulture);
     }
 
     [BenchmarkCategory("Max"), Benchmark]

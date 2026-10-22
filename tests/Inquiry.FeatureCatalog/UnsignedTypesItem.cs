@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -18,7 +15,7 @@ namespace Inquiry.FeatureCatalog;
 //
 // Bug #49: DbTypeMapper previously emitted DbType.SByte / UInt16 / UInt32 / UInt64
 //          on the parameter, which SqlClient rejects at bind time.
-// Bug #48: MaterializerEmitter previously fell to GetFieldValue<T> for these types;
+// Bug #48: MaterializerEmitter previously fell to GetFieldValue<T> for these types.
 //          SqlClient stores the value as the signed equivalent and the
 //          unbox to the unsigned type threw InvalidCastException.
 // ---------------------------------------------------------------------------
@@ -77,7 +74,7 @@ public sealed class UnsignedTypesItem
 }
 
 /// <summary>Control: int-backed enum (should work fine).</summary>
-public enum SampleEnumInt32 : int
+public enum SampleEnumInt32
 {
     Zero = 0,
     One = 1,

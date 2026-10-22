@@ -1,6 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.Sqlite.Tests.Fixtures;
 
 namespace Inquiry.Sqlite.Tests;

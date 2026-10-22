@@ -39,6 +39,8 @@ public sealed class InquiryNPlusOneScope : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
             _current.Value = _previous;
+        }
     }
 }

@@ -3,6 +3,7 @@
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <Description>MariaDB provider for Inquiry. Bundles the MariaDB-flavoured source generator (Inquiry.MariaDb.Analyzer) so referencing this package alone enables store SQL generation.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn.Replace('CS1591', ''))</NoWarn>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Runs the trim/AOT analyzers and stamps the trimming/AOT-compatibility metadata. -->
     <IsAotCompatible>true</IsAotCompatible>

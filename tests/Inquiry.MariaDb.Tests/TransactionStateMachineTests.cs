@@ -1,8 +1,9 @@
+using System.Data;
+using System.Globalization;
+using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.Stores;
-using System.Data;
 
 namespace Inquiry.MariaDb.Tests;
 
@@ -96,21 +97,21 @@ public sealed class TransactionStateMachineTests
         var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
-        const int N = 16;
-        var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
+        const int transactionCount = 16;
+        var tasks = Enumerable.Range(0, transactionCount).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await store.InsertAsync(new Customer { CustomerID = "C" + i.ToString("D4"), CompanyName = "Concurrent " + i });
+            await store.InsertAsync(new Customer { CustomerID = "C" + i.ToString("D4", CultureInfo.CurrentCulture), CompanyName = "Concurrent " + i });
             await tx.CommitAsync();
         }));
 
         await Task.WhenAll(tasks);
 
         var all = await store.SelectAllAsync();
-        Assert.Equal(N, all.Count);
-        for (var i = 0; i < N; i++)
+        Assert.Equal(transactionCount, all.Count);
+        for (var i = 0; i < transactionCount; i++)
         {
-            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4"));
+            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4", CultureInfo.CurrentCulture));
         }
     }
 
@@ -191,6 +192,9 @@ internal sealed partial class CustomerAtomicService : InquiryStore<Customer>
         {
             await _customers.InsertAsync(c, cancellationToken);
         }
-        if (commit) await tx.CommitAsync(cancellationToken);
+        if (commit)
+        {
+            await tx.CommitAsync(cancellationToken);
+        }
     }
 }

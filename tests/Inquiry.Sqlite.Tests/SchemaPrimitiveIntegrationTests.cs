@@ -1,8 +1,8 @@
+using System.Globalization;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Microsoft.Data.Sqlite;
-using Xunit;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -39,7 +39,7 @@ public sealed class SchemaPrimitiveIntegrationTests
     }
 
     private static async Task ExecAsync(SqliteConnection connection, string sql) { await using var command = connection.CreateCommand(); command.CommandText = sql; await command.ExecuteNonQueryAsync(); }
-    private static async Task<int> ScalarAsync(SqliteConnection connection, string sql) => Convert.ToInt32(await ValueAsync(connection, sql));
-    private static async Task<string?> StringAsync(SqliteConnection connection, string sql) => Convert.ToString(await ValueAsync(connection, sql));
+    private static async Task<int> ScalarAsync(SqliteConnection connection, string sql) => Convert.ToInt32(await ValueAsync(connection, sql), CultureInfo.CurrentCulture);
+    private static async Task<string?> StringAsync(SqliteConnection connection, string sql) => Convert.ToString(await ValueAsync(connection, sql), CultureInfo.CurrentCulture);
     private static async Task<object?> ValueAsync(SqliteConnection connection, string sql) { await using var command = connection.CreateCommand(); command.CommandText = sql; return await command.ExecuteScalarAsync(); }
 }

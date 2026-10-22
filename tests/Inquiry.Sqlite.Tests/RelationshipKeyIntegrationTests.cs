@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
@@ -57,7 +53,7 @@ public partial class RkTerritoryStore : InquiryStore<RkTerritory>
 [InquiryTable("BkDoc")]
 public sealed class BkDoc
 {
-    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = Array.Empty<byte>();
     [InquiryColumn("Title")] public string Title { get; set; } = string.Empty;
 
     [InquiryRelation(nameof(BkNote.DocHash))]
@@ -80,15 +76,15 @@ public sealed class BkNote
 [InquiryTable("BkTag")]
 public sealed class BkTag
 {
-    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] Hash { get; set; } = Array.Empty<byte>();
     [InquiryColumn("Label")] public string Label { get; set; } = string.Empty;
 }
 
 [InquiryTable("BkDocTag")]
 public sealed class BkDocTag
 {
-    [InquiryKey(Length = 4)] public byte[] DocHash { get; set; } = new byte[0];
-    [InquiryKey(Length = 4)] public byte[] TagHash { get; set; } = new byte[0];
+    [InquiryKey(Length = 4)] public byte[] DocHash { get; set; } = Array.Empty<byte>();
+    [InquiryKey(Length = 4)] public byte[] TagHash { get; set; } = Array.Empty<byte>();
 }
 
 public partial class BkDocStore : InquiryStore<BkDoc>
@@ -129,7 +125,7 @@ public sealed class RelationshipKeyIntegrationTests
         var territories = harness.GetRequiredService<RkTerritoryStore>();
 
         var north = await regions.GetWithTerritoriesAsync(1);
-        Assert.Equal(new[] { "N1", "N2" }, north!.Territories.Select(static t => t.Name).OrderBy(static n => n));
+        Assert.Equal(["N1", "N2"], north!.Territories.Select(static t => t.Name).OrderBy(static n => n));
 
         var all = new List<RkRegion>();
         await foreach (var region in regions.AllWithTerritoriesAsync())
@@ -138,7 +134,7 @@ public sealed class RelationshipKeyIntegrationTests
         }
 
         Assert.Equal(
-            new[] { "North:N1,N2", "South:S1", "Empty:" },
+            ["North:N1,N2", "South:S1", "Empty:"],
             all.OrderBy(static r => r.RegionId).Select(static r => r.Name + ":" + string.Join(",", r.Territories.Select(static t => t.Name).OrderBy(static n => n))));
 
         Assert.Equal("South", (await territories.GetWithRegionAsync(20))!.Region!.Name);
@@ -148,7 +144,7 @@ public sealed class RelationshipKeyIntegrationTests
             allTerritories.Add(territory);
         }
 
-        Assert.Equal(new[] { "North", "North", "South" }, allTerritories.OrderBy(static t => t.TerritoryId).Select(static t => t.Region!.Name));
+        Assert.Equal(["North", "North", "South"], allTerritories.OrderBy(static t => t.TerritoryId).Select(static t => t.Region!.Name));
     }
 
     [Fact]

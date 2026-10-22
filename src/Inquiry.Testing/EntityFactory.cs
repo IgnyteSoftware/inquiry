@@ -34,7 +34,8 @@ public sealed class EntityFactory<TEntity>
     /// <summary>Defines a named state that can be selected by <see cref="Build"/>.</summary>
     public EntityFactory<TEntity> State(string name, Action<TEntity> apply)
     {
-        if (apply is null) throw new ArgumentNullException(nameof(apply));
+        ArgumentNullException.ThrowIfNull(apply);
+
         return State(name, (entity, _) => apply(entity));
     }
 
@@ -43,8 +44,12 @@ public sealed class EntityFactory<TEntity>
     /// </summary>
     public EntityFactory<TEntity> State(string name, Action<TEntity, long> apply)
     {
-        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("State name cannot be empty.", nameof(name));
-        if (apply is null) throw new ArgumentNullException(nameof(apply));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException("State name cannot be empty.", nameof(name));
+        }
+
+        ArgumentNullException.ThrowIfNull(apply);
 
         lock (_statesLock)
         {
@@ -62,7 +67,7 @@ public sealed class EntityFactory<TEntity>
     /// </summary>
     public TEntity Build(params string[] states)
     {
-        if (states is null) throw new ArgumentNullException(nameof(states));
+        ArgumentNullException.ThrowIfNull(states);
 
         var actions = new Action<TEntity, long>[states.Length];
         if (states.Length > 0)
@@ -99,10 +104,15 @@ public sealed class EntityFactory<TEntity>
     /// <summary>
     /// Builds a deterministic sequence of entities, applying the same states to each entity.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     public IReadOnlyList<TEntity> BuildMany(int count, params string[] states)
     {
-        if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
-        if (states is null) throw new ArgumentNullException(nameof(states));
+        if (count < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
+
+        ArgumentNullException.ThrowIfNull(states);
 
         var entities = new TEntity[count];
         for (var i = 0; i < entities.Length; i++)

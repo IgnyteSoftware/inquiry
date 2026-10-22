@@ -1,0 +1,205 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+tab_width = 4
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.cs]
+# Formatting is enforced by IDE0055 in the centralized build properties.
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# Preferences use explicit severities so they work consistently in the IDE and build.
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = false:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_constructors = false:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_indexers = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_prefer_not_pattern = true:suggestion
+csharp_style_prefer_extended_property_pattern = true:suggestion
+csharp_style_prefer_null_check_over_type_check = true:suggestion
+csharp_style_prefer_local_over_anonymous_function = true:suggestion
+csharp_style_prefer_index_operator = true:suggestion
+csharp_style_prefer_range_operator = true:suggestion
+csharp_style_prefer_method_group_conversion = true:suggestion
+csharp_style_prefer_simple_using_statement = true:suggestion
+csharp_prefer_braces = true:warning
+csharp_style_namespace_declarations = file_scoped:warning
+
+[*.{json,yml,yaml,xml,props,targets,config,csproj,vbproj,slnx}]
+indent_size = 2
+tab_width = 2
+
+[*.md]
+# Two trailing spaces are a Markdown hard line break.
+trim_trailing_whitespace = false
+
+[*.{cs,vb}]
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+dotnet_style_readonly_field = true:warning
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_namespace_match_folder = true:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+dotnet_style_prefer_compound_assignment = true:suggestion
+dotnet_style_prefer_simplified_interpolation = true:suggestion
+dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
+dotnet_style_operator_placement_when_wrapping = beginning_of_line
+dotnet_style_parentheses_in_arithmetic_binary_operators = always_for_clarity
+dotnet_style_parentheses_in_other_binary_operators = always_for_clarity
+dotnet_style_parentheses_in_relational_binary_operators = always_for_clarity
+dotnet_style_parentheses_in_other_operators = never_if_unnecessary
+
+# Rule-ID severities are the build contract. Naming-rule severity fields below are IDE metadata.
+dotnet_diagnostic.IDE0005.severity = error
+dotnet_diagnostic.IDE0055.severity = error
+dotnet_diagnostic.IDE0060.severity = warning
+dotnet_diagnostic.IDE1006.severity = error
+
+# Enable the recommended SDK analyzer categories as build warnings. TreatWarningsAsErrors
+# in Directory.Build.props promotes emitted warnings to build errors.
+dotnet_analyzer_diagnostic.category-Design.severity = warning
+dotnet_analyzer_diagnostic.category-Documentation.severity = warning
+dotnet_analyzer_diagnostic.category-Globalization.severity = warning
+dotnet_analyzer_diagnostic.category-Interoperability.severity = warning
+dotnet_analyzer_diagnostic.category-Maintainability.severity = warning
+dotnet_analyzer_diagnostic.category-Naming.severity = warning
+dotnet_analyzer_diagnostic.category-Performance.severity = warning
+dotnet_analyzer_diagnostic.category-Reliability.severity = warning
+dotnet_analyzer_diagnostic.category-Security.severity = warning
+dotnet_analyzer_diagnostic.category-Usage.severity = warning
+
+# LoggerMessage source generation is the preferred style for hot paths, but converting every log call
+# is a refactor with no correctness gain, so these two stay visible without failing the build.
+dotnet_diagnostic.CA1848.severity = suggestion
+dotnet_diagnostic.CA1873.severity = suggestion
+
+# Generated files are excluded from code-analysis diagnostics. Compiler diagnostics still apply.
+[*.Designer.cs]
+generated_code = true
+
+[*.g.cs]
+generated_code = true
+
+[*.g.i.cs]
+generated_code = true
+
+[*.generated.cs]
+generated_code = true
+
+[*.Designer.vb]
+generated_code = true
+
+[*.g.vb]
+generated_code = true
+
+# Naming rules.
+[*.{cs,vb}]
+dotnet_naming_rule.interfaces_should_begin_with_i.severity = error
+dotnet_naming_rule.interfaces_should_begin_with_i.symbols = interface_symbols
+dotnet_naming_rule.interfaces_should_begin_with_i.style = interface_style
+
+dotnet_naming_symbols.interface_symbols.applicable_kinds = interface
+dotnet_naming_symbols.interface_symbols.applicable_accessibilities = *
+dotnet_naming_style.interface_style.required_prefix = I
+dotnet_naming_style.interface_style.capitalization = pascal_case
+
+dotnet_naming_rule.types_should_be_pascal_case.severity = error
+dotnet_naming_rule.types_should_be_pascal_case.symbols = type_symbols
+dotnet_naming_rule.types_should_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.type_symbols.applicable_kinds = class, struct, enum, delegate
+dotnet_naming_symbols.type_symbols.applicable_accessibilities = *
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+dotnet_naming_rule.members_should_be_pascal_case.severity = error
+dotnet_naming_rule.members_should_be_pascal_case.symbols = member_symbols
+dotnet_naming_rule.members_should_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.member_symbols.applicable_kinds = method, property, event
+dotnet_naming_symbols.member_symbols.applicable_accessibilities = *
+
+# Constants are matched before the private-field rule so they are not forced to _camelCase.
+dotnet_naming_rule.constants_should_be_pascal_case.severity = error
+dotnet_naming_rule.constants_should_be_pascal_case.symbols = constant_symbols
+dotnet_naming_rule.constants_should_be_pascal_case.style = pascal_case_style
+
+dotnet_naming_symbols.constant_symbols.applicable_kinds = field
+dotnet_naming_symbols.constant_symbols.applicable_accessibilities = *
+dotnet_naming_symbols.constant_symbols.required_modifiers = const
+
+dotnet_naming_rule.private_fields_should_be_camel_case.severity = error
+dotnet_naming_rule.private_fields_should_be_camel_case.symbols = private_field_symbols
+dotnet_naming_rule.private_fields_should_be_camel_case.style = private_field_style
+
+dotnet_naming_symbols.private_field_symbols.applicable_kinds = field
+dotnet_naming_symbols.private_field_symbols.applicable_accessibilities = private, internal
+dotnet_naming_style.private_field_style.required_prefix = _
+dotnet_naming_style.private_field_style.capitalization = camel_case
+
+dotnet_naming_rule.parameters_and_locals_should_be_camel_case.severity = error
+dotnet_naming_rule.parameters_and_locals_should_be_camel_case.symbols = variable_symbols
+dotnet_naming_rule.parameters_and_locals_should_be_camel_case.style = camel_case_style
+
+dotnet_naming_symbols.variable_symbols.applicable_kinds = parameter, local
+dotnet_naming_symbols.variable_symbols.applicable_accessibilities = *
+dotnet_naming_style.camel_case_style.capitalization = camel_case
+
+dotnet_naming_rule.type_parameters_should_begin_with_t.severity = error
+dotnet_naming_rule.type_parameters_should_begin_with_t.symbols = type_parameter_symbols
+dotnet_naming_rule.type_parameters_should_begin_with_t.style = type_parameter_style
+
+dotnet_naming_symbols.type_parameter_symbols.applicable_kinds = type_parameter
+dotnet_naming_symbols.type_parameter_symbols.applicable_accessibilities = *
+dotnet_naming_style.type_parameter_style.required_prefix = T
+dotnet_naming_style.type_parameter_style.capitalization = pascal_case
+
+[*.vb]
+# VB's implicit entry point does not require explicit accessibility or a used args parameter.
+dotnet_style_require_accessibility_modifiers = never:suggestion
+dotnet_diagnostic.IDE0060.severity = suggestion
+
+# Some test projects set IsTestProject=false so dotnet test skips them, such as browser suites.
+# Files under tests/ and benchmarks/ still use test naming, so CA1707 does not apply there either.
+[{tests,benchmarks}/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+# Inquiry.Benchmarks.DLG holds third-party DLG generator output kept only as a benchmark comparison.
+# docs/decisions.md records this exception. Compiler diagnostics still apply.
+[benchmarks/Inquiry.Benchmarks.DLG/*.cs]
+generated_code = true
+# Sonar does not read generated_code, so its rules are turned off here explicitly.
+dotnet_analyzer_diagnostic.severity = none

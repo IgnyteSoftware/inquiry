@@ -50,7 +50,7 @@ public sealed class AmbientTransactionIntegrationTests
 
         var loaded = await store.SelectByKeyAsync("COMM1");
         Assert.NotNull(loaded);
-        Assert.Equal("Committed", loaded!.CompanyName);
+        Assert.Equal("Committed", loaded.CompanyName);
     }
 
     [SkippableFact]
@@ -79,7 +79,6 @@ public sealed class AmbientTransactionIntegrationTests
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "Ambient");
-        var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
         // No transaction — should hit the default pipeline and persist immediately.

@@ -9,7 +9,7 @@ public class BatchInsertThresholdBenchmarks
     private readonly BatchMutationStrategyBenchmarks _benchmark = new();
 
     [Params(249, 250, 251)]
-    public int Rows;
+    public int Rows { get; set; }
 
     [GlobalSetup]
     public void Setup()

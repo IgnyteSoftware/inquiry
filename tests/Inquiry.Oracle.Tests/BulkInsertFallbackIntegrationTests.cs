@@ -1,7 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
-using Inquiry.FeatureCatalog;
 using Inquiry.BulkCopy;
+using Inquiry.FeatureCatalog;
 using Inquiry.Oracle.Tests.Fixtures;
 
 namespace Inquiry.Oracle.Tests;

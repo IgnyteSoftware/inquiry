@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <!-- Generated DLG code is not warning-clean; do not let it fail the build. -->
     <NoWarn>$(NoWarn);CS8600;CS8601;CS8602;CS8603;CS8604;CS8618;CS8625;CS0168;CS0219;CS0649</NoWarn>
+    <!-- .editorconfig marks these files generated, so the compiler wants an explicit #nullable directive (CS8669).
+         The DLG doc comments are malformed (CS1570-CS1587). docs/decisions.md records both. -->
+    <NoWarn>$(NoWarn);CS8669;CS1570;CS1572;CS1573;CS1587</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

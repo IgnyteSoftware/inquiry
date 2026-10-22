@@ -26,6 +26,8 @@ public class BatchMutationStrategyBenchmarks
     private int[] _deleteIds = null!;
 
     [Params(1, 10, 100, 1000)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1051", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1104", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
     public int Rows;
 
     [GlobalSetup]
@@ -111,7 +113,11 @@ public class BatchMutationStrategyBenchmarks
     private static OracleBatchMutationItem[] CreateItems(int count, int firstId, string valuePrefix)
     {
         var items = new OracleBatchMutationItem[count];
-        for (var i = 0; i < count; i++) items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        for (var i = 0; i < count; i++)
+        {
+            items[i] = new(firstId + i, $"{valuePrefix} {i}");
+        }
+
         return items;
     }
 
@@ -133,17 +139,21 @@ public class BatchMutationStrategyBenchmarks
     private static int[] CreateIds(int count, int firstId)
     {
         var ids = new int[count];
-        for (var i = 0; i < count; i++) ids[i] = firstId + i;
+        for (var i = 0; i < count; i++)
+        {
+            ids[i] = firstId + i;
+        }
+
         return ids;
     }
 
     private static (int[] Ids, string[] Values, int[] ValueSizes) CreateArrayBindingInputs(
-        IReadOnlyList<OracleBatchMutationItem> items)
+        OracleBatchMutationItem[] items)
     {
-        var ids = new int[items.Count];
-        var values = new string[items.Count];
-        var sizes = new int[items.Count];
-        for (var i = 0; i < items.Count; i++)
+        var ids = new int[items.Length];
+        var values = new string[items.Length];
+        var sizes = new int[items.Length];
+        for (var i = 0; i < items.Length; i++)
         {
             ids[i] = items[i].Id;
             values[i] = items[i].Value;
@@ -165,7 +175,11 @@ public class BatchMutationStrategyBenchmarks
     {
         foreach (var method in typeof(BatchMutationStrategyBenchmarks).GetMethods(BindingFlags.Instance | BindingFlags.Public))
         {
-            if (method.GetCustomAttribute<DirectDriverFloorAttribute>() is null) continue;
+            if (method.GetCustomAttribute<DirectDriverFloorAttribute>() is null)
+            {
+                continue;
+            }
+
             if (!method.Name.Contains("DirectDriver", StringComparison.Ordinal) ||
                 !method.Name.Contains("Floor", StringComparison.Ordinal) ||
                 method.Name.Contains("Production", StringComparison.Ordinal) ||

@@ -5,9 +5,9 @@ using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
 
-public sealed class AnalyzerReleaseCatalogTests
+public sealed partial class AnalyzerReleaseCatalogTests
 {
-    private static readonly string[] AnalyzerProjects =
+    private static readonly string[] _analyzerProjects =
     [
         "Inquiry.Generators.Shared",
         "Inquiry.Sqlite.Analyzer",
@@ -18,7 +18,7 @@ public sealed class AnalyzerReleaseCatalogTests
         "Inquiry.Oracle.Analyzer",
     ];
 
-    private static readonly string[] ReservedIds = ["INQ003", "INQ013", "INQ015", "INQ027"];
+    private static readonly string[] _reservedIds = ["INQ003", "INQ013", "INQ015", "INQ027"];
 
     [Fact]
     public void EveryActiveDescriptorHasOneUnshippedEntryOwnedByItsDeclaringAnalyzer()
@@ -34,7 +34,7 @@ public sealed class AnalyzerReleaseCatalogTests
         Assert.Equal(descriptors.Length, descriptors.Select(static entry => entry.Id).Distinct(StringComparer.Ordinal).Count());
 
         var root = RepositoryRoot();
-        var releases = AnalyzerProjects
+        var releases = _analyzerProjects
             .SelectMany(project => ParseReleaseEntries(
                 Path.Combine(root, "src", project, "AnalyzerReleases.Unshipped.md"),
                 project))
@@ -43,7 +43,7 @@ public sealed class AnalyzerReleaseCatalogTests
 
         Assert.Equal(descriptors, releases);
         Assert.Equal("Inquiry.SqlServer.Analyzer", Assert.Single(releases, static entry => entry.Id == "INQ076").Owner);
-        Assert.All(AnalyzerProjects, project =>
+        Assert.All(_analyzerProjects, project =>
         {
             var shipped = File.ReadAllText(Path.Combine(root, "src", project, "AnalyzerReleases.Shipped.md"));
             Assert.DoesNotMatch(@"\bINQ\d{3}\b", shipped);
@@ -55,22 +55,22 @@ public sealed class AnalyzerReleaseCatalogTests
     {
         var root = RepositoryRoot();
         var reservedPath = Path.Combine(root, "src", "Inquiry.Generators.Shared", "AnalyzerReleases.Reserved.md");
-        var reserved = Regex.Matches(File.ReadAllText(reservedPath), @"\bINQ\d{3}\b")
+        var reserved = InqIdRegex().Matches(File.ReadAllText(reservedPath))
             .Select(static match => match.Value)
             .OrderBy(static id => id, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(ReservedIds, reserved);
+        Assert.Equal(_reservedIds, reserved);
 
         var active = AnalyzerAssemblies()
             .SelectMany(DescriptorFields)
             .Select(static descriptor => descriptor.Id)
             .OrderBy(static id => id, StringComparer.Ordinal)
             .ToArray();
-        Assert.DoesNotContain(active, static id => ReservedIds.Contains(id, StringComparer.Ordinal));
+        Assert.DoesNotContain(active, static id => _reservedIds.Contains(id, StringComparer.Ordinal));
 
         var expectedActive = Enumerable.Range(1, 105)
             .Select(static value => $"INQ{value:000}")
-            .Except(ReservedIds, StringComparer.Ordinal)
+            .Except(_reservedIds, StringComparer.Ordinal)
             .OrderBy(static id => id, StringComparer.Ordinal)
             .ToArray();
         Assert.Equal(expectedActive, active);
@@ -100,8 +100,10 @@ public sealed class AnalyzerReleaseCatalogTests
         foreach (var line in File.ReadLines(path))
         {
             var parts = line.Split('|').Select(static value => value.Trim()).ToArray();
-            if (parts.Length >= 3 && Regex.IsMatch(parts[0], @"^INQ\d{3}$"))
+            if (parts.Length >= 3 && ExactInqIdRegex().IsMatch(parts[0]))
+            {
                 yield return new CatalogEntry(parts[0], owner, parts[2]);
+            }
         }
     }
 
@@ -109,9 +111,18 @@ public sealed class AnalyzerReleaseCatalogTests
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+        {
             directory = directory.Parent;
+        }
+
         return directory?.FullName ?? throw new InvalidOperationException("Could not locate the repository root.");
     }
 
     private sealed record CatalogEntry(string Id, string Owner, string Severity);
+
+    [GeneratedRegex(@"\bINQ\d{3}\b")]
+    private static partial Regex InqIdRegex();
+
+    [GeneratedRegex(@"^INQ\d{3}$")]
+    private static partial Regex ExactInqIdRegex();
 }

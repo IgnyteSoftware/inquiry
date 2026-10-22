@@ -1,9 +1,9 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -55,7 +55,7 @@ public sealed class StreamingFastPathTests
             names.Add(item.Name);
         }
 
-        Assert.Equal(new[] { "Alpha", "Gamma" }, names);
+        Assert.Equal(["Alpha", "Gamma"], names);
     }
 
     private sealed class Row

@@ -1,9 +1,9 @@
+using System.Data.Common;
+using System.Diagnostics;
 using Inquiry.Commands;
 using Inquiry.Diagnostics;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
-using System.Data.Common;
-using System.Diagnostics;
 
 namespace Inquiry;
 
@@ -245,7 +245,10 @@ public sealed class InquiryGridReader : IAsyncDisposable
                 throw;
             }
 
-            if (!hasRow) break;
+            if (!hasRow)
+            {
+                break;
+            }
 
             TEntity item;
             try
@@ -384,13 +387,16 @@ public sealed class InquiryGridReader : IAsyncDisposable
             // Disposal ends the grid command, early or not. The reader stays open for these callbacks,
             // as it does on single-result paths, so interceptors still see a live command. They run
             // before the span ends, so a throwing callback is recorded as a grid failure.
-            try { await _interception.ExecutedAsync(CancellationToken.None).ConfigureAwait(false); }
+            try
+            { await _interception.ExecutedAsync(CancellationToken.None).ConfigureAwait(false); }
             catch (Exception exception)
             {
                 exceptions = InquiryCleanup.Add(exceptions, exception);
-                try { RecordFailure(exception); }
+                try
+                { RecordFailure(exception); }
                 catch (Exception telemetryException) { exceptions = InquiryCleanup.Add(exceptions, telemetryException); }
-                try { await _interception.FailedAsync(exception, CancellationToken.None).ConfigureAwait(false); }
+                try
+                { await _interception.FailedAsync(exception, CancellationToken.None).ConfigureAwait(false); }
                 catch (Exception failedException) { exceptions = InquiryCleanup.Add(exceptions, failedException); }
             }
         }
@@ -402,7 +408,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
                 var dbSystem = InquiryTelemetry.MapDbSystem(_command);
                 if (!_faulted)
                 {
-                    InquiryTelemetry.CommandDuration.Record(
+                    InquiryTelemetry._commandDuration.Record(
                         Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
                         new KeyValuePair<string, object?>("db.system.name", dbSystem),
                         new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"));
@@ -421,16 +427,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             exceptions = InquiryCleanup.Add(exceptions, exception);
         }
-        try { InquiryCommandResources.Dispose(_command); }
+        try
+        { InquiryCommandResources.Dispose(_command); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
-        try { await _command.DisposeAsync().ConfigureAwait(false); }
+        try
+        { await _command.DisposeAsync().ConfigureAwait(false); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
         try
         {
-            if (_ownedConnection is not null) await _ownedConnection.DisposeAsync().ConfigureAwait(false);
+            if (_ownedConnection is not null)
+            {
+                await _ownedConnection.DisposeAsync().ConfigureAwait(false);
+            }
         }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
-        try { _lease?.Dispose(); }
+        try
+        { _lease?.Dispose(); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
         InquiryCleanup.ThrowIfAny(exceptions);
     }
@@ -439,11 +451,13 @@ public sealed class InquiryGridReader : IAsyncDisposable
     {
         // Telemetry and callback failures must not hide the read failure or skip the failed callbacks.
         List<Exception>? secondary = null;
-        try { RecordFailure(exception); }
+        try
+        { RecordFailure(exception); }
         catch (Exception telemetryException) { secondary = InquiryCleanup.Add(secondary, telemetryException); }
         if (_interception is not null)
         {
-            try { await _interception.FailedAsync(exception, cancellationToken).ConfigureAwait(false); }
+            try
+            { await _interception.FailedAsync(exception, cancellationToken).ConfigureAwait(false); }
             catch (Exception callbackException) { secondary = InquiryCleanup.Add(secondary, callbackException); }
         }
 
@@ -457,11 +471,15 @@ public sealed class InquiryGridReader : IAsyncDisposable
 
     internal void RecordFailure(Exception exception)
     {
-        if (_startTimestamp == 0 || _faulted) return;
+        if (_startTimestamp == 0 || _faulted)
+        {
+            return;
+        }
+
         _faulted = true;
         var errorType = InquiryTelemetry.ErrorType(exception);
         var dbSystem = InquiryTelemetry.MapDbSystem(_command);
-        InquiryTelemetry.CommandDuration.Record(
+        InquiryTelemetry._commandDuration.Record(
             Stopwatch.GetElapsedTime(_startTimestamp).TotalSeconds,
             new KeyValuePair<string, object?>("db.system.name", dbSystem),
             new KeyValuePair<string, object?>("db.operation.name", "QUERY_MULTIPLE"),

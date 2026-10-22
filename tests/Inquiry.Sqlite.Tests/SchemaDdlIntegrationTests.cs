@@ -1,10 +1,8 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Inquiry.Entities;
-using Inquiry.Generated;
 using Inquiry.FeatureCatalog;
+using Inquiry.Generated;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
 using Microsoft.Data.Sqlite;
@@ -75,36 +73,49 @@ public sealed class SchemaDdlIntegrationTests
             var column = expected[ordinal++];
             Assert.Equal(column.GetProperty("name").GetString(), reader.GetString(0));
             if (column.GetProperty("storeType").ValueKind != JsonValueKind.Null)
+            {
                 Assert.Equal(column.GetProperty("storeType").GetString(), reader.GetString(1), ignoreCase: true);
+            }
+
             var primaryKeyOrdinal = column.GetProperty("primaryKeyOrdinal");
             var expectedPrimaryKeyOrdinal = primaryKeyOrdinal.ValueKind == JsonValueKind.Null ? 0 : primaryKeyOrdinal.GetInt32() + 1;
             Assert.Equal(expectedPrimaryKeyOrdinal, reader.GetInt64(3));
             // SQLite reports NOT NULL = 0 for an INTEGER PRIMARY KEY even though the key is non-nullable.
             if (expectedPrimaryKeyOrdinal == 0)
+            {
                 Assert.Equal(!column.GetProperty("nullable").GetBoolean(), reader.GetInt64(2) != 0);
+            }
         }
         await reader.DisposeAsync();
         Assert.Equal(expected.Length, ordinal);
-        Assert.Equal(new[] { "Id" }, table.GetProperty("primaryKey").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["Id"], table.GetProperty("primaryKey").EnumerateArray().Select(value => value.GetString()));
         var columns = table.GetProperty("columns").EnumerateArray().ToDictionary(x => x.GetProperty("name").GetString()!);
-        Assert.Equal("identity", columns["Id"].GetProperty("generation").GetString()); Assert.Equal("7", columns["score"].GetProperty("defaultExpression").GetString());
+        Assert.Equal("identity", columns["Id"].GetProperty("generation").GetString());
+        Assert.Equal("7", columns["score"].GetProperty("defaultExpression").GetString());
         Assert.Equal("score + 1", columns["Total"].GetProperty("computedExpression").GetString());
-        var index = Assert.Single(table.GetProperty("indexes").EnumerateArray()); Assert.True(index.GetProperty("unique").GetBoolean()); Assert.Empty(index.GetProperty("includeColumns").EnumerateArray());
-        Assert.Equal(new[] { "Name" }, index.GetProperty("keyColumns").EnumerateArray().Select(value => value.GetString()));
+        var index = Assert.Single(table.GetProperty("indexes").EnumerateArray());
+        Assert.True(index.GetProperty("unique").GetBoolean());
+        Assert.Empty(index.GetProperty("includeColumns").EnumerateArray());
+        Assert.Equal(["Name"], index.GetProperty("keyColumns").EnumerateArray().Select(value => value.GetString()));
         Assert.Equal("CK_SchemaWidget_Score", Assert.Single(table.GetProperty("checks").EnumerateArray()).GetProperty("name").GetString());
         var foreignKey = Assert.Single(table.GetProperty("foreignKeys").EnumerateArray());
         Assert.Equal("FK_SchemaWidget_Parent", foreignKey.GetProperty("name").GetString());
-        Assert.Equal(new[] { "ParentId" }, foreignKey.GetProperty("localColumns").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["ParentId"], foreignKey.GetProperty("localColumns").EnumerateArray().Select(value => value.GetString()));
         Assert.Equal(JsonValueKind.Null, foreignKey.GetProperty("referencedSchema").ValueKind);
         Assert.Equal("SchemaWidgetParent", foreignKey.GetProperty("referencedTable").GetString());
-        Assert.Equal(new[] { "Id" }, foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(["Id"], foreignKey.GetProperty("referencedColumns").EnumerateArray().Select(value => value.GetString()));
         Assert.Equal("cascade", foreignKey.GetProperty("onDelete").GetString());
         Assert.Equal("no-action", foreignKey.GetProperty("onUpdate").GetString());
 
         await using var facts = connection.CreateCommand();
         facts.CommandText = "SELECT (SELECT count(*) FROM pragma_table_xinfo('SchemaWidget') WHERE name='Id' AND pk=1), (SELECT count(*) FROM pragma_table_xinfo('SchemaWidget') WHERE name='score' AND dflt_value='7'), (SELECT count(*) FROM pragma_table_xinfo('SchemaWidget') WHERE name='Total' AND hidden IN (2,3)), (SELECT count(*) FROM pragma_index_list('SchemaWidget') WHERE name='UX_SchemaWidget_Name' AND [unique]=1), (SELECT count(*) FROM pragma_foreign_key_list('SchemaWidget') WHERE [table]='SchemaWidgetParent' AND [to]='Id' AND on_delete='CASCADE')";
-        await using var factsReader = await facts.ExecuteReaderAsync(); Assert.True(await factsReader.ReadAsync());
-        for (var i = 0; i < 5; i++) Assert.Equal(1L, factsReader.GetInt64(i));
+        await using var factsReader = await facts.ExecuteReaderAsync();
+        Assert.True(await factsReader.ReadAsync());
+        for (var i = 0; i < 5; i++)
+        {
+            Assert.Equal(1L, factsReader.GetInt64(i));
+        }
+
         await factsReader.DisposeAsync();
 
         await using var tableSqlCommand = connection.CreateCommand();
@@ -120,7 +131,13 @@ public sealed class SchemaDdlIntegrationTests
         indexCommand.CommandText = "SELECT name FROM pragma_index_xinfo('UX_SchemaWidget_Name') WHERE [key]=1 ORDER BY seqno";
         var catalogIndexColumns = new List<string>();
         await using (var indexReader = await indexCommand.ExecuteReaderAsync())
-            while (await indexReader.ReadAsync()) catalogIndexColumns.Add(indexReader.GetString(0));
+        {
+            while (await indexReader.ReadAsync())
+            {
+                catalogIndexColumns.Add(indexReader.GetString(0));
+            }
+        }
+
         Assert.Equal(index.GetProperty("keyColumns").EnumerateArray().Select(value => value.GetString()), catalogIndexColumns);
 
         await using var foreignKeyCommand = connection.CreateCommand();
@@ -136,6 +153,7 @@ public sealed class SchemaDdlIntegrationTests
     }
 
     [Fact]
+    [SuppressMessage("Major Bug", "S1244:Floating point numbers should not be tested for equality", Justification = "2.5 is exact in binary floating point, and SQLite REAL stores it without loss. The test checks the exact round trip.")]
     public async Task GeneratedSchemaExecutesAndRoundTripsCrud()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(InquiryGeneratedSchema.Ddl, "GenSchema");

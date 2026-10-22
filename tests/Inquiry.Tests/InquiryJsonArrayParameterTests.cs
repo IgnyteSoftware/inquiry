@@ -1,6 +1,4 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using Inquiry.Parameters;
 
@@ -59,7 +57,7 @@ public sealed class InquiryJsonArrayParameterTests
     [Fact]
     public void EnumerableIsConsumedExactlyOnce()
     {
-        var values = new SingleUseEnumerable<int>(new[] { 1, 2, 3 });
+        var values = new SingleUseEnumerable<int>([1, 2, 3]);
         Assert.Equal("[1,2,3]", InquiryJsonArrayParameter.ToJsonArray(values));
         Assert.Equal(1, values.EnumerationCount);
     }
@@ -69,7 +67,11 @@ public sealed class InquiryJsonArrayParameterTests
         public int EnumerationCount { get; private set; }
         public IEnumerator<T> GetEnumerator()
         {
-            if (++EnumerationCount != 1) throw new InvalidOperationException("enumerated twice");
+            if (++EnumerationCount != 1)
+            {
+                throw new InvalidOperationException("enumerated twice");
+            }
+
             return values.GetEnumerator();
         }
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

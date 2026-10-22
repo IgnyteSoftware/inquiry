@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.MySql.DependencyInjection;
@@ -5,7 +6,6 @@ using Inquiry.Northwind;
 using Inquiry.Northwind.Stores;
 using Microsoft.Extensions.DependencyInjection;
 using MySqlConnector;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
@@ -84,9 +84,14 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
                 typeof(VersionedItemStore).Assembly,
             };
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(storeAssemblies);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, storeAssemblies);
+            }
+
             serviceCollection.AddInquiryMySql(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -95,7 +100,7 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
         catch (Exception setupException) when (wasCreated)
         {
-            MySqlConnection.ClearAllPools();
+            await MySqlConnection.ClearAllPoolsAsync();
             try
             {
                 await DropDatabaseAsync(adminConnectionString, databaseName);
@@ -125,7 +130,7 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
 
         // Force-close pooled connections so DROP DATABASE doesn't fail with "database in use".
-        MySqlConnection.ClearAllPools();
+        await MySqlConnection.ClearAllPoolsAsync();
 
         try
         {
@@ -144,7 +149,9 @@ internal sealed class MySqlTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 
     private static async Task DropDatabaseAsync(string adminConnectionString, string databaseName)

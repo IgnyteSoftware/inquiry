@@ -1,8 +1,8 @@
 using Inquiry.DependencyInjection;
 using Inquiry.Sample;
+using Inquiry.Sample.Data;
 using Inquiry.Sample.Services;
 using Inquiry.Seeding;
-using Inquiry.Sample.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 // Source builds also need framework assets when launched without a development profile.
@@ -53,4 +53,4 @@ app.MapHealthChecks("/health");
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
-app.Run();
+await app.RunAsync();

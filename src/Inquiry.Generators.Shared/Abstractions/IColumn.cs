@@ -18,6 +18,10 @@ public enum SoftDeleteKind
 /// contract. The generator collapses enums to their underlying integer class during discovery, so this
 /// enum has no dedicated enum member.
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Naming",
+    "CA1720:Identifier contains type name",
+    Justification = "Each member names the CLR type it classifies, and the INQ diagnostic text for unmapped TVP element types prints the member name.")]
 public enum DbTypeClass
 {
     String,

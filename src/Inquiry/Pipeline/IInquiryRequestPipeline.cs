@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Materialization;
-using System.Data.Common;
 
 namespace Inquiry.Pipeline;
 
@@ -36,53 +36,6 @@ internal interface IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
     /// <summary>
-    /// Executes a query and returns a buffered list of materialized rows.
-    /// </summary>
-    Task<IReadOnlyList<T>> QueryListAsync<T>(
-        InquiryCommand command,
-        IInquiryEntityMaterializer<T> materializer,
-        CancellationToken cancellationToken = default)
-        where T : class;
-
-    /// <summary>
-    /// Buffered query with a struct materializer (JIT-specialized). <paramref name="capacityHint"/>
-    /// (when &gt;= 0) pre-sizes the result list to the known row count.
-    /// </summary>
-    Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>;
-
-    /// <summary>Executes a query and returns the first materialized row, or <see langword="null"/>.</summary>
-    Task<T?> QuerySingleOrDefaultAsync<T>(
-        InquiryCommand command,
-        IInquiryEntityMaterializer<T> materializer,
-        CancellationToken cancellationToken = default)
-        where T : class;
-
-    /// <summary>Single-or-default query with a struct materializer (JIT-specialized).</summary>
-    Task<T?> QuerySingleOrDefaultAsync<T, TMaterializer>(
-        InquiryCommand command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>;
-
-    /// <summary>
-    /// Executes a command returning multiple result sets and returns a grid reader to materialize them in
-    /// order (one round trip). Generated eager-load stores use this for parent + key-filterable children.
-    /// </summary>
-    /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
-    /// built-in pipelines provide the real implementation.</remarks>
-    Task<InquiryGridReader> QueryMultipleAsync(
-        InquiryCommand command,
-        CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("Multi-result-set queries are implemented by the built-in Inquiry pipelines.");
-
-    /// <summary>
     /// Streaming query whose parameters are bound by a caller-supplied static delegate, avoiding
     /// the <c>InquiryCommand</c> / <c>InquiryParameter[]</c> allocations of the boxed path —
     /// generated stores pass a method group / static lambda (no closure capture).
@@ -102,11 +55,44 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QueryAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
+
+    /// <summary>
+    /// Executes a query and returns a buffered list of materialized rows.
+    /// </summary>
+    Task<IReadOnlyList<T>> QueryListAsync<T>(
+        InquiryCommand command,
+        IInquiryEntityMaterializer<T> materializer,
+        CancellationToken cancellationToken = default)
+        where T : class;
+
+    /// <summary>
+    /// Buffered query with a struct materializer (JIT-specialized). <paramref name="capacityHint"/>
+    /// (when &gt;= 0) pre-sizes the result list to the known row count.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
+    Task<IReadOnlyList<T>> QueryListAsync<T, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
     /// <summary>
     /// Buffered query whose parameters are bound by a caller-supplied static delegate, avoiding
@@ -128,11 +114,39 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QueryListAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "Published API; moving the optional capacityHint before the token would break callers and implementers.")]
+    Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
+        InquiryGeneratedCommand<TArgs> command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default,
+        int capacityHint = -1)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>
+        => QueryListAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
+
+    /// <summary>Executes a query and returns the first materialized row, or <see langword="null"/>.</summary>
+    Task<T?> QuerySingleOrDefaultAsync<T>(
+        InquiryCommand command,
+        IInquiryEntityMaterializer<T> materializer,
+        CancellationToken cancellationToken = default)
+        where T : class;
+
+    /// <summary>Single-or-default query with a struct materializer (JIT-specialized).</summary>
+    Task<T?> QuerySingleOrDefaultAsync<T, TMaterializer>(
+        InquiryCommand command,
+        TMaterializer materializer,
+        CancellationToken cancellationToken = default)
+        where T : class
+        where TMaterializer : struct, IInquiryEntityMaterializer<T>;
 
     /// <summary>
     /// Single-or-default query whose parameters are bound by a caller-supplied static delegate.
@@ -148,30 +162,13 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return QuerySingleOrDefaultAsync<T, TMaterializer>(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)), materializer, cancellationToken);
     }
-
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    IAsyncEnumerable<T> QueryAsync<T, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
-
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<IReadOnlyList<T>> QueryListAsync<T, TArgs, TMaterializer>(
-        InquiryGeneratedCommand<TArgs> command,
-        TMaterializer materializer,
-        CancellationToken cancellationToken = default,
-        int capacityHint = -1)
-        where T : class
-        where TMaterializer : struct, IInquiryEntityMaterializer<T>
-        => QueryListAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken, capacityHint);
 
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     Task<T?> QuerySingleOrDefaultAsync<T, TArgs, TMaterializer>(
@@ -182,6 +179,23 @@ internal interface IInquiryRequestPipeline
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
         => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
 
+    /// <summary>
+    /// Executes a command returning multiple result sets and returns a grid reader to materialize them in
+    /// order (one round trip). Generated eager-load stores use this for parent + key-filterable children.
+    /// </summary>
+    /// <remarks>A default-interface-method (throwing) so custom pipelines stay source-compatible; the
+    /// built-in pipelines provide the real implementation.</remarks>
+    Task<InquiryGridReader> QueryMultipleAsync(
+        InquiryCommand command,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Multi-result-set queries are implemented by the built-in Inquiry pipelines.");
+
+    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
+    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
+        InquiryGeneratedCommand<TArgs> command,
+        CancellationToken cancellationToken = default)
+        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
+
     [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
     Task<T?> QueryGeneratedSingleOrDefaultAsync<T, TArgs, TMaterializer>(
         InquiryGeneratedCommand<TArgs> command,
@@ -190,12 +204,6 @@ internal interface IInquiryRequestPipeline
         where T : class
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
         => QuerySingleOrDefaultAsync<T, TMaterializer>(command.ToInquiryCommand(), materializer, cancellationToken);
-
-    [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
-    Task<InquiryGridReader> QueryMultipleAsync<TArgs>(
-        InquiryGeneratedCommand<TArgs> command,
-        CancellationToken cancellationToken = default)
-        => QueryMultipleAsync(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>Executes a non-query command and returns the affected row count.</summary>
     Task<int> ExecuteAsync(
@@ -226,8 +234,10 @@ internal interface IInquiryRequestPipeline
         Action<DbCommand, TArgs> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
         return ExecuteAsync(
             new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
             cancellationToken);
@@ -250,9 +260,11 @@ internal interface IInquiryRequestPipeline
         Action<InquiryParameterTarget, TItem> bindParameters,
         CancellationToken cancellationToken = default)
     {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (items is null) throw new ArgumentNullException(nameof(items));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(items);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
 
         var total = 0;
         for (var i = 0; i < items.Count; i++)
@@ -274,7 +286,7 @@ internal interface IInquiryRequestPipeline
         CancellationToken cancellationToken = default)
     {
         command.Validate();
-        if (items is null) throw new ArgumentNullException(nameof(items));
+        ArgumentNullException.ThrowIfNull(items);
 
         var total = 0;
         using var chunks = new InquiryBatchChunkReader<TItem>(items,
@@ -289,7 +301,9 @@ internal interface IInquiryRequestPipeline
             else
             {
                 for (var i = 0; i < chunk.Count; i++)
+                {
                     total += await ExecuteAsync(command.ForItem(chunk[i]), cancellationToken).ConfigureAwait(false);
+                }
             }
         }
 
@@ -311,6 +325,26 @@ internal interface IInquiryRequestPipeline
         => ExecuteScalarAsync<T>(command.ToInquiryCommand(), cancellationToken);
 
     /// <summary>
+    /// Scalar query with parameters bound by a caller-supplied static delegate (allocation-free
+    /// fast path). The default routes through <c>ExecuteScalarAsync&lt;T&gt;(InquiryCommand, …)</c> so
+    /// custom pipelines stay source-compatible; the built-in pipeline overrides it.
+    /// </summary>
+    Task<T> ExecuteScalarAsync<T, TArgs>(
+        string commandText,
+        TArgs args,
+        Action<DbCommand, TArgs> bindParameters,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+
+        ArgumentNullException.ThrowIfNull(bindParameters);
+
+        return ExecuteScalarAsync<T>(
+            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Executes a command (typically a stored procedure) and returns the post-execution value of a
     /// bound output / return-value parameter named <paramref name="readBackParameterName"/>,
     /// converted to <typeparamref name="T"/>. The command must register that parameter with the
@@ -330,22 +364,4 @@ internal interface IInquiryRequestPipeline
         string readBackParameterName,
         CancellationToken cancellationToken = default)
         => ExecuteProcedureScalarAsync<T>(command.ToInquiryCommand(), readBackParameterName, cancellationToken);
-
-    /// <summary>
-    /// Scalar query with parameters bound by a caller-supplied static delegate (allocation-free
-    /// fast path). The default routes through <c>ExecuteScalarAsync&lt;T&gt;(InquiryCommand, …)</c> so
-    /// custom pipelines stay source-compatible; the built-in pipeline overrides it.
-    /// </summary>
-    Task<T> ExecuteScalarAsync<T, TArgs>(
-        string commandText,
-        TArgs args,
-        Action<DbCommand, TArgs> bindParameters,
-        CancellationToken cancellationToken = default)
-    {
-        if (commandText is null) throw new ArgumentNullException(nameof(commandText));
-        if (bindParameters is null) throw new ArgumentNullException(nameof(bindParameters));
-        return ExecuteScalarAsync<T>(
-            new InquiryCommand(commandText, cmd => bindParameters(cmd, args)),
-            cancellationToken);
-    }
 }

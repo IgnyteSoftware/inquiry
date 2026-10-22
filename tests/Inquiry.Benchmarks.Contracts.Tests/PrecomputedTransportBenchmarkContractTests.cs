@@ -1,5 +1,4 @@
 using BenchmarkDotNet.Attributes;
-using Inquiry.Benchmarks.Contracts;
 
 namespace Inquiry.Benchmarks.Contracts.Tests;
 
@@ -27,39 +26,67 @@ public sealed class PrecomputedTransportBenchmarkContractTests
     private sealed class ValidBenchmarks
     {
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Raw_PrecomputedSqlFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Raw_PrecomputedSqlFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
 
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Raw_PreSerializedJsonFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Raw_PreSerializedJsonFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 
     private sealed class MissingFloorBenchmarks
     {
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Raw_PrecomputedSql() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Raw_PrecomputedSql()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 
     private sealed class SelectedFloorBenchmarks
     {
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Selected_PrecomputedSqlFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Selected_PrecomputedSqlFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 
     private sealed class GeneratedFloorBenchmarks
     {
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Generated_PrecomputedSqlFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Generated_PrecomputedSqlFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 
     private sealed class ProductionFloorBenchmarks
     {
         [Benchmark, PrecomputedTransportBenchmark]
-        public void Production_PrecomputedSqlFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Production_PrecomputedSqlFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 
     private sealed class MissingBenchmarkAttribute
     {
         [PrecomputedTransportBenchmark]
-        public void Raw_PrecomputedSqlFloor() { }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The contract reads public instance methods, so the fixture methods stay on the instance.")]
+        public void Raw_PrecomputedSqlFloor()
+        {
+            // The contract reads only the method name and attributes.
+        }
     }
 }

@@ -1,10 +1,10 @@
+using System.Reflection;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Oracle.DependencyInjection;
 using Inquiry.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
-using System.Reflection;
 
 namespace Inquiry.Oracle.Tests;
 
@@ -56,7 +56,7 @@ public sealed class OracleProviderIntegrationTests
         };
 
         using var command = new OracleCommand();
-        descriptor.BindChunk!(command, items);
+        descriptor.BindChunk(command, items);
 
         Assert.Equal(2, command.ArrayBindCount);
         var parameters = command.Parameters.Cast<OracleParameter>().ToArray();
@@ -91,6 +91,6 @@ public sealed class OracleProviderIntegrationTests
         ConvertedEnabled = new OracleToggle(enabled),
         Payload = payload,
         Name = name,
-        OccurredAt = new DateTime(2026, 7, 14, 12, 0, 0),
+        OccurredAt = new DateTime(2026, 7, 14, 12, 0, 0, DateTimeKind.Unspecified),
     };
 }

@@ -24,8 +24,8 @@ public class EagerGridBenchmarks
     private BenchmarkDatabase _db = null!;
     private string _connectionString = null!;
 
-    [Params(1000, 100000)] public int Rows;
-    [Params(4, 100)] public int RegionCount;
+    [Params(1000, 100000)] public int Rows { get; set; }
+    [Params(4, 100)] public int RegionCount { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -83,12 +83,18 @@ public class EagerGridBenchmarks
             {
                 var territory = ReadTerritory(reader);
                 if (regionsById.TryGetValue(territory.RegionID, out var region))
+                {
                     region.Territories!.Add(territory);
+                }
             }
         }
 
         var count = 0;
-        foreach (var region in regionsById.Values) count += region.Territories!.Count;
+        foreach (var region in regionsById.Values)
+        {
+            count += region.Territories!.Count;
+        }
+
         return count;
     }
 
@@ -109,11 +115,17 @@ public class EagerGridBenchmarks
         foreach (var territory in await connection.QueryAsync<Territory>(AllTerritoriesSql))
         {
             if (regionsById.TryGetValue(territory.RegionID, out var region))
+            {
                 region.Territories!.Add(territory);
+            }
         }
 
         var count = 0;
-        foreach (var region in regions) count += region.Territories!.Count;
+        foreach (var region in regions)
+        {
+            count += region.Territories!.Count;
+        }
+
         return count;
     }
 

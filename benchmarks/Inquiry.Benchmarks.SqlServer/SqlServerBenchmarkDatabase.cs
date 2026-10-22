@@ -1,15 +1,14 @@
+using Inquiry.Benchmarks.Contracts.Fixtures;
 using Inquiry.Benchmarks.SqlServer.Ef;
 using Inquiry.DependencyInjection;
+using Inquiry.Materialization;
 using Inquiry.Northwind;
-using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.SqlServer.DependencyInjection;
-using Inquiry.Materialization;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.MsSql;
-using Inquiry.Benchmarks.Contracts.Fixtures;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -28,7 +27,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
     public const int SequentialAdHocRowCount = 32;
     public const int SequentialAdHocPayloadSize = 64 * 1024;
 
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static MsSqlContainer? _container;
     private static ServiceProvider? _services;
     private static string? _connectionString;
@@ -37,28 +36,49 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
 
     private SqlServerBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<SqlServerShipperContext> DbContextFactory => _dbContextFactory!;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<SqlServerProductContext> ProductContextFactory => _productContextFactory!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ProductStore Products => _services!.GetRequiredService<ProductStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public CategoryStore Categories => _services!.GetRequiredService<CategoryStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IInquiry Inquiry => _services!.GetRequiredService<IInquiry>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public WideBatchEvidenceStore WideBatchMutations => _services!.GetRequiredService<WideBatchEvidenceStore>();
 
     /// <summary>
     /// Returns a handle over the process-wide shared container, starting + seeding it on first call.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The DDL is built only from constants in code; no part comes from input.")]
     public static async Task<SqlServerBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -135,7 +155,7 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new SqlServerBenchmarkDatabase(seedRows);
@@ -153,11 +173,11 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             insert.Transaction = (SqlTransaction)tx;
             insert.CommandText = "INSERT INTO Shippers (CompanyName, Phone) VALUES (@company, @phone);";
             var pCompany = insert.Parameters.Add("@company", System.Data.SqlDbType.NVarChar, 40);
-            var pPhone   = insert.Parameters.Add("@phone",   System.Data.SqlDbType.NVarChar, -1);
+            var pPhone = insert.Parameters.Add("@phone", System.Data.SqlDbType.NVarChar, -1);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
@@ -186,20 +206,20 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             insert.CommandText =
                 "INSERT INTO Products (ProductName, CategoryID, UnitPrice, Discontinued) " +
                 "VALUES (@name, @cat, @price, 0);";
-            var pName  = insert.Parameters.Add("@name",  System.Data.SqlDbType.NVarChar, 40);
-            var pCat   = insert.Parameters.Add("@cat",   System.Data.SqlDbType.Int);
+            var pName = insert.Parameters.Add("@name", System.Data.SqlDbType.NVarChar, 40);
+            var pCat = insert.Parameters.Add("@cat", System.Data.SqlDbType.Int);
             var pPrice = insert.Parameters.Add("@price", System.Data.SqlDbType.Decimal);
             for (int i = 0; i < rowCount; i++)
             {
-                pName.Value  = $"Product {i}";
-                pCat.Value   = categoryIds[i % categoryIds.Count];
+                pName.Value = $"Product {i}";
+                pCat.Value = categoryIds[i % categoryIds.Count];
                 pPrice.Value = 10m + (i % 100);
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }
 
         // M:N eager evidence: two eligible parents, eight participating children, and rowCount
-        // unrelated children. The old-shape control therefore materializes rowCount + 8 children;
+        // unrelated children. The old-shape control therefore materializes rowCount + 8 children, while
         // Inquiry's generated child-key IN query materializes only the eight participating rows.
         var orderIds = new List<long>();
         await using (var insert = connection.CreateCommand())
@@ -227,7 +247,10 @@ public sealed class SqlServerBenchmarkDatabase : IAsyncDisposable
             {
                 pTitle.Value = i < 8 ? "Participating " + i : "Unrelated " + (i - 8);
                 var id = (long)(await command.ExecuteScalarAsync().ConfigureAwait(false))!;
-                if (i < 8) participatingIds.Add(id);
+                if (i < 8)
+                {
+                    participatingIds.Add(id);
+                }
             }
 
             command.CommandText =

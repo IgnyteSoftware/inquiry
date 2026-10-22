@@ -1,16 +1,14 @@
+using System.Reflection;
 using System.Text.Json;
-using BenchmarkDotNet.Exporters.Json;
-using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Diagnosers;
+using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Toolchains.InProcess.Emit;
-using Perfolizer.Horology;
-using Perfolizer.Mathematics.OutlierDetection;
-using Inquiry.Benchmarks.Contracts;
 using Inquiry.Benchmarks.Contracts.Evidence;
 using Json.Schema;
-using System.Reflection;
+using Perfolizer.Horology;
+using Perfolizer.Mathematics.OutlierDetection;
 
 namespace Inquiry.Benchmarks.Contracts.Tests;
 
@@ -58,7 +56,11 @@ public sealed class EvidenceContractTests
             new("user", userRoot),
         };
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        if (Directory.Exists(programFilesX86)) roots.Add(new("programfilesx86", programFilesX86));
+        if (Directory.Exists(programFilesX86))
+        {
+            roots.Add(new("programfilesx86", programFilesX86));
+        }
+
         var manifest = ResolvedDependencyManifestCollector.Collect(
             selectedAssetsPath, projectAssetsPath, "sqlite", BenchmarkSourceLane.DeveloperProject,
             runtimeTfm, runtimeIdentifier, roots);
@@ -99,7 +101,10 @@ public sealed class EvidenceContractTests
         {
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
             while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+            {
                 directory = directory.Parent;
+            }
+
             return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
         }
     }
@@ -123,10 +128,14 @@ public sealed class EvidenceContractTests
 
         var differentlyCasedRoot = Path.Combine(profileRoot, ".NUGET", "PACKAGES");
         if (OperatingSystem.IsWindows())
+        {
             Assert.True(string.Equals(
                 Path.GetFullPath(profileRoot), DeriveUserProfileRoot(differentlyCasedRoot), comparison));
+        }
         else
+        {
             Assert.Throws<InvalidOperationException>(() => DeriveUserProfileRoot(differentlyCasedRoot));
+        }
 
         var volumeRoot = Path.GetPathRoot(Path.GetFullPath(profileRoot))!;
         Assert.Throws<InvalidOperationException>(() =>
@@ -194,7 +203,10 @@ public sealed class EvidenceContractTests
         }
         finally
         {
-            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+            if (Directory.Exists(temporary))
+            {
+                Directory.Delete(temporary, recursive: true);
+            }
         }
     }
 
@@ -235,7 +247,10 @@ public sealed class EvidenceContractTests
         }
         finally
         {
-            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+            if (Directory.Exists(temporary))
+            {
+                Directory.Delete(temporary, recursive: true);
+            }
         }
     }
 
@@ -293,7 +308,10 @@ public sealed class EvidenceContractTests
         }
         finally
         {
-            if (Directory.Exists(temporary)) Directory.Delete(temporary, recursive: true);
+            if (Directory.Exists(temporary))
+            {
+                Directory.Delete(temporary, recursive: true);
+            }
         }
     }
 
@@ -313,16 +331,16 @@ public sealed class EvidenceContractTests
     [Fact]
     public void SourceManifestClaimsOnlyWiredProjectProviderTfmLanes()
     {
-        Assert.Equal(new[]
-        {
+        Assert.Equal([
             "Inquiry", "Inquiry.Sqlite", "Inquiry.SqlServer", "Inquiry.PostgreSql", "Inquiry.MySql",
             "Inquiry.MariaDb", "Inquiry.Oracle", "Inquiry.Interceptors", "Inquiry.Testing",
-        }, SourceArtifactManifestCatalog.PackageIds);
+        ], SourceArtifactManifestCatalog.PackageIds);
         var providers = new[] { "sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle" };
         Assert.Equal(providers, SourceArtifactManifestCatalog.Providers);
         var rids = SourceArtifactManifestCatalog.RuntimeIdentifiers;
+        string[] runtimeTfms = ["net8.0", "net10.0"];
         var expectedLanes = providers.SelectMany(provider => rids.SelectMany(rid =>
-            new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+            runtimeTfms.Select(runtimeTfm =>
                 (Provider: provider, RuntimeTfm: runtimeTfm, Rid: rid, Lane: BenchmarkSourceLane.DeveloperProject)))).ToArray();
         Assert.Equal(expectedLanes, SourceArtifactManifestCatalog.Manifests.Select(static manifest =>
             (manifest.Provider, manifest.RuntimeTfm, manifest.RuntimeIdentifier, manifest.Lane)));
@@ -336,7 +354,10 @@ public sealed class EvidenceContractTests
             Assert.Equal(ResolvedDependencyManifest.RequiredSelectionRule, manifest.ResolvedDependencyScope);
             Assert.Contains(manifest.RuntimeIdentifier, rids);
             if (!StringComparer.Ordinal.Equals(manifest.RuntimeIdentifier, TestData.RuntimeIdentifier))
+            {
                 continue;
+            }
+
             var target = $"{manifest.RuntimeTfm}/{manifest.RuntimeIdentifier}";
             Assert.Equal($"source-artifacts-v1/{manifest.Provider}/DeveloperProject/{target}", manifest.Id);
             Assert.Equal(new[]
@@ -400,9 +421,14 @@ public sealed class EvidenceContractTests
                     _ => artifact.RelativeArtifactId.EndsWith(".json", StringComparison.Ordinal),
                 });
                 if (artifact.Role != SourceArtifactRole.Package)
+                {
                     Assert.Contains($"/{manifest.Provider}/", artifact.RelativeArtifactId, StringComparison.Ordinal);
+                }
+
                 if (artifact.Role is not (SourceArtifactRole.Package or SourceArtifactRole.AnalyzerAssembly))
+                {
                     Assert.Contains($"/{manifest.RuntimeTfm}/", artifact.RelativeArtifactId, StringComparison.Ordinal);
+                }
             });
         }
 
@@ -957,7 +983,8 @@ public sealed class EvidenceContractTests
         Assert.Contains(EvidenceHygieneValidator.ValidateTotalBytes(EvidenceLimits.MaxCheckedEvidenceBytes + 1),
             static error => error.Code == "total-size");
 
-        var aliases = JsonSerializer.SerializeToUtf8Bytes(new { records = new[] { "customer" } });
+        string[] records = ["customer"];
+        var aliases = JsonSerializer.SerializeToUtf8Bytes(new { records });
         Assert.Contains(EvidenceHygieneValidator.Validate(aliases), static error => error.Code == "row-data");
 
         var pathKey = JsonSerializer.SerializeToUtf8Bytes(new Dictionary<string, string> { ["/home/alice/secret"] = "value" });
@@ -1109,7 +1136,9 @@ public sealed class EvidenceContractTests
         finally
         {
             if (Directory.Exists(fixture.Context.ArtifactRoot))
+            {
                 Directory.Delete(fixture.Context.ArtifactRoot, recursive: true);
+            }
         }
     }
 
@@ -1408,13 +1437,17 @@ public sealed class EvidenceContractTests
         }
         finally
         {
-            if (Directory.Exists(artifacts)) Directory.Delete(artifacts, recursive: true);
+            if (Directory.Exists(artifacts))
+            {
+                Directory.Delete(artifacts, recursive: true);
+            }
         }
     }
 
     public class TinyAllocationBenchmark
     {
         [Benchmark]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
         public byte[] Allocate() => new byte[64];
     }
 
@@ -1451,7 +1484,11 @@ public sealed class EvidenceContractTests
             new("user", userRoot),
         };
         var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        if (Directory.Exists(programFilesX86)) selectedRoots.Add(new("programfilesx86", programFilesX86));
+        if (Directory.Exists(programFilesX86))
+        {
+            selectedRoots.Add(new("programfilesx86", programFilesX86));
+        }
+
         var manifest = SourceArtifactManifestCatalog.GetRequired("sqlite", BenchmarkSourceMode.ProjectReference, runtimeTfm);
         var artifactRoot = Path.Combine(Path.GetTempPath(), $"inquiry-evidence-filesystem-{Guid.NewGuid():N}");
         Directory.CreateDirectory(artifactRoot);
@@ -1481,34 +1518,38 @@ public sealed class EvidenceContractTests
                 File.Copy(ResolveSelectedAssetPath(selectedArtifact.RelativeArtifactId, selectedRoots), path);
                 sha = selectedArtifact.Sha256;
             }
-            else switch (expected.Role)
+            else
             {
-                case SourceArtifactRole.DependencyArtifact:
-                    File.Copy(metadata["ProjectAssetsFile"], path);
-                    sha = resolved.ProjectAssetsSha256;
-                    break;
-                case SourceArtifactRole.SelectedAssetsManifest:
-                    File.Copy(selectedInput, path);
-                    sha = resolved.SelectedAssetsManifestSha256;
-                    break;
-                case SourceArtifactRole.ResolvedDependencyManifest:
-                    File.WriteAllBytes(path, resolved.ToCanonicalJsonBytes());
-                    sha = resolved.ContentSha256;
-                    break;
-                case SourceArtifactRole.BenchmarkConfigFile:
-                    File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(BenchmarkJobCatalog.GetRequired(
-                        runtimeTfm == "net8.0" ? "net8-live-v1" : "net10-live-v1"), EvidenceJson.Options));
-                    sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
-                        .ToLowerInvariant();
-                    break;
-                case SourceArtifactRole.PackageLockFile:
-                    File.WriteAllText(path, "{\"version\":2,\"dependencies\":{}}");
-                    sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
-                        .ToLowerInvariant();
-                    break;
-                default:
-                    throw new InvalidOperationException($"Physical fixture has no byte source for {expected.Role}.");
+                switch (expected.Role)
+                {
+                    case SourceArtifactRole.DependencyArtifact:
+                        File.Copy(metadata["ProjectAssetsFile"], path);
+                        sha = resolved.ProjectAssetsSha256;
+                        break;
+                    case SourceArtifactRole.SelectedAssetsManifest:
+                        File.Copy(selectedInput, path);
+                        sha = resolved.SelectedAssetsManifestSha256;
+                        break;
+                    case SourceArtifactRole.ResolvedDependencyManifest:
+                        File.WriteAllBytes(path, resolved.ToCanonicalJsonBytes());
+                        sha = resolved.ContentSha256;
+                        break;
+                    case SourceArtifactRole.BenchmarkConfigFile:
+                        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(BenchmarkJobCatalog.GetRequired(
+                            runtimeTfm == "net8.0" ? "net8-live-v1" : "net10-live-v1"), EvidenceJson.Options));
+                        sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
+                            .ToLowerInvariant();
+                        break;
+                    case SourceArtifactRole.PackageLockFile:
+                        File.WriteAllText(path, "{\"version\":2,\"dependencies\":{}}");
+                        sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
+                            .ToLowerInvariant();
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Physical fixture has no byte source for {expected.Role}.");
+                }
             }
+
             artifacts.Add(new SourceArtifact(expected.Role, expected.RelativeArtifactId, sha));
         }
         var source = BenchmarkSourceIdentity.Project(TestData.Commit, manifest.IdentityHash, resolved, artifacts);
@@ -1519,7 +1560,10 @@ public sealed class EvidenceContractTests
         {
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
             while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Inquiry.slnx")))
+            {
                 directory = directory.Parent;
+            }
+
             return directory?.FullName ?? throw new InvalidOperationException("Could not locate repository root.");
         }
 
@@ -1527,13 +1571,19 @@ public sealed class EvidenceContractTests
         {
             var separator = logicalAssetId.IndexOf('/');
             if (separator <= 0)
+            {
                 throw new InvalidDataException($"Selected asset has no physical root identity: {logicalAssetId}");
+            }
+
             var rootId = logicalAssetId[..separator];
             var root = roots.Single(candidate => StringComparer.Ordinal.Equals(candidate.Id, rootId));
             var relative = logicalAssetId[(separator + 1)..].Replace('/', Path.DirectorySeparatorChar);
             var path = Path.GetFullPath(Path.Combine(root.Path, relative));
             if (!File.Exists(path))
+            {
                 throw new FileNotFoundException($"Selected asset does not exist: {logicalAssetId}", path);
+            }
+
             return path;
         }
     }

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-
 namespace Inquiry.Generators.Abstractions;
 
 /// <summary>
@@ -208,7 +205,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         if (HasAutoIncrementKey(context))
         {
             // Read the upserted row back by its key. An explicit non-zero key inserts (or, on conflict,
-            // updates) that exact key, so select by @key directly. A 0/NULL key triggers AUTO_INCREMENT;
+            // updates) that exact key, so select by @key directly. A 0/NULL key triggers AUTO_INCREMENT.
             // MySQL only sets LAST_INSERT_ID() when a value is actually generated (NOT for an explicit
             // non-null insert) and the ON DUPLICATE UPDATE branch never fires for a new row — so
             // LAST_INSERT_ID() is correct only for that auto-generated case. IF(@key, @key, LAST_INSERT_ID())
@@ -244,7 +241,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     /// AUTO_INCREMENT key is read back via session-scoped <c>LAST_INSERT_ID()</c>; otherwise the row
     /// is selected by its key predicate. Non-auto database-default keys branch to their capture path.
     /// </summary>
-    private string BuildReturningSelect(SqlBuildContext context)
+    private static string BuildReturningSelect(SqlBuildContext context)
     {
         var keyPredicate = HasAutoIncrementKey(context)
             ? context.QuotedKeyColumns[0] + " = LAST_INSERT_ID()"

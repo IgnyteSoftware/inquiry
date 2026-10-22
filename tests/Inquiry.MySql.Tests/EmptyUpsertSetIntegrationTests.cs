@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Stores;
@@ -59,13 +56,13 @@ public sealed class EmptyUpsertSetIntegrationTests
         // SELECT finds and returns it — unlike PostgreSQL/SQLite which return null.
         var conflict = await store.UpsertReturningAsync(new MySqlKeyOnlyItem { Id = id });
         Assert.NotNull(conflict);
-        Assert.Equal(id, conflict!.Id);
+        Assert.Equal(id, conflict.Id);
         Assert.Single(await store.AllAsync());
 
         // A returning upsert with a null key takes the generate path and returns the inserted row.
         var inserted = await store.UpsertReturningAsync(new MySqlKeyOnlyItem { Id = null });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.Id);
+        Assert.NotNull(inserted.Id);
         Assert.Equal(2, (await store.AllAsync()).Count);
     }
 }

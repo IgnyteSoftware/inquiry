@@ -30,9 +30,9 @@ public sealed class OracleCoverageGapIntegrationTests
         var nancy = await employees.InsertReturningAsync(new Employee { FirstName = "Nancy", LastName = "Davolio" });
         var andrew = await employees.InsertReturningAsync(new Employee { FirstName = "Andrew", LastName = "Fuller" });
 
-        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = nancy!.EmployeeID,  ShipCity = "Berlin" });
+        await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = nancy!.EmployeeID, ShipCity = "Berlin" });
         await orders.InsertAsync(new Order { CustomerID = "ALFKI", EmployeeID = andrew!.EmployeeID, ShipCity = "Berlin" });
-        await orders.InsertAsync(new Order { CustomerID = "BONAP", EmployeeID = nancy.EmployeeID,   ShipCity = "Marseille" });
+        await orders.InsertAsync(new Order { CustomerID = "BONAP", EmployeeID = nancy.EmployeeID, ShipCity = "Marseille" });
 
         var matched = await orders.SelectByCustomerAndEmployeeAsync("ALFKI", nancy.EmployeeID).ToListAsync();
         var only = Assert.Single(matched);
@@ -51,7 +51,7 @@ public sealed class OracleCoverageGapIntegrationTests
 
         var fetched = await employees.SelectByKeyAsync(report!.EmployeeID);
         Assert.NotNull(fetched);
-        Assert.Equal(manager.EmployeeID, fetched!.ReportsTo);
+        Assert.Equal(manager.EmployeeID, fetched.ReportsTo);
     }
 
     [SkippableFact]
@@ -63,8 +63,8 @@ public sealed class OracleCoverageGapIntegrationTests
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "datetime");
         var employees = harness.GetRequiredService<EmployeeStore>();
 
-        var birth = new DateTime(1980, 5, 15);
-        var hire = new DateTime(2010, 3, 1);
+        var birth = new DateTime(1980, 5, 15, 0, 0, 0, DateTimeKind.Unspecified);
+        var hire = new DateTime(2010, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
         var inserted = await employees.InsertReturningAsync(new Employee
         {
             FirstName = "Nancy",
@@ -75,7 +75,7 @@ public sealed class OracleCoverageGapIntegrationTests
 
         var fetched = await employees.SelectByKeyAsync(inserted!.EmployeeID);
         Assert.NotNull(fetched);
-        Assert.Equal(birth, fetched!.BirthDate);
+        Assert.Equal(birth, fetched.BirthDate);
         Assert.Equal(hire, fetched.HireDate);
     }
 }

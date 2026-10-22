@@ -44,7 +44,7 @@ internal sealed record EntityData(
 
     /// <summary>
     /// Whether generated <c>CREATE TABLE</c> DDL emits <c>FOREIGN KEY</c> constraints for this
-    /// entity's foreign-key columns (<see cref="InquiryTableAttribute.GenerateForeignKeys"/>). Default true.
+    /// entity's foreign-key columns (<c>InquiryTableAttribute.GenerateForeignKeys</c>). Default true.
     /// </summary>
     public bool GenerateForeignKeys { get; init; } = true;
     public bool GenerateDdl { get; init; } = true;

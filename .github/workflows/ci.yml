@@ -13,7 +13,7 @@ permissions:
 # A superseded push to the same PR cancels the in-flight matrix; merge-group runs are never
 # cancelled because the queue's verdict is the merge gate.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -24,12 +24,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             9.0.x
             10.0.x
-      - run: dotnet restore
-      - run: dotnet build --no-restore -c Release
+      - run: dotnet restore Inquiry.slnx
+      - run: dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror
+      # The provider source generators load from the analyzer build output. Format runs after the build
+      # and in the same configuration, so it sees the generated code that some usings refer to.
+      - run: Configuration=Release dotnet format Inquiry.slnx --no-restore --verify-no-changes --severity error
       - name: Verify release and required-check manifests
         run: |
           dotnet run --project eng/Inquiry.ReleaseTools/Inquiry.ReleaseTools.csproj --configuration Release --no-build -- verify-manifest . eng/release-manifest.json
@@ -59,9 +63,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: 10.0.x
+      # Restore without -r: a global RID would apply to every referenced library and rewrite its lock file.
+      - name: Restore AOT smoke app
+        run: dotnet restore samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj
       - name: Publish AOT smoke app
-        run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 -o aot-out
+        run: dotnet publish samples/Inquiry.AotSmoke/Inquiry.AotSmoke.csproj -c Release -r linux-x64 --no-restore -o aot-out
       - name: Run native binary
         run: |
           out=$(./aot-out/Inquiry.AotSmoke)
@@ -85,6 +93,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             9.0.x
@@ -123,6 +132,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             10.0.x
@@ -152,6 +162,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             9.0.x
@@ -211,6 +222,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: |
             8.0.x
             9.0.x
@@ -267,6 +279,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
+          global-json-file: global.json
           dotnet-version: 8.0.x
       - name: Install DocFX
         run: dotnet tool install --global docfx --version 2.78.5

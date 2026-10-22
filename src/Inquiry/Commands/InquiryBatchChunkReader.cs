@@ -13,10 +13,15 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
     private int _offset;
     private int _disposed;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     internal InquiryBatchChunkReader(IEnumerable<T> items, int maxBatchSize, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(items);
-        if (maxBatchSize <= 0) throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
+        if (maxBatchSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxBatchSize));
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         _maxBatchSize = maxBatchSize;
@@ -40,7 +45,7 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         // returned or the batch transaction commits — including the call that returns false after the
         // final chunk. That is what makes a driver's post-cancel lying success (a KILL-interrupted
         // MySQL statement reporting normal completion) unable to complete a cancelled batch, without
-        // per-execute registrations on the hot loop. BatchCancellationRaceTests pins this end to end;
+        // per-execute registrations on the hot loop. BatchCancellationRaceTests pins this end to end, so
         // do not make this check conditional.
         _cancellationToken.ThrowIfCancellationRequested();
         if (_items is not null)
@@ -69,7 +74,11 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
         while (_buffer.Count < _maxBatchSize)
         {
             _cancellationToken.ThrowIfCancellationRequested();
-            if (!_enumerator!.MoveNext()) break;
+            if (!_enumerator!.MoveNext())
+            {
+                break;
+            }
+
             _buffer.Add(_enumerator.Current);
         }
         chunk = _buffer;
@@ -78,7 +87,10 @@ internal sealed class InquiryBatchChunkReader<T> : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0) _enumerator?.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _enumerator?.Dispose();
+        }
     }
 }
 
@@ -93,7 +105,11 @@ internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
     {
         get
         {
-            if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+            if ((uint)index >= (uint)Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
+
             return _items![_offset + index];
         }
     }
@@ -107,7 +123,10 @@ internal sealed class InquiryBatchChunkView<T> : IReadOnlyList<T>
 
     public IEnumerator<T> GetEnumerator()
     {
-        for (var i = 0; i < Count; i++) yield return this[i];
+        for (var i = 0; i < Count; i++)
+        {
+            yield return this[i];
+        }
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

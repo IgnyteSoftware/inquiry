@@ -35,7 +35,9 @@ public static class ResolvedDependencyManifestCollector
         var roots = NormalizeRoots(allowedRoots);
         var lines = File.ReadAllLines(selectedManifestPath);
         if (lines.Length < 2)
+        {
             throw new InvalidDataException("The MSBuild selected-assets manifest has no selected assets.");
+        }
 
         var header = lines[0].Split('\t');
         if (header.Length != 5 ||
@@ -44,7 +46,9 @@ public static class ResolvedDependencyManifestCollector
             !StringComparer.Ordinal.Equals(header[2], lane.ToString()) ||
             !StringComparer.Ordinal.Equals(header[3], runtimeTfm) ||
             !StringComparer.Ordinal.Equals(header[4], runtimeIdentifier))
+        {
             throw new InvalidDataException("The selected-assets manifest header does not match its provider/lane/TFM/RID contract.");
+        }
 
         var assets = new List<ResolvedDependencyAsset>(lines.Length - 1);
         var identities = new HashSet<(ResolvedAssetKind Kind, string LogicalAssetId)>(AssetIdentityComparer.Instance);
@@ -54,20 +58,30 @@ public static class ResolvedDependencyManifestCollector
             if (fields.Length != 3 ||
                 !Enum.TryParse<ResolvedAssetKind>(fields[0], ignoreCase: false, out var kind) ||
                 !IsSafeProvenance(fields[1]))
+            {
                 throw new InvalidDataException($"Selected asset line {index + 1} is malformed.");
+            }
 
             var physicalPath = Path.GetFullPath(fields[2]);
             if (!File.Exists(physicalPath))
+            {
                 throw new FileNotFoundException($"MSBuild-selected asset does not exist: {physicalPath}");
+            }
+
             var root = roots.FirstOrDefault(candidate => IsWithin(candidate.Path, physicalPath))
                 ?? throw new InvalidDataException($"MSBuild-selected asset escapes every approved physical root: {physicalPath}");
             EnsureNoReparsePoint(root.Path, physicalPath);
             var relative = Normalize(Path.GetRelativePath(root.Path, physicalPath));
             if (!IsSafeRelativePath(relative))
+            {
                 throw new InvalidDataException($"MSBuild-selected asset has an unsafe relative identity: {relative}");
+            }
+
             var logicalAssetId = $"{root.Id}/{relative}";
             if (!identities.Add((kind, logicalAssetId)))
+            {
                 throw new InvalidDataException($"MSBuild-selected asset identity collides case-insensitively: {kind}:{logicalAssetId}");
+            }
 
             ValidateRole(kind, physicalPath, provider);
 
@@ -88,16 +102,23 @@ public static class ResolvedDependencyManifestCollector
             ResolvedAssetKind.ProductAssembly,
         };
         if (requiredKinds.Any(kind => assets.All(asset => asset.Kind != kind)))
+        {
             throw new InvalidDataException("The MSBuild-selected asset set omits a required compiler/runtime/analyzer/generated/host/product role.");
+        }
 
         var requiredProductNames = new[] { "Inquiry.dll", ProviderAssemblyName(provider) };
         if (requiredProductNames.Any(required => assets.All(asset => asset.Kind != ResolvedAssetKind.ProductAssembly ||
                 !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), required))))
+        {
             throw new InvalidDataException("The selected product role must contain Inquiry.dll and the exact provider assembly.");
+        }
+
         var providerAnalyzer = ProviderAnalyzerAssemblyName(provider);
         if (assets.All(asset => asset.Kind != ResolvedAssetKind.Analyzer ||
                 !StringComparer.OrdinalIgnoreCase.Equals(Path.GetFileName(asset.LogicalAssetId), providerAnalyzer)))
+        {
             throw new InvalidDataException("The selected analyzer role must contain an Inquiry provider analyzer.");
+        }
 
         return new ResolvedDependencyManifest(
             ResolvedDependencyManifest.RequiredSelectionRule,
@@ -121,7 +142,10 @@ public static class ResolvedDependencyManifestCollector
         using var document = JsonDocument.Parse(File.ReadAllBytes(Path.GetFullPath(projectAssetsPath)));
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
+        {
             WriteCanonicalJson(document.RootElement, writer, roots);
+        }
+
         return Convert.ToHexString(SHA256.HashData(stream.ToArray())).ToLowerInvariant();
     }
 
@@ -136,25 +160,41 @@ public static class ResolvedDependencyManifestCollector
         return StringComparer.Ordinal.Equals(actual.ContentSha256, manifest.ContentSha256);
     }
 
-    private static IReadOnlyList<SelectedAssetRoot> NormalizeRoots(IReadOnlyList<SelectedAssetRoot> roots)
+    private static SelectedAssetRoot[] NormalizeRoots(IReadOnlyList<SelectedAssetRoot> roots)
     {
         if (roots.Count == 0 || roots.Any(static root => string.IsNullOrWhiteSpace(root.Id) || string.IsNullOrWhiteSpace(root.Path)))
+        {
             throw new ArgumentException("At least one named physical root is required.", nameof(roots));
+        }
+
         if (roots.Select(static root => root.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != roots.Count)
+        {
             throw new ArgumentException("Physical root IDs must be case-insensitively unique.", nameof(roots));
+        }
+
         if (roots.Any(static root => !IsSafeRootId(root.Id)))
+        {
             throw new ArgumentException("Physical root IDs must be simple portable identifiers.", nameof(roots));
+        }
 
         var normalized = roots.Select(root => new SelectedAssetRoot(root.Id, Path.GetFullPath(root.Path)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))).ToArray();
         if (normalized.Select(static root => root.Path).Distinct(PathComparer).Count() != normalized.Length)
-            throw new ArgumentException("Physical roots must identify distinct paths.", nameof(roots));
-        foreach (var root in normalized)
         {
-            if (!Directory.Exists(root.Path))
-                throw new DirectoryNotFoundException($"Approved selected-asset root does not exist: {root.Path}");
-            if ((File.GetAttributes(root.Path) & FileAttributes.ReparsePoint) != 0)
-                throw new InvalidDataException($"Approved selected-asset root cannot be a reparse point: {root.Path}");
+            throw new ArgumentException("Physical roots must identify distinct paths.", nameof(roots));
+        }
+
+        foreach (var rootPath in normalized.Select(static root => root.Path))
+        {
+            if (!Directory.Exists(rootPath))
+            {
+                throw new DirectoryNotFoundException($"Approved selected-asset root does not exist: {rootPath}");
+            }
+
+            if ((File.GetAttributes(rootPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException($"Approved selected-asset root cannot be a reparse point: {rootPath}");
+            }
         }
         return normalized.OrderByDescending(static root => root.Path.Length).ToArray();
     }
@@ -183,7 +223,10 @@ public static class ResolvedDependencyManifestCollector
                     .OrderBy(static property => property.Name, StringComparer.Ordinal)
                     .ToArray();
                 if (properties.Select(static property => property.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != properties.Length)
+                {
                     throw new InvalidDataException("project.assets.json contains path keys that collide after canonical relocation.");
+                }
+
                 foreach (var property in properties)
                 {
                     writer.WritePropertyName(property.Name);
@@ -193,7 +236,11 @@ public static class ResolvedDependencyManifestCollector
                 break;
             case JsonValueKind.Array:
                 writer.WriteStartArray();
-                foreach (var item in element.EnumerateArray()) WriteCanonicalJson(item, writer, roots);
+                foreach (var item in element.EnumerateArray())
+                {
+                    WriteCanonicalJson(item, writer, roots);
+                }
+
                 writer.WriteEndArray();
                 break;
             case JsonValueKind.String:
@@ -218,14 +265,25 @@ public static class ResolvedDependencyManifestCollector
 
     private static string CanonicalizePathValue(string value, IReadOnlyList<SelectedAssetRoot> roots)
     {
-        if (!Path.IsPathRooted(value)) return Normalize(value);
+        if (!Path.IsPathRooted(value))
+        {
+            return Normalize(value);
+        }
+
         if (value.Length >= 32 && value.EndsWith('=') && value.Length % 4 == 0 &&
             Convert.TryFromBase64String(value, new byte[value.Length], out _))
+        {
             return value;
+        }
+
         var fullPath = Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var root = roots.FirstOrDefault(candidate => IsWithinOrEqual(candidate.Path, fullPath))
             ?? throw new InvalidDataException($"project.assets.json contains an absolute path outside approved roots: {value}");
-        if (PathComparer.Equals(root.Path, fullPath)) return root.Id;
+        if (PathComparer.Equals(root.Path, fullPath))
+        {
+            return root.Id;
+        }
+
         return $"{root.Id}/{Normalize(Path.GetRelativePath(root.Path, fullPath))}";
     }
 
@@ -245,13 +303,22 @@ public static class ResolvedDependencyManifestCollector
             ResolvedAssetKind.GeneratedSource => extension.Equals(".cs", StringComparison.OrdinalIgnoreCase),
             _ => false,
         };
-        if (!valid) throw new InvalidDataException($"Selected {kind} asset has an invalid physical role: {physicalPath}");
+        if (!valid)
+        {
+            throw new InvalidDataException($"Selected {kind} asset has an invalid physical role: {physicalPath}");
+        }
+
         if (kind == ResolvedAssetKind.HostAssembly && !fileName.StartsWith("Inquiry.Benchmarks", StringComparison.OrdinalIgnoreCase))
+        {
             throw new InvalidDataException("The selected host role must be an Inquiry benchmark assembly.");
+        }
+
         if (kind == ResolvedAssetKind.ProductAssembly &&
             !StringComparer.OrdinalIgnoreCase.Equals(fileName, "Inquiry.dll") &&
             !StringComparer.OrdinalIgnoreCase.Equals(fileName, ProviderAssemblyName(provider)))
+        {
             throw new InvalidDataException("Only Inquiry.dll and the exact selected provider DLL may be classified as product assemblies.");
+        }
     }
 
     internal static string ProviderAssemblyName(string provider) => provider.ToLowerInvariant() switch
@@ -274,10 +341,16 @@ public static class ResolvedDependencyManifestCollector
         while (current is not null && IsWithinOrEqual(root, current.FullName))
         {
             if ((current.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
                 throw new InvalidDataException($"MSBuild-selected asset path traverses a reparse point: {file}");
+            }
+
             if (PathComparer.Equals(current.FullName.TrimEnd(Path.DirectorySeparatorChar),
                     root.TrimEnd(Path.DirectorySeparatorChar)))
+            {
                 return;
+            }
+
             current = current switch
             {
                 FileInfo info => info.Directory,

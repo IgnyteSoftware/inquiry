@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Generated;
 using Inquiry.SqlServer.Tests.Fixtures;
@@ -48,7 +44,7 @@ public sealed class TvpArtifactIntegrationTests
 
         var missingBefore = await ReadValidationAsync(harness.ConnectionString);
         Assert.Contains(missingBefore, row => row.Name == "[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]" && row.Signature == "int|nullable=0" && row.Status == "missing");
-        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync(new[] { 1 }));
+        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync([1]));
         Assert.Contains("Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c", missingException.Message);
 
         await ExecuteAsync(harness.ConnectionString, "CREATE TYPE [dbo].[Legacy_Unrelated_Type] AS TABLE ([Value] INT NOT NULL);");
@@ -58,7 +54,7 @@ public sealed class TvpArtifactIntegrationTests
 
         Assert.Empty(await ReadValidationAsync(harness.ConnectionString));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString, "SELECT 1 FROM sys.table_types WHERE [name] = N'Legacy_Unrelated_Type'"));
-        Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+        Assert.Equal(1, await store.DeleteAllAsync([1]));
     }
 
     [SkippableFact]
@@ -161,7 +157,7 @@ public sealed class TvpArtifactIntegrationTests
             "tvptenant");
         var store = harness.GetRequiredService<TenantGadgetStore>();
         await store.InsertAsync(new TenantGadget { Name = "tenant", IsActive = true });
-        Assert.True(await store.ExistsActiveAsync(new[] { true }));
+        Assert.True(await store.ExistsActiveAsync([true]));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString,
             "SELECT 1 FROM sys.table_types t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE t.[name] = N'Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c' AND s.[name] = N'9 odd].schema'''"));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString,
@@ -170,12 +166,12 @@ public sealed class TvpArtifactIntegrationTests
 
         await using (var transaction = await inquiry.BeginTransactionAsync())
         {
-            Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+            Assert.Equal(1, await store.DeleteAllAsync([1]));
             await transaction.RollbackAsync();
         }
 
         Assert.Equal(1, await store.CountAsync());
-        Assert.Equal(1, await store.DeleteAllAsync(new[] { 1 }));
+        Assert.Equal(1, await store.DeleteAllAsync([1]));
     }
 
     [SkippableFact]
@@ -223,7 +219,11 @@ public sealed class TvpArtifactIntegrationTests
         command.CommandText = sql;
         await using var reader = await command.ExecuteReaderAsync();
         var count = 0;
-        while (await reader.ReadAsync()) count++;
+        while (await reader.ReadAsync())
+        {
+            count++;
+        }
+
         return count;
     }
 
@@ -235,7 +235,11 @@ public sealed class TvpArtifactIntegrationTests
         command.CommandText = InquiryGeneratedSchema.ProviderArtifactsValidationSql;
         await using var reader = await command.ExecuteReaderAsync();
         var rows = new List<ValidationRow>();
-        while (await reader.ReadAsync()) rows.Add(new ValidationRow(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        while (await reader.ReadAsync())
+        {
+            rows.Add(new ValidationRow(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        }
+
         return rows;
     }
 
@@ -244,7 +248,11 @@ public sealed class TvpArtifactIntegrationTests
     private static int CountOccurrences(string value, string search)
     {
         var count = 0;
-        for (var index = 0; (index = value.IndexOf(search, index, System.StringComparison.Ordinal)) >= 0; index += search.Length) count++;
+        for (var index = 0; (index = value.IndexOf(search, index, System.StringComparison.Ordinal)) >= 0; index += search.Length)
+        {
+            count++;
+        }
+
         return count;
     }
 }

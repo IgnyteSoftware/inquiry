@@ -70,7 +70,9 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
         {
             AssertRow(row, 1);
             firstOnly++;
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row is safe.
             break;
+#pragma warning restore S1751
         }
         Assert.Equal(1, firstOnly);
         Assert.Equal(RowCount, await inquiry.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM sequential_ad_hoc_row"));
@@ -79,7 +81,9 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
         await foreach (var row in transaction.QueryAsync<PostgreSqlSequentialAdHocRow>(new Inquiry.Commands.InquiryCommand(SelectSql)))
         {
             AssertRow(row, 1);
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row is safe.
             break;
+#pragma warning restore S1751
         }
         Assert.Equal(RowCount, await transaction.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM sequential_ad_hoc_row"));
         await transaction.CommitAsync();
@@ -123,7 +127,10 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
     private static void AssertRows(IReadOnlyList<PostgreSqlSequentialAdHocRow> rows)
     {
         Assert.Equal(RowCount, rows.Count);
-        for (var i = 0; i < rows.Count; i++) AssertRow(rows[i], i + 1);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            AssertRow(rows[i], i + 1);
+        }
     }
 
     private static void AssertRow(PostgreSqlSequentialAdHocRow row, int id)

@@ -1,6 +1,6 @@
-using Inquiry.MariaDb.Tests.Fixtures;
 using Inquiry.DependencyInjection;
 using Inquiry.MariaDb.DependencyInjection;
+using Inquiry.MariaDb.Tests.Fixtures;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.MariaDb.Tests;

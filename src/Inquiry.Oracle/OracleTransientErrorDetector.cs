@@ -15,7 +15,7 @@ internal sealed class OracleTransientErrorDetector : ITransientErrorDetector
     /// providers (OCI Autonomous Database, AWS RDS Oracle). These errors commonly surface during
     /// scaling events, maintenance windows, and failover.
     /// </summary>
-    private static readonly HashSet<int> TransientErrorNumbers = new()
+    private static readonly HashSet<int> _transientErrorNumbers = new()
     {
         1033,   // ORA-01033 — Oracle initialization or shutdown in progress.
         1034,   // ORA-01034 — Oracle not available.
@@ -32,6 +32,6 @@ internal sealed class OracleTransientErrorDetector : ITransientErrorDetector
     public bool IsTransient(Exception exception)
     {
         return exception is OracleException oracleException
-            && TransientErrorNumbers.Contains(oracleException.Number);
+            && _transientErrorNumbers.Contains(oracleException.Number);
     }
 }

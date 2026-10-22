@@ -1,8 +1,8 @@
+using System.Globalization;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.MySql.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 
@@ -58,13 +58,13 @@ public sealed class SchemaPrimitiveIntegrationTests
     {
         await using var x = c.CreateCommand();
         x.CommandText = s;
-        return Convert.ToInt32(await x.ExecuteScalarAsync());
+        return Convert.ToInt32(await x.ExecuteScalarAsync(), CultureInfo.CurrentCulture);
     }
 
     private static async Task<string?> T(MySqlConnection c, string s)
     {
         await using var x = c.CreateCommand();
         x.CommandText = s;
-        return Convert.ToString(await x.ExecuteScalarAsync());
+        return Convert.ToString(await x.ExecuteScalarAsync(), CultureInfo.CurrentCulture);
     }
 }

@@ -1,14 +1,5 @@
 version: 2
 updates:
-  # Keep SHA-pinned actions from rotting: Dependabot updates the pin and the version comment.
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    groups:
-      actions:
-        patterns: ["*"]
-
   - package-ecosystem: nuget
     directory: /
     schedule:
@@ -45,3 +36,11 @@ updates:
       - dependency-name: Npgsql.EntityFrameworkCore.PostgreSQL
       - dependency-name: Pomelo.EntityFrameworkCore.MySql
       - dependency-name: Oracle.EntityFrameworkCore
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'

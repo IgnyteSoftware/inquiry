@@ -1,4 +1,3 @@
-using Inquiry;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.Oracle.DependencyInjection;

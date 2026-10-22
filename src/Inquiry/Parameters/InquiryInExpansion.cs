@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
 using System.Text;
@@ -91,11 +90,17 @@ public static class InquiryInExpansion
     public static void ExpandNotIn<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, System.Data.DbType? dbType, int? size = null, byte? precision = null, byte? scale = null)
         => ExpandCore(command, parameterName, values, maxParameterCount, emptyReplacement: "(NULL) OR 1=1", dbType, size, precision, scale);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     private static void ExpandCore<T>(DbCommand command, string parameterName, IEnumerable<T>? values, int maxParameterCount, string emptyReplacement, System.Data.DbType? dbType = null, int? size = null, byte? precision = null, byte? scale = null)
     {
-        if (command is null) throw new System.ArgumentNullException(nameof(command));
-        if (parameterName is null) throw new System.ArgumentNullException(nameof(parameterName));
-        if (maxParameterCount < 1) throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+        ArgumentNullException.ThrowIfNull(command);
+
+        ArgumentNullException.ThrowIfNull(parameterName);
+
+        if (maxParameterCount < 1)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(maxParameterCount));
+        }
 
         var sentinel = "(" + parameterName + ")";
 
@@ -131,13 +136,16 @@ public static class InquiryInExpansion
                 placeholders.Append(", ");
             }
 
-            var elementName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var baseName = parameterName + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var elementName = baseName;
+            var suffixLength = 0;
             // SQL reserves parameters that later binders have not added yet. Check existing bindings
             // too, so separate expansions cannot reuse a name after its sentinel was replaced.
             while (command.CommandText.Contains(elementName, System.StringComparison.OrdinalIgnoreCase)
                 || !usedNames.Add(elementName))
             {
-                elementName += "_";
+                suffixLength++;
+                elementName = baseName + new string('_', suffixLength);
             }
             placeholders.Append(elementName);
 
@@ -193,10 +201,10 @@ public static class InquiryInExpansion
             // partner-type representation is always the correct one.
             boxed = boxed switch
             {
-                sbyte v  => (object)unchecked((byte)v),
+                sbyte v => (object)unchecked((byte)v),
                 ushort v => (object)unchecked((short)v),
-                uint v   => (object)unchecked((int)v),
-                ulong v  => (object)unchecked((long)v),
+                uint v => (object)unchecked((int)v),
+                ulong v => (object)unchecked((long)v),
                 _ => boxed,
             };
 
@@ -256,6 +264,6 @@ public static class InquiryInExpansion
         var index = text.IndexOf(search, System.StringComparison.Ordinal);
         return index < 0
             ? text
-            : text.Substring(0, index) + replacement + text.Substring(index + search.Length);
+            : string.Concat(text.AsSpan(0, index), replacement, text.AsSpan(index + search.Length));
     }
 }

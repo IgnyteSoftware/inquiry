@@ -1,10 +1,10 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Connections;
 using Inquiry.Pipeline;
 using Inquiry.SqlServer.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.SqlServer.Tests;
 

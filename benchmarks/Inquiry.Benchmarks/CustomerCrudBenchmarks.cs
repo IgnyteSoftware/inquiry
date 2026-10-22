@@ -27,11 +27,11 @@ public class CustomerCrudBenchmarks
     private DataOptions _linqToDbOptions = null!;
 
     /// <summary>Seeded row count: the small (1 000) and large (100 000) dataset tiers.</summary>
-    [Params(1000, 100000)] public int Rows;
+    [Params(1000, 100000)] public int Rows { get; set; }
 
     // Fixed targets used by SelectByKey / Update / Upsert. "00000" is the first seeded row.
     private const string TargetCustomerId = "00000";
-    private const string TargetCountry    = "USA";
+    private const string TargetCountry = "USA";
 
     // Monotonic counter so Insert iterations never collide on PK.
     private int _insertCounter;
@@ -54,17 +54,17 @@ public class CustomerCrudBenchmarks
 
     private static Customer ReadCustomer(System.Data.Common.DbDataReader reader) => new Customer
     {
-        CustomerID   = reader.GetString(0),
-        CompanyName  = reader.GetString(1),
-        ContactName  = reader.IsDBNull(2) ? null : reader.GetString(2),
+        CustomerID = reader.GetString(0),
+        CompanyName = reader.GetString(1),
+        ContactName = reader.IsDBNull(2) ? null : reader.GetString(2),
         ContactTitle = reader.IsDBNull(3) ? null : reader.GetString(3),
-        Address      = reader.IsDBNull(4) ? null : reader.GetString(4),
-        City         = reader.IsDBNull(5) ? null : reader.GetString(5),
-        Region       = reader.IsDBNull(6) ? null : reader.GetString(6),
-        PostalCode   = reader.IsDBNull(7) ? null : reader.GetString(7),
-        Country      = reader.IsDBNull(8) ? null : reader.GetString(8),
-        Phone        = reader.IsDBNull(9) ? null : reader.GetString(9),
-        Fax          = reader.IsDBNull(10) ? null : reader.GetString(10),
+        Address = reader.IsDBNull(4) ? null : reader.GetString(4),
+        City = reader.IsDBNull(5) ? null : reader.GetString(5),
+        Region = reader.IsDBNull(6) ? null : reader.GetString(6),
+        PostalCode = reader.IsDBNull(7) ? null : reader.GetString(7),
+        Country = reader.IsDBNull(8) ? null : reader.GetString(8),
+        Phone = reader.IsDBNull(9) ? null : reader.GetString(9),
+        Fax = reader.IsDBNull(10) ? null : reader.GetString(10),
     };
 
     // ---- SelectAll ----------------------------------------------------------------------
@@ -78,7 +78,11 @@ public class CustomerCrudBenchmarks
         command.CommandText = $"SELECT {SelectColumns} FROM Customers;";
         var list = new List<Customer>(_db.RowCount);
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadCustomer(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadCustomer(reader));
+        }
+
         return list.Count;
     }
 
@@ -187,7 +191,11 @@ public class CustomerCrudBenchmarks
         command.Parameters.Add("$c", SqliteType.Text).Value = TargetCountry;
         var list = new List<Customer>();
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) list.Add(ReadCustomer(reader));
+        while (await reader.ReadAsync())
+        {
+            list.Add(ReadCustomer(reader));
+        }
+
         return list.Count;
     }
 
@@ -250,11 +258,11 @@ public class CustomerCrudBenchmarks
         command.CommandText =
             "INSERT INTO Customers (CustomerID, CompanyName, ContactName, Country, City) " +
             "VALUES ($id, $company, $contact, $country, $city);";
-        command.Parameters.Add("$id",      SqliteType.Text).Value = id;
+        command.Parameters.Add("$id", SqliteType.Text).Value = id;
         command.Parameters.Add("$company", SqliteType.Text).Value = "Bench Co";
         command.Parameters.Add("$contact", SqliteType.Text).Value = "Bench Contact";
         command.Parameters.Add("$country", SqliteType.Text).Value = "USA";
-        command.Parameters.Add("$city",    SqliteType.Text).Value = "Bench City";
+        command.Parameters.Add("$city", SqliteType.Text).Value = "Bench City";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -276,11 +284,11 @@ public class CustomerCrudBenchmarks
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         ctx.Customers.Add(new EfCustomer
         {
-            CustomerID  = NextInsertId(),
+            CustomerID = NextInsertId(),
             CompanyName = "Bench Co",
             ContactName = "Bench Contact",
-            Country     = "USA",
-            City        = "Bench City",
+            Country = "USA",
+            City = "Bench City",
         });
         return await ctx.SaveChangesAsync();
     }
@@ -291,11 +299,11 @@ public class CustomerCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.InsertAsync(new L2Customer
         {
-            CustomerID  = NextInsertId(),
+            CustomerID = NextInsertId(),
             CompanyName = "Bench Co",
             ContactName = "Bench Contact",
-            Country     = "USA",
-            City        = "Bench City",
+            Country = "USA",
+            City = "Bench City",
         });
     }
 
@@ -307,11 +315,11 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.InsertAsync(connection, new RdCustomer
         {
-            CustomerID  = id,
+            CustomerID = id,
             CompanyName = "Bench Co",
             ContactName = "Bench Contact",
-            Country     = "USA",
-            City        = "Bench City",
+            Country = "USA",
+            City = "Bench City",
         });
     }
 
@@ -319,11 +327,11 @@ public class CustomerCrudBenchmarks
     public async Task<int> Insert_Inquiry()
         => await _db.Customers.InsertAsync(new Customer
         {
-            CustomerID  = NextInsertId(),
+            CustomerID = NextInsertId(),
             CompanyName = "Bench Co",
             ContactName = "Bench Contact",
-            Country     = "USA",
-            City        = "Bench City",
+            Country = "USA",
+            City = "Bench City",
         });
 
     // ---- Update -------------------------------------------------------------------------
@@ -337,11 +345,11 @@ public class CustomerCrudBenchmarks
         command.CommandText =
             "UPDATE Customers SET CompanyName = $company, ContactName = $contact, " +
             "Country = $country, City = $city WHERE CustomerID = $id;";
-        command.Parameters.Add("$id",      SqliteType.Text).Value = TargetCustomerId;
+        command.Parameters.Add("$id", SqliteType.Text).Value = TargetCustomerId;
         command.Parameters.Add("$company", SqliteType.Text).Value = "Updated Co";
         command.Parameters.Add("$contact", SqliteType.Text).Value = "Updated Contact";
         command.Parameters.Add("$country", SqliteType.Text).Value = "USA";
-        command.Parameters.Add("$city",    SqliteType.Text).Value = "Updated City";
+        command.Parameters.Add("$city", SqliteType.Text).Value = "Updated City";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -363,8 +371,8 @@ public class CustomerCrudBenchmarks
         var entity = await ctx.Customers.FirstAsync(c => c.CustomerID == TargetCustomerId);
         entity.CompanyName = "Updated Co";
         entity.ContactName = "Updated Contact";
-        entity.Country     = "USA";
-        entity.City        = "Updated City";
+        entity.Country = "USA";
+        entity.City = "Updated City";
         return await ctx.SaveChangesAsync();
     }
 
@@ -374,11 +382,11 @@ public class CustomerCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.UpdateAsync(new L2Customer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Updated Co",
             ContactName = "Updated Contact",
-            Country     = "USA",
-            City        = "Updated City",
+            Country = "USA",
+            City = "Updated City",
         });
     }
 
@@ -389,11 +397,11 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdCustomer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Updated Co",
             ContactName = "Updated Contact",
-            Country     = "USA",
-            City        = "Updated City",
+            Country = "USA",
+            City = "Updated City",
         });
     }
 
@@ -401,11 +409,11 @@ public class CustomerCrudBenchmarks
     public async Task<bool> Update_Inquiry()
         => await _db.Customers.UpdateAsync(new Customer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Updated Co",
             ContactName = "Updated Contact",
-            Country     = "USA",
-            City        = "Updated City",
+            Country = "USA",
+            City = "Updated City",
         });
 
     // ---- Upsert (raw SQL for the non-Inquiry libraries) ---------------------------------
@@ -435,11 +443,11 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = UpsertSql;
-        command.Parameters.Add("$id",      SqliteType.Text).Value = TargetCustomerId;
+        command.Parameters.Add("$id", SqliteType.Text).Value = TargetCustomerId;
         command.Parameters.Add("$company", SqliteType.Text).Value = "Upserted Co";
         command.Parameters.Add("$contact", SqliteType.Text).Value = "Upserted Contact";
         command.Parameters.Add("$country", SqliteType.Text).Value = "USA";
-        command.Parameters.Add("$city",    SqliteType.Text).Value = "Upserted City";
+        command.Parameters.Add("$city", SqliteType.Text).Value = "Upserted City";
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -450,11 +458,11 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         return await connection.ExecuteAsync(UpsertSqlAt, new
         {
-            id      = TargetCustomerId,
+            id = TargetCustomerId,
             company = "Upserted Co",
             contact = "Upserted Contact",
             country = "USA",
-            city    = "Upserted City",
+            city = "Upserted City",
         });
     }
 
@@ -479,11 +487,11 @@ public class CustomerCrudBenchmarks
         await using var dc = new DataConnection(_linqToDbOptions);
         return await dc.InsertOrReplaceAsync(new L2Customer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Upserted Co",
             ContactName = "Upserted Contact",
-            Country     = "USA",
-            City        = "Upserted City",
+            Country = "USA",
+            City = "Upserted City",
         });
     }
 
@@ -494,11 +502,11 @@ public class CustomerCrudBenchmarks
         await connection.OpenAsync();
         return await RepoDb.DbConnectionExtension.MergeAsync(connection, new RdCustomer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Upserted Co",
             ContactName = "Upserted Contact",
-            Country     = "USA",
-            City        = "Upserted City",
+            Country = "USA",
+            City = "Upserted City",
         });
     }
 
@@ -506,10 +514,10 @@ public class CustomerCrudBenchmarks
     public async Task<int> Upsert_Inquiry()
         => await _db.Customers.UpsertAsync(new Customer
         {
-            CustomerID  = TargetCustomerId,
+            CustomerID = TargetCustomerId,
             CompanyName = "Upserted Co",
             ContactName = "Upserted Contact",
-            Country     = "USA",
-            City        = "Upserted City",
+            Country = "USA",
+            City = "Upserted City",
         });
 }

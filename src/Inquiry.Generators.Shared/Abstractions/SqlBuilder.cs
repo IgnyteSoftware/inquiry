@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
@@ -23,7 +20,7 @@ public enum BatchInsertStrategy { SetBased, Row, Adaptive }
 /// <summary>
 /// Compile-time SQL builder consumed by the Inquiry source generator. One concrete subclass exists
 /// per supported dialect, lives in that provider's analyzer assembly, and is registered with
-/// <see cref="SqlBuilderRegistry"/> at analyzer load time. The Inquiry runtime ships no SQL — every
+/// <c>SqlBuilderRegistry</c> at analyzer load time. The Inquiry runtime ships no SQL — every
 /// statement is produced here and emitted as a <c>const string</c> field at compile time.
 /// </summary>
 /// <remarks>
@@ -53,20 +50,29 @@ public abstract class SqlBuilder
     {
         var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
         var failures = new System.Collections.Generic.List<string>(analysis.Failures);
-        if (analysis.HasComment) failures.Add("contains a comment");
-        if (analysis.HasTopLevelComma) failures.Add("contains a top-level comma");
-        if (analysis.HasUserVariableAssignment) failures.Add("contains a side-effecting variable assignment");
-        foreach (var token in analysis.ValueIdentifierTokens)
+        if (analysis.HasComment)
         {
-            if (!SetExpressionKeywords.Contains(token))
-            {
-                failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
-            }
+            failures.Add("contains a comment");
+        }
+
+        if (analysis.HasTopLevelComma)
+        {
+            failures.Add("contains a top-level comma");
+        }
+
+        if (analysis.HasUserVariableAssignment)
+        {
+            failures.Add("contains a side-effecting variable assignment");
+        }
+
+        foreach (var token in analysis.ValueIdentifierTokens.Where(candidate => !_setExpressionKeywords.Contains(candidate)))
+        {
+            failures.Add("contains bare identifier '" + token + "'; use a {Field} placeholder for mapped columns");
         }
         return failures;
     }
 
-    private static readonly HashSet<string> SetExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _setExpressionKeywords = new(StringComparer.OrdinalIgnoreCase)
     {
         "and", "or", "not", "null", "true", "false", "case", "when", "then", "else", "end",
         "as", "is", "between", "like", "in", "current_date", "current_time", "current_timestamp",
@@ -95,8 +101,14 @@ public abstract class SqlBuilder
         var chars = identifier.ToCharArray();
         for (var i = 0; i < chars.Length; i++)
         {
-            if (upper && chars[i] is >= 'a' and <= 'z') chars[i] = (char)(chars[i] - ('a' - 'A'));
-            else if (!upper && chars[i] is >= 'A' and <= 'Z') chars[i] = (char)(chars[i] + ('a' - 'A'));
+            if (upper && chars[i] is >= 'a' and <= 'z')
+            {
+                chars[i] = (char)(chars[i] - ('a' - 'A'));
+            }
+            else if (!upper && chars[i] is >= 'A' and <= 'Z')
+            {
+                chars[i] = (char)(chars[i] + ('a' - 'A'));
+            }
         }
         return new string(chars);
     }
@@ -117,7 +129,7 @@ public abstract class SqlBuilder
     public virtual IdentifierComparison IndexNameComparison => IdentifierComparison.Ordinal;
     public virtual IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.Ordinal;
     public virtual IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.Ordinal;
-    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
+    public virtual bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent)
         => action == ReferentialActionKind.NoAction;
 
     public virtual string ParameterName(string logicalName) => "@" + logicalName;
@@ -159,10 +171,25 @@ public abstract class SqlBuilder
     public virtual string BuildReaderExpression(ReaderExpressionContext context)
     {
         var ordinal = context.Ordinal;
-        if (context.ProviderIsGuid) return $"reader.GetGuid({ordinal})";
-        if (context.ProviderIsDateOnly) return $"reader.GetFieldValue<global::System.DateOnly>({ordinal})";
-        if (context.ProviderIsTimeOnly) return $"reader.GetFieldValue<global::System.TimeOnly>({ordinal})";
-        if (context.ProviderIsByteArray) return $"reader.GetFieldValue<global::System.Byte[]>({ordinal})";
+        if (context.ProviderIsGuid)
+        {
+            return $"reader.GetGuid({ordinal})";
+        }
+
+        if (context.ProviderIsDateOnly)
+        {
+            return $"reader.GetFieldValue<global::System.DateOnly>({ordinal})";
+        }
+
+        if (context.ProviderIsTimeOnly)
+        {
+            return $"reader.GetFieldValue<global::System.TimeOnly>({ordinal})";
+        }
+
+        if (context.ProviderIsByteArray)
+        {
+            return $"reader.GetFieldValue<global::System.Byte[]>({ordinal})";
+        }
 
         return context.ProviderSpecialType switch
         {
@@ -201,12 +228,36 @@ public abstract class SqlBuilder
     /// </summary>
     internal string? MapDbTypeExpression(TypeData type, bool isUnicode = true)
     {
-        if (type.IsGuid) return GuidDbTypeExpression;
-        if (type.SpecialType == SpecialType.System_Boolean) return BooleanDbTypeExpression;
-        if (type.SpecialType == SpecialType.System_DateTime) return DateTimeDbTypeExpression;
-        if (type.IsDateOnly) return DateOnlyDbTypeExpression;
-        if (type.IsTimeOnly) return TimeOnlyDbTypeExpression;
-        if (type.NonNullableDisplayName == "global::System.DateTimeOffset") return DateTimeOffsetDbTypeExpression;
+        if (type.IsGuid)
+        {
+            return GuidDbTypeExpression;
+        }
+
+        if (type.SpecialType == SpecialType.System_Boolean)
+        {
+            return BooleanDbTypeExpression;
+        }
+
+        if (type.SpecialType == SpecialType.System_DateTime)
+        {
+            return DateTimeDbTypeExpression;
+        }
+
+        if (type.IsDateOnly)
+        {
+            return DateOnlyDbTypeExpression;
+        }
+
+        if (type.IsTimeOnly)
+        {
+            return TimeOnlyDbTypeExpression;
+        }
+
+        if (type.NonNullableDisplayName == "global::System.DateTimeOffset")
+        {
+            return DateTimeOffsetDbTypeExpression;
+        }
+
         return DbTypeMapper.TryGetDbTypeExpression(type, isUnicode);
     }
 
@@ -527,7 +578,10 @@ public abstract class SqlBuilder
     {
         var parts = new string[filterColumns.Count];
         for (var i = 0; i < filterColumns.Count; i++)
+        {
             parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
+        }
+
         var where = string.Join(" AND ", parts);
         return (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
@@ -774,11 +828,16 @@ public abstract class SqlBuilder
     internal virtual string BuildCountByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         if (filterColumns.Count == 0)
+        {
             return BuildCountSql(context);
+        }
 
         var parts = new string[filterColumns.Count];
         for (var i = 0; i < filterColumns.Count; i++)
+        {
             parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
+        }
+
         var where = string.Join(" AND ", parts);
         return "SELECT " + CountExpression + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
@@ -1008,14 +1067,20 @@ public abstract class SqlBuilder
         if (context.NormalizedChecks is not null)
         {
             foreach (var check in context.NormalizedChecks)
+            {
                 lines.Add("CONSTRAINT " + QuoteIdentifier(check.EmittedName ?? check.RequestedName!) + " CHECK (" + check.Expression + ")");
+            }
         }
 
         if (context.GenerateForeignKeys && context.NormalizedForeignKeys is not null)
         {
             foreach (var foreignKey in context.NormalizedForeignKeys)
             {
-                if (context.SuppressedForeignKeyColumns?.Contains(foreignKey.LocalColumn) == true) continue;
+                if (context.SuppressedForeignKeyColumns?.Contains(foreignKey.LocalColumn) == true)
+                {
+                    continue;
+                }
+
                 lines.Add(BuildForeignKeyConstraintBody(foreignKey, includeConstraintKeyword: !string.IsNullOrEmpty(foreignKey.EmittedName)));
             }
         }
@@ -1050,9 +1115,15 @@ public abstract class SqlBuilder
             + RenderReferentialActionClause(ReferentialActionEvent.Delete, (ReferentialActionKind)foreignKey.OnDelete)
             + RenderReferentialActionClause(ReferentialActionEvent.Update, (ReferentialActionKind)foreignKey.OnUpdate);
 
-    protected virtual string RenderReferentialActionClause(ReferentialActionEvent @event, ReferentialActionKind action)
-        => action == ReferentialActionKind.NoAction ? string.Empty
-            : " ON " + (@event == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+    protected virtual string RenderReferentialActionClause(ReferentialActionEvent actionEvent, ReferentialActionKind action)
+    {
+        if (action == ReferentialActionKind.NoAction)
+        {
+            return string.Empty;
+        }
+
+        return " ON " + (actionEvent == ReferentialActionEvent.Delete ? "DELETE" : "UPDATE") + " " + RenderReferentialActionToken(action);
+    }
 
     protected virtual string RenderReferentialActionToken(ReferentialActionKind action) => action switch
     {
@@ -1106,8 +1177,9 @@ public abstract class SqlBuilder
                 continue;
             }
 
+            var indexPrefix = column.IsUnique ? "UX_" : "IX_";
             var indexName = string.IsNullOrEmpty(column.IndexName)
-                ? (column.IsUnique ? "UX_" : "IX_") + context.RawTableName + "_" + column.ColumnName
+                ? indexPrefix + context.RawTableName + "_" + column.ColumnName
                 : column.IndexName!;
             var unique = column.IsUnique ? "UNIQUE " : string.Empty;
             var guard = SupportsCreateIndexIfNotExists ? "IF NOT EXISTS " : string.Empty;
@@ -1207,7 +1279,11 @@ public abstract class SqlBuilder
 
     protected static bool DatabaseMaySupplyKey(SqlBuildContext context)
     {
-        if (context.KeyColumns.Count != 1) return false;
+        if (context.KeyColumns.Count != 1)
+        {
+            return false;
+        }
+
         var key = context.KeyColumns[0];
         return key.IsGenerated || key.UseDatabaseDefault;
     }
@@ -1367,9 +1443,16 @@ public abstract class SqlBuilder
     /// </summary>
     protected static string JsonPathToPostgresTextPath(string jsonPath)
     {
-        var trimmed = jsonPath.StartsWith("$.", System.StringComparison.Ordinal)
-            ? jsonPath.Substring(2)
-            : jsonPath.StartsWith("$", System.StringComparison.Ordinal) ? jsonPath.Substring(1) : jsonPath;
+        string trimmed;
+        if (jsonPath.StartsWith("$.", System.StringComparison.Ordinal))
+        {
+            trimmed = jsonPath.Substring(2);
+        }
+        else
+        {
+            trimmed = jsonPath.StartsWith("$", System.StringComparison.Ordinal) ? jsonPath.Substring(1) : jsonPath;
+        }
+
         return "{" + trimmed.Replace(".", ",") + "}";
     }
 
@@ -1413,7 +1496,11 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
     {
-        if (lockMode == 0) return selectSql;
+        if (lockMode == 0)
+        {
+            return selectSql;
+        }
+
         return selectSql + BuildLockSuffix(lockMode);
     }
 

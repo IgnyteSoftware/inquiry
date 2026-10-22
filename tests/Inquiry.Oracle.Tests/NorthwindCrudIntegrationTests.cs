@@ -41,12 +41,12 @@ public sealed class NorthwindCrudIntegrationTests
 
         Assert.Equal(1, inserted);
         Assert.NotNull(selected);
-        Assert.Equal("Acme Research", selected!.CompanyName);
+        Assert.Equal("Acme Research", selected.CompanyName);
         Assert.Equal("USA", selected.Country);
         Assert.Single(usCustomers);
         Assert.True(updated);
         Assert.NotNull(selectedAfterUpdate);
-        Assert.Equal("Acme Updated", selectedAfterUpdate!.CompanyName);
+        Assert.Equal("Acme Updated", selectedAfterUpdate.CompanyName);
         Assert.Equal("Canada", selectedAfterUpdate.Country);
         Assert.True(deleted);
         Assert.Null(selectedAfterDelete);
@@ -85,7 +85,7 @@ public sealed class NorthwindCrudIntegrationTests
         await using var harness = await OracleTestHarness.CreateAsync(_fixture.AdminConnectionString, "boolcol");
         var products = harness.GetRequiredService<ProductStore>();
 
-        await products.InsertAsync(new Product { ProductName = "Active",  Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Active", Discontinued = false });
         await products.InsertAsync(new Product { ProductName = "Retired", Discontinued = true });
 
         var all = await products.SelectAllAsync();
@@ -111,9 +111,9 @@ public sealed class NorthwindCrudIntegrationTests
         var afterUpdate = await store.SelectByKeyAsync("UPS01");
 
         Assert.NotNull(afterInsert);
-        Assert.Equal("First", afterInsert!.CompanyName);
+        Assert.Equal("First", afterInsert.CompanyName);
         Assert.NotNull(afterUpdate);
-        Assert.Equal("Second", afterUpdate!.CompanyName);
+        Assert.Equal("Second", afterUpdate.CompanyName);
         Assert.Equal("Canada", afterUpdate.Country);
     }
 
@@ -132,7 +132,7 @@ public sealed class NorthwindCrudIntegrationTests
 
         var loaded = await bridge.SelectByKeyAsync("ALFKI", "VIP");
         Assert.NotNull(loaded);
-        Assert.Equal("ALFKI", loaded!.CustomerID);
+        Assert.Equal("ALFKI", loaded.CustomerID);
         Assert.Equal("VIP", loaded.CustomerTypeID);
 
         Assert.True(await bridge.DeleteByKeyAsync("ALFKI", "VIP"));
@@ -149,14 +149,14 @@ public sealed class NorthwindCrudIntegrationTests
 
         await regions.InsertAsync(new Region { RegionID = 1, RegionDescription = "Eastern" });
         await territories.InsertAsync(new Territory { TerritoryID = "01581", TerritoryDescription = "Westboro", RegionID = 1 });
-        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford",  RegionID = 1 });
+        await territories.InsertAsync(new Territory { TerritoryID = "01730", TerritoryDescription = "Bedford", RegionID = 1 });
 
         var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Equal("Eastern", loaded!.RegionDescription);
+        Assert.Equal("Eastern", loaded.RegionDescription);
         Assert.NotNull(loaded.Territories);
-        Assert.Equal(2, loaded.Territories!.Count);
+        Assert.Equal(2, loaded.Territories.Count);
     }
 
     [SkippableFact]

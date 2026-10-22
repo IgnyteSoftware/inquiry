@@ -1,12 +1,9 @@
+using System.Collections.Immutable;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
 
 namespace Inquiry.Generators;
 
@@ -82,14 +79,23 @@ internal static class AutoJunctionSynthesizer
 
         foreach (var entity in entities)
         {
-            if (!entity.IsMapped) continue;
+            if (!entity.IsMapped)
+            {
+                continue;
+            }
 
             foreach (var relation in entity.Relations)
             {
-                if (!relation.IsAutoJunction) continue;
+                if (!relation.IsAutoJunction)
+                {
+                    continue;
+                }
 
                 var shape = TryBuildShape(context, sqlBuilder, byName, claimedTables, entity, relation);
-                if (shape is null) continue;
+                if (shape is null)
+                {
+                    continue;
+                }
 
                 if (Describe(byPair, pairByIdentity, shape) is { } disagreement)
                 {
@@ -259,15 +265,13 @@ internal static class AutoJunctionSynthesizer
         // inputs are fine. Held to the same rule as an explicitly named constraint or index rather than
         // shipping a name a provider will truncate — silent truncation collapses two junctions that
         // share a prefix onto one physical table.
-        foreach (var identifier in new[] { table, parentColumn, childColumn })
+        var invalidIdentifier = new[] { table, parentColumn, childColumn }.FirstOrDefault(identifier => !SchemaEmitter.IsValidExplicitIdentifier(identifier));
+        if (invalidIdentifier is not null)
         {
-            if (!SchemaEmitter.IsValidExplicitIdentifier(identifier))
-            {
-                Report(context, parent, relation,
-                    $"'{identifier}' is not a usable identifier — it must be non-empty, at most 63 bytes, and free of "
-                    + "control characters. Set JunctionTable, ParentColumn, or ChildColumn to a shorter name");
-                return null;
-            }
+            Report(context, parent, relation,
+                $"'{invalidIdentifier}' is not a usable identifier — it must be non-empty, at most 63 bytes, and free of "
+                + "control characters. Set JunctionTable, ParentColumn, or ChildColumn to a shorter name");
+            return null;
         }
 
         if (schema is not null && !SchemaEmitter.IsValidExplicitIdentifier(schema))
@@ -386,16 +390,8 @@ internal static class AutoJunctionSynthesizer
             return false;
         }
 
-        foreach (var claimed in schemas)
-        {
-            if (claimed is null || schema is null ||
-                string.Equals(claimed, schema, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return schemas.Any(claimed => claimed is null || schema is null ||
+            string.Equals(claimed, schema, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -407,7 +403,10 @@ internal static class AutoJunctionSynthesizer
     private static int ComparePhysical(EntityData left, EntityData right)
     {
         var bySchema = StringComparer.Ordinal.Compare(left.Schema ?? string.Empty, right.Schema ?? string.Empty);
-        if (bySchema != 0) return bySchema;
+        if (bySchema != 0)
+        {
+            return bySchema;
+        }
 
         var byTable = StringComparer.Ordinal.Compare(left.TableName, right.TableName);
         return byTable != 0 ? byTable : StringComparer.Ordinal.Compare(left.FullyQualifiedName, right.FullyQualifiedName);
@@ -467,21 +466,31 @@ internal static class AutoJunctionSynthesizer
 
         /// <summary>The column referencing <paramref name="entity"/>, which must be one of the two sides.</summary>
         public string ColumnFor(EntityData entity)
-            => string.Equals(entity.FullyQualifiedName, DeclaringEntity, StringComparison.Ordinal)
-                ? declaringParentColumn
-                : (string.Equals(entity.FullyQualifiedName, sideA.FullyQualifiedName, StringComparison.Ordinal) ? ColumnA : ColumnB);
+        {
+            if (string.Equals(entity.FullyQualifiedName, DeclaringEntity, StringComparison.Ordinal))
+            {
+                return declaringParentColumn;
+            }
+
+            return string.Equals(entity.FullyQualifiedName, sideA.FullyQualifiedName, StringComparison.Ordinal) ? ColumnA : ColumnB;
+        }
 
         /// <summary>The column referencing the side that is not <paramref name="entity"/>.</summary>
         public string ColumnForOther(EntityData entity)
-            => string.Equals(entity.FullyQualifiedName, DeclaringEntity, StringComparison.Ordinal)
-                ? declaringChildColumn
-                : (string.Equals(entity.FullyQualifiedName, sideA.FullyQualifiedName, StringComparison.Ordinal) ? ColumnB : ColumnA);
+        {
+            if (string.Equals(entity.FullyQualifiedName, DeclaringEntity, StringComparison.Ordinal))
+            {
+                return declaringChildColumn;
+            }
+
+            return string.Equals(entity.FullyQualifiedName, sideA.FullyQualifiedName, StringComparison.Ordinal) ? ColumnB : ColumnA;
+        }
 
         public EntityData ToEntity()
         {
-            var columnA = LinkColumn(ColumnA, sideA);
-            var columnB = LinkColumn(ColumnB, sideB);
-            var columns = ImmutableArray.Create(columnA, columnB);
+            var linkA = LinkColumn(ColumnA, sideA);
+            var linkB = LinkColumn(ColumnB, sideB);
+            var columns = ImmutableArray.Create(linkA, linkB);
 
             return new EntityData(
                 FullyQualifiedName: Identity,
@@ -512,7 +521,7 @@ internal static class AutoJunctionSynthesizer
         /// references; carrying the converter is also what keeps the generated dictionary key types
         /// agreeing on the eager path.
         /// </summary>
-        private ColumnData LinkColumn(string name, EntityData referenced)
+        private static ColumnData LinkColumn(string name, EntityData referenced)
         {
             var key = referenced.Keys[0];
             return key with

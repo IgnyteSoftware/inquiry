@@ -1,8 +1,6 @@
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 

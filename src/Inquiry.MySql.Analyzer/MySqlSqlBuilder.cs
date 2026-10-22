@@ -1,6 +1,4 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.MySql.Analyzer;
 
@@ -15,8 +13,12 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
     public override IReadOnlyList<string> ValidateComputedExpression(string expression)
     {
         var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
-        if (!analysis.HasConcatenationOperator) return analysis.Failures;
-        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mysql override" }).ToArray();
+        if (!analysis.HasConcatenationOperator)
+        {
+            return analysis.Failures;
+        }
+
+        return analysis.Failures.Concat(["contains ambiguous '||'; use CONCAT(...), OR, or a mysql override"]).ToArray();
     }
     public override string DialectName => "MySql";
     public override string ProviderId => "mysql";
@@ -26,6 +28,6 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
     public override ConstraintNameScope IndexNameScope => ConstraintNameScope.Table;
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
 }

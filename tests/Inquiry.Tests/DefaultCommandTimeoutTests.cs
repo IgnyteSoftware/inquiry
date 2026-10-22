@@ -1,9 +1,9 @@
+using System.Data.Common;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 

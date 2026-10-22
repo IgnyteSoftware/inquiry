@@ -227,7 +227,10 @@
         _busy = true;
         _error = null;
         try { await action(); }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            // The page is closing, so there is no error to show.
+        }
         catch (ValidationException ex) { _error = ex.Message; }
         catch (Exception ex) { Logger.LogError(ex, "Product workspace operation failed"); _error = "The operation could not be completed. Retry, or reload the product before saving again."; }
         finally { _busy = false; }

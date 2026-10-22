@@ -1,10 +1,10 @@
-using Inquiry;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Pipeline;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -92,6 +92,7 @@ public sealed class PreparedStatementTests
 
         protected override DbCommand CreateDbCommand() => _command;
 
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => string.Empty;
         public override string DataSource => string.Empty;
@@ -156,7 +157,13 @@ public sealed class PreparedStatementTests
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add(value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var v in values) _items.Add(v); }
+        public override void AddRange(Array values)
+        {
+            foreach (var v in values)
+            {
+                _items.Add(v);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains(value);
         public override bool Contains(string value) => false;

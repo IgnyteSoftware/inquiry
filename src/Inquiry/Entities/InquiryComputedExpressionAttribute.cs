@@ -9,8 +9,16 @@ public sealed class InquiryComputedExpressionAttribute : Attribute
     /// <param name="expression">Raw provider SQL expression.</param>
     public InquiryComputedExpressionAttribute(string providerId, string expression)
     {
-        if (string.IsNullOrWhiteSpace(providerId)) throw new ArgumentException("Provider id cannot be empty.", nameof(providerId));
-        if (string.IsNullOrWhiteSpace(expression)) throw new ArgumentException("Expression cannot be empty.", nameof(expression));
+        if (string.IsNullOrWhiteSpace(providerId))
+        {
+            throw new ArgumentException("Provider id cannot be empty.", nameof(providerId));
+        }
+
+        if (string.IsNullOrWhiteSpace(expression))
+        {
+            throw new ArgumentException("Expression cannot be empty.", nameof(expression));
+        }
+
         ProviderId = providerId;
         Expression = expression;
     }

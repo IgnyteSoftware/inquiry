@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.DependencyInjection;
 using Inquiry.FeatureCatalog;
 using Inquiry.IntegrationTesting;
@@ -43,30 +44,30 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         string adminConnectionString,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default,
         Action<global::Inquiry.InquiryOptions>? configureOptions = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        CancellationToken cancellationToken = default)
         => CreateFromDdlAsync(
             adminConnectionString,
             NorthwindSchema.OracleDdl,
             namePrefix,
             userCreated,
-            cancellationToken,
             configureOptions,
-            configureServices);
+            configureServices,
+            cancellationToken);
 
     public static async Task<OracleTestHarness> CreateFromDdlAsync(
         string adminConnectionString,
         string ddl,
         string? namePrefix = null,
         Action<string>? userCreated = null,
-        CancellationToken cancellationToken = default,
         Action<global::Inquiry.InquiryOptions>? configureOptions = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        CancellationToken cancellationToken = default)
     {
         var prefix = (namePrefix ?? "inquiry").ToUpperInvariant();
         var schemaUser = prefix + "_" + Guid.NewGuid().ToString("N").Substring(0, 16).ToUpperInvariant();
-        var schemaPassword = "Pw_" + Guid.NewGuid().ToString("N").Substring(0, 12);
+        var schemaPassword = string.Concat("Pw_", Guid.NewGuid().ToString("N").AsSpan(0, 12));
         var connectionString = new OracleConnectionStringBuilder(adminConnectionString)
         {
             UserID = schemaUser,
@@ -263,7 +264,9 @@ internal sealed class OracleTestHarness : IAsyncDisposable
             query.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
             await using var reader = await query.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
+            {
                 sessions.Add((reader.GetInt32(0), reader.GetInt32(1)));
+            }
         }
 
         foreach (var session in sessions)
@@ -293,6 +296,6 @@ internal sealed class OracleTestHarness : IAsyncDisposable
         command.CommandTimeout = 10;
         command.CommandText = "SELECT COUNT(*) FROM ALL_USERS WHERE USERNAME = :username";
         command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
-        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) != 0;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken), CultureInfo.CurrentCulture) != 0;
     }
 }

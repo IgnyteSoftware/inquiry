@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
 using Inquiry.Oracle.Tests.Fixtures;
@@ -32,11 +31,11 @@ public sealed class PredicateSelectIntegrationTests
         var c1 = cats.Single(c => c.CategoryName == "Beverages").CategoryID!.Value;
         var c2 = cats.Single(c => c.CategoryName == "Condiments").CategoryID!.Value;
 
-        await products.InsertAsync(new Product { ProductName = "Chai",               UnitPrice = 18m, UnitsInStock = 39, CategoryID = c1,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Chang",              UnitPrice = 19m, UnitsInStock = 17, CategoryID = c1,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Aniseed Syrup",      UnitPrice = 10m, UnitsInStock = 13, CategoryID = c2,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Chef Anton's Cajun", UnitPrice = 22m, UnitsInStock = 53, CategoryID = c2,   Discontinued = true });
-        await products.InsertAsync(new Product { ProductName = "Uncategorized",      UnitPrice = 5m,  UnitsInStock = 0,  CategoryID = null, Discontinued = true });
+        await products.InsertAsync(new Product { ProductName = "Chai", UnitPrice = 18m, UnitsInStock = 39, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Chang", UnitPrice = 19m, UnitsInStock = 17, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Aniseed Syrup", UnitPrice = 10m, UnitsInStock = 13, CategoryID = c2, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Chef Anton's Cajun", UnitPrice = 22m, UnitsInStock = 53, CategoryID = c2, Discontinued = true });
+        await products.InsertAsync(new Product { ProductName = "Uncategorized", UnitPrice = 5m, UnitsInStock = 0, CategoryID = null, Discontinued = true });
 
         return (c1, c2);
     }
@@ -166,8 +165,9 @@ public sealed class PredicateSelectIntegrationTests
     }
 
     // #106: live bucket-boundary coverage against real Oracle. #67 pads each IN list to the next power of
-    // two by repeating an element (well under Oracle's 1000-expression IN ceiling for these cardinalities);
-    // 1,2,3,5,9 → buckets 1,2,4,8,16, all returning the same rows — the padding-is-a-no-op guarantee.
+    // two by repeating an element. These list sizes stay well under the Oracle limit of 1000 IN expressions.
+    // Lists of 1, 2, 3, 5, and 9 values use buckets of 1, 2, 4, 8, and 16, and all return the same rows.
+    // This shows that the padding is a no-op.
     [SkippableFact]
     public async Task InListBucketBoundariesReturnCorrectRows()
     {

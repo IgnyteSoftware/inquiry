@@ -1,8 +1,4 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Inquiry.SqlServer.Analyzer;
 
@@ -40,7 +36,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull or ReferentialActionKind.SetDefault;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull or ReferentialActionKind.SetDefault;
 
     public override bool SupportsDatabaseGeneratedConcurrencyToken => true;
 
@@ -275,7 +271,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
             QuoteIdentifier(c.ColumnName) + " " + (c.IsDatabaseGeneratedToken ? "BINARY(8)" : MapColumnType(c)))) + ");";
 
-    private string SelectFromOutput(SqlBuildContext context)
+    private static string SelectFromOutput(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM @_out";
 
     private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
@@ -342,7 +338,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             trailing;
     }
 
-    private string BuildGeneratedKeyEmptySetBranch(
+    private static string BuildGeneratedKeyEmptySetBranch(
         SqlBuildContext context,
         bool returning,
         string keyColumn,
@@ -441,7 +437,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
     {
-        if (lockMode == 0) return selectSql;
+        if (lockMode == 0)
+        {
+            return selectSql;
+        }
+
         var hint = lockMode switch
         {
             1 => " WITH (UPDLOCK, ROWLOCK)",

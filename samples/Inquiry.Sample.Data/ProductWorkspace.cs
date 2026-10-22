@@ -20,9 +20,15 @@ public sealed class ProductWorkspace(
     {
         using var scope = Enter(workspaceId);
         if (search.Minimum < 0 || search.Maximum < 0 || search.Minimum > search.Maximum)
+        {
             throw new ValidationException("Enter a valid price range.");
+        }
+
         if (search.Offset < 0 || search.Limit is < 1 or > 100)
+        {
             throw new ValidationException("Choose a page size between 1 and 100.");
+        }
+
         var name = string.IsNullOrWhiteSpace(search.Name) ? null : "%" + search.Name.Trim() + "%";
         int? stock = search.InStock ? 1 : null;
         return await ((search.Sort, search.Unassigned) switch
@@ -60,19 +66,31 @@ public sealed class ProductWorkspace(
     {
         using var scope = Enter(workspaceId);
         if (product.WorkspaceId != workspaceId || product.IsDeleted)
+        {
             throw new ValidationException("This product does not belong to the current workspace.");
+        }
+
         product.Name = (product.Name ?? "").Trim();
         product.Description = string.IsNullOrWhiteSpace(product.Description) ? null : product.Description.Trim();
         Validator.ValidateObject(product, new ValidationContext(product), validateAllProperties: true);
         if (product.CategoryId is not null && !(await categories.ListAsync(ct)).Any(c => c.Id == product.CategoryId))
+        {
             throw new ValidationException("Choose an existing category.");
+        }
+
         if (product.Id == 0)
+        {
             return await products.CreateAsync(product, ct);
+        }
+
         return await inquiry.ExecuteInTransactionAsync<WorkspaceProduct?>(async (_, token) =>
         {
             var current = await products.FindAsync(product.Id, token);
             if (current is null || current.Version != product.Version)
+            {
                 return null;
+            }
+
             return await products.SaveAsync(product, token);
         }, cancellationToken: ct);
     }
@@ -81,12 +99,18 @@ public sealed class ProductWorkspace(
     {
         using var scope = Enter(workspaceId);
         if (product.WorkspaceId != workspaceId || product.Id == 0)
+        {
             throw new ValidationException("Choose a saved product in this workspace.");
+        }
+
         return await inquiry.ExecuteInTransactionAsync(async (_, token) =>
         {
             var current = await products.FindAsync(product.Id, token);
             if (current is null || current.Version != product.Version)
+            {
                 return false;
+            }
+
             return await products.ArchiveAsync(product, token);
         }, cancellationToken: ct);
     }
@@ -96,7 +120,10 @@ public sealed class ProductWorkspace(
         await inquiry.ExecuteInTransactionAsync(async (_, token) =>
         {
             if ((await categories.ListAsync(token)).Count != 0)
+            {
                 return;
+            }
+
             await categories.SeedAsync(new[]
             {
                 new WorkspaceCategory { Id = 1, Name = "Coffee & tea" },
@@ -109,7 +136,8 @@ public sealed class ProductWorkspace(
                 "Decaf blend", "Cocoa powder", "Glass carafe", "Breakfast bundle", "Chamomile", "Maple syrup",
                 "Measuring spoons", "Weekend hamper", "Cold brew", "Fruit preserve", "Tea strainer", "Discovery set"];
             int[] categoryIds = [1, 1, 2, 3, 4, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4];
-            foreach (var workspaceId in new[] { 1, 2 })
+            int[] workspaceIds = [1, 2];
+            foreach (var workspaceId in workspaceIds)
             {
                 var rows = names.Select((name, index) => new WorkspaceProduct
                 {
@@ -125,10 +153,13 @@ public sealed class ProductWorkspace(
         }, cancellationToken: ct);
     }
 
-    private static IDisposable Enter(int workspaceId)
+    private static InquiryFilterContext.Scope Enter(int workspaceId)
     {
         if (workspaceId is not (1 or 2))
+        {
             throw new ValidationException("Choose Northwind or Market House.");
+        }
+
         return InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["WorkspaceId"] = workspaceId });
     }
 }

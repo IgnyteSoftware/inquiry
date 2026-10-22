@@ -1,4 +1,3 @@
-using System.Linq;
 using Inquiry.FeatureCatalog.FullText;
 using Inquiry.MariaDb.Tests.Fixtures;
 

@@ -445,3 +445,8 @@ samples/Inquiry.Sample/northwind.db-*
 
 # Codex CLI local state
 .codex/
+
+# Ignyte template entries
+.idea/
+coverage/
+packages.lock.json.tmp

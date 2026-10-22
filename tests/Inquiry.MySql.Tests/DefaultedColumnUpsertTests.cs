@@ -40,7 +40,7 @@ public sealed class DefaultedColumnUpsertTests
         // from the VALUES list since UseDatabaseDefault = true → DB default 'New' applied.
         var inserted = await store.UpsertReturningAsync(new DefaultedItem { Key = 1, Name = "Widget" });
         Assert.NotNull(inserted);
-        Assert.Equal("New", inserted!.Status);
+        Assert.Equal("New", inserted.Status);
 
         // Second upsert with the same key hits the UPDATE branch (ON DUPLICATE KEY UPDATE).
         // The entity supplies Status = "Closed" — that's what the row should end up with.
@@ -49,11 +49,11 @@ public sealed class DefaultedColumnUpsertTests
         // attempted insert → the row's Status silently reverted to 'New'.
         var updated = await store.UpsertReturningAsync(new DefaultedItem { Key = 1, Name = "Widget", Status = "Closed" });
         Assert.NotNull(updated);
-        Assert.Equal("Closed", updated!.Status);
+        Assert.Equal("Closed", updated.Status);
 
         // Final read-back from the row (not the returning select) confirms the persisted state.
         var read = await store.SelectByKeyAsync(1);
         Assert.NotNull(read);
-        Assert.Equal("Closed", read!.Status);
+        Assert.Equal("Closed", read.Status);
     }
 }

@@ -1,4 +1,3 @@
-using Inquiry;
 using Inquiry.FeatureCatalog;
 using Inquiry.PostgreSql.Tests.Fixtures;
 

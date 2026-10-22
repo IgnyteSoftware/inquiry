@@ -1,4 +1,3 @@
-using System.Data;
 using System.Text.Json;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -51,8 +50,9 @@ public class EagerLoadingBenchmarks
 {
     private SqlServerBenchmarkDatabase _db = null!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     // First category id under the benchmark seed. Categories are seeded first (10 rows), so id 1 exists.
     private const int TargetCategoryId = 1;
@@ -95,7 +95,11 @@ public class EagerLoadingBenchmarks
         var hasCategory = await reader.ReadAsync();
         await reader.NextResultAsync();
         var childCount = 0;
-        while (await reader.ReadAsync()) childCount++;
+        while (await reader.ReadAsync())
+        {
+            childCount++;
+        }
+
         return hasCategory ? childCount : -1;
     }
 
@@ -121,6 +125,7 @@ public class EagerLoadingBenchmarks
     }
 
     [BenchmarkCategory("EagerParentChildren"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> Eager_Dlg()
     {
         var category = await DlgLib.Category.SelectOneWithProductsUsingCategoryIDAsync(TargetCategoryId);
@@ -164,6 +169,7 @@ public class EagerLoadingBenchmarks
         return attached;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The SQL joins constant strings chosen in code; no part comes from input.")]
     private async Task<ManyToManyGraphCardinality> LoadManyToManyGraphAdoAsync(bool filteredChildren)
     {
         const string parentsSql = "SELECT [Id], [Name] FROM [BenchmarkM2MOrder]";

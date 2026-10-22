@@ -1,7 +1,3 @@
-using System;
-using System.Threading.Tasks;
-using Xunit;
-
 namespace Inquiry.FeatureCatalog;
 
 /// <summary>Provider-neutral exact-value acceptance contract for issue #134.</summary>
@@ -21,7 +17,7 @@ public static class BulkAllTypesCases
         {
             var actual = await store.GetAsync(item.Id);
             Assert.NotNull(actual);
-            AssertEqual(item, actual!);
+            AssertEqual(item, actual);
         }
     }
 

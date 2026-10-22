@@ -1,3 +1,4 @@
+using System.Collections;
 using Inquiry.Commands;
 using Inquiry.Entities;
 using Inquiry.Interceptors;
@@ -6,8 +7,6 @@ using Inquiry.SqlServer.Tests.Fixtures;
 using Inquiry.Stores;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
-using System.Collections;
-using System.Data.Common;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -92,7 +91,9 @@ public sealed class TvpResourceLifetimeIntegrationTests
         await foreach (var item in harness.GetRequiredService<TvpLifetimeStore>().StreamAsync(source))
         {
             Assert.Equal(1, item.Id);
+#pragma warning disable S1751 // The test checks that leaving the stream after the first row disposes the source.
             break;
+#pragma warning restore S1751
         }
 
         Assert.Equal(1, source.DisposeCount);
@@ -161,7 +162,10 @@ public sealed class TvpResourceLifetimeIntegrationTests
             started++;
             try
             {
-                for (var id = 1; id <= 5; id++) yield return id;
+                for (var id = 1; id <= 5; id++)
+                {
+                    yield return id;
+                }
             }
             finally
             {
@@ -293,7 +297,11 @@ public sealed class TvpResourceLifetimeIntegrationTests
             public void Reset() => throw new NotSupportedException();
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
             }

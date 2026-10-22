@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -6,8 +8,6 @@ using Inquiry.Commands;
 using Inquiry.Entities;
 using Inquiry.Materialization;
 using Microsoft.Data.SqlClient;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Benchmarks.SqlServer;
 
@@ -88,8 +88,10 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private SqlServerBenchmarkDatabase _db = null!;
     private IInquiry _inquiry = null!;
     private DbDataReader _dispatchReader = null!;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "The benchmark measures interface dispatch, so the field keeps the interface type.")]
     private IInquiryEntityMaterializer<SequentialBenchmarkRow> _classMaterializer = null!;
-    private SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer = default;
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1805", Justification = "The stateless struct materializer is used as its default value; the explicit initializer shows that this is intended.")]
+    private readonly SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer = new();
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -157,6 +159,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     }
 
     [BenchmarkCategory("PartialStream"), Benchmark(Baseline = true)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S4144", Justification = "Each benchmark category needs its own full-stream baseline method; the bodies match on purpose.")]
     public async Task<long> GeneratedFullStream()
     {
         long checksum = 0;
@@ -168,6 +171,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     }
 
     [BenchmarkCategory("PartialStream"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1751", Justification = "The benchmark measures reading one row and then disposing the stream, so the loop returns on its first pass.")]
     public async Task<long> GeneratedFirstRowThenDispose()
     {
         await foreach (var row in _inquiry.QueryAsync<SequentialBenchmarkRow>(new InquiryCommand(SelectSql)))
@@ -185,7 +189,11 @@ public class GeneratedAdHocSequentialAccessBenchmarks
         command.CommandText = SelectSql;
         await using var reader = await command.ExecuteReaderAsync(behavior);
         long checksum = 0;
-        while (await reader.ReadAsync()) checksum += Checksum(ReadRow(reader));
+        while (await reader.ReadAsync())
+        {
+            checksum += Checksum(ReadRow(reader));
+        }
+
         return checksum;
     }
 
@@ -194,7 +202,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
         where TMaterializer : struct, IInquiryEntityMaterializer<T>
         => materializer.Materialize(reader);
 
-    private static DbDataReader CreateDispatchReader()
+    private static DataTableReader CreateDispatchReader()
     {
         var table = new DataTable();
         table.Columns.Add("Id", typeof(int));
@@ -206,14 +214,26 @@ public class GeneratedAdHocSequentialAccessBenchmarks
 
         var values = new object[14];
         values[0] = 1;
-        for (var ordinal = 1; ordinal <= 12; ordinal++) values[ordinal] = 100 + ordinal;
+        for (var ordinal = 1; ordinal <= 12; ordinal++)
+        {
+            values[ordinal] = 100 + ordinal;
+        }
+
         var payload = new byte[256];
-        for (var index = 0; index < payload.Length; index++) payload[index] = (byte)index;
+        for (var index = 0; index < payload.Length; index++)
+        {
+            payload[index] = (byte)index;
+        }
+
         values[13] = payload;
         table.Rows.Add(values);
 
         var reader = table.CreateDataReader();
-        if (!reader.Read()) throw new InvalidOperationException("Dispatch benchmark row was not created.");
+        if (!reader.Read())
+        {
+            throw new InvalidOperationException("Dispatch benchmark row was not created.");
+        }
+
         return reader;
     }
 
@@ -238,14 +258,22 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private static long Checksum(IReadOnlyList<SequentialBenchmarkRow> rows)
     {
         long checksum = 0;
-        foreach (var row in rows) checksum += Checksum(row);
+        foreach (var row in rows)
+        {
+            checksum += Checksum(row);
+        }
+
         return checksum;
     }
 
     private static long Checksum(IReadOnlyList<BufferedSequentialBenchmarkRow> rows)
     {
         long checksum = 0;
-        foreach (var row in rows) checksum += Checksum(row);
+        foreach (var row in rows)
+        {
+            checksum += Checksum(row);
+        }
+
         return checksum;
     }
 
@@ -264,7 +292,11 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private static long Checksum(long scalarChecksum, byte[] payload)
     {
         var checksum = scalarChecksum + payload.Length;
-        for (var index = 0; index < payload.Length; index++) checksum += payload[index];
+        for (var index = 0; index < payload.Length; index++)
+        {
+            checksum += payload[index];
+        }
+
         return checksum;
     }
 }

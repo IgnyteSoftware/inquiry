@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.SqlServer.Tests.Fixtures;
 
 namespace Inquiry.SqlServer.Tests;
@@ -27,8 +24,8 @@ public sealed class GeneratedKeyUpsertConcurrencyTests
 
         var saved = await store.UpsertReturningAsync(new GuidItem { Id = null, Name = "A" });
         Assert.NotNull(saved);
-        Assert.NotNull(saved!.Id);
-        Assert.NotEqual(Guid.Empty, saved.Id!.Value);
+        Assert.NotNull(saved.Id);
+        Assert.NotEqual(Guid.Empty, saved.Id.Value);
     }
 
     [SkippableFact]

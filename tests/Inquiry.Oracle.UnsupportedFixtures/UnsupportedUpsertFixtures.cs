@@ -3,6 +3,7 @@ using Inquiry.Stores;
 
 namespace Inquiry.Oracle.Tests;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2094", Justification = "Empty marker type; the Oracle test harness uses typeof(...).Assembly to register the fixture stores.")]
 public sealed class OracleUnsupportedFixtureMarker;
 
 [InquiryTable("TDefaultedKeyItem")]

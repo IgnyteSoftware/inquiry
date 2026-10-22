@@ -1,7 +1,7 @@
-using Inquiry.Commands;
-using Inquiry.Parameters;
 using System.Data;
 using System.Globalization;
+using Inquiry.Commands;
+using Inquiry.Parameters;
 
 namespace Inquiry;
 
@@ -12,7 +12,7 @@ public static class InquirySql
 {
     // Generated parameter names for the common interpolation arities, so converting a
     // FormattableString doesn't allocate a fresh name string per hole.
-    private static readonly string[] CachedNames =
+    private static readonly string[] _cachedNames =
     {
         "@p0", "@p1", "@p2", "@p3", "@p4", "@p5", "@p6", "@p7",
         "@p8", "@p9", "@p10", "@p11", "@p12", "@p13", "@p14", "@p15",
@@ -27,10 +27,7 @@ public static class InquirySql
         CommandType? commandType = null,
         int? commandTimeout = null)
     {
-        if (commandText is null)
-        {
-            throw new ArgumentNullException(nameof(commandText));
-        }
+        ArgumentNullException.ThrowIfNull(commandText);
 
         var args = commandText.GetArguments();
         if (args.Length == 0)
@@ -42,7 +39,7 @@ public static class InquirySql
         var parameters = new InquiryParameter[args.Length];
         for (var i = 0; i < args.Length; i++)
         {
-            var name = i < CachedNames.Length ? CachedNames[i] : "@p" + i.ToString(CultureInfo.InvariantCulture);
+            var name = i < _cachedNames.Length ? _cachedNames[i] : "@p" + i.ToString(CultureInfo.InvariantCulture);
             placeholders[i] = name;
             parameters[i] = new InquiryParameter(name, CoerceAdHocValue(args[i]));
         }
@@ -62,15 +59,14 @@ public static class InquirySql
         if (type.IsEnum)
         {
             value = System.Convert.ChangeType(value, Enum.GetUnderlyingType(type), CultureInfo.InvariantCulture);
-            type = value.GetType();
         }
 
         return value switch
         {
-            sbyte v  => unchecked((byte)v),
+            sbyte v => unchecked((byte)v),
             ushort v => unchecked((short)v),
-            uint v   => unchecked((int)v),
-            ulong v  => unchecked((long)v),
+            uint v => unchecked((int)v),
+            ulong v => unchecked((long)v),
             _ => value,
         };
     }

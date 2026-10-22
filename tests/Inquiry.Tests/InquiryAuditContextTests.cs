@@ -1,7 +1,3 @@
-using System.Threading.Tasks;
-using Inquiry;
-using Xunit;
-
 namespace Inquiry.Tests;
 
 /// <summary>

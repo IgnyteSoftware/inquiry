@@ -107,7 +107,11 @@ internal sealed class SqlServerBatchMutationStrategyRunner(string connectionStri
         for (var i = 0; i < items.Count; i++)
         {
             id.Value = items[i].Id;
-            if (value is not null) value.Value = items[i].ValueText;
+            if (value is not null)
+            {
+                value.Value = items[i].ValueText;
+            }
+
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         await transaction.CommitAsync().ConfigureAwait(false);
@@ -146,7 +150,11 @@ internal sealed class SqlServerBatchMutationStrategyRunner(string connectionStri
             var command = batch.CreateBatchCommand();
             command.CommandText = commandText;
             AddParameter(command, "@id", SqlDbType.Int, 0, items[i].Id);
-            if (includeValue) AddParameter(command, "@value", SqlDbType.NVarChar, 100, items[i].ValueText);
+            if (includeValue)
+            {
+                AddParameter(command, "@value", SqlDbType.NVarChar, 100, items[i].ValueText);
+            }
+
             batch.BatchCommands.Add(command);
         }
         var affected = await batch.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -178,7 +186,11 @@ internal sealed class SqlServerBatchMutationStrategyRunner(string connectionStri
         var parameter = (SqlParameter)command.CreateParameter();
         parameter.ParameterName = name;
         parameter.SqlDbType = type;
-        if (size > 0) parameter.Size = size;
+        if (size > 0)
+        {
+            parameter.Size = size;
+        }
+
         parameter.Value = value;
         command.Parameters.Add(parameter);
     }

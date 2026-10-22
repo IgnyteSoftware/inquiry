@@ -1,4 +1,3 @@
-using Inquiry.Benchmarks.Contracts;
 using Inquiry.Benchmarks.Contracts.Evidence;
 using Inquiry.Benchmarks.Contracts.Fixtures;
 
@@ -52,8 +51,11 @@ internal static class TestData
             ProviderResolvedAsset(provider),
         };
         if (provider == "sqlite")
+        {
             assets.Add(new("nuget/sqlitepclraw.lib.e_sqlite3/3.50.3/runtimes/linux-x64/native/libe_sqlite3.so",
                 ResolvedAssetKind.Native, "native:SQLitePCLRaw.lib.e_sqlite3", new string('f', 64)));
+        }
+
         return new(
             ResolvedDependencyManifest.RequiredSelectionRule,
             provider,
@@ -245,7 +247,9 @@ internal static class TestData
     private static SourceArtifactManifest Manifest(BenchmarkSourceMode mode, string provider, string runtimeTfm)
     {
         if (mode == BenchmarkSourceMode.ProjectReference)
+        {
             return SourceArtifactManifestCatalog.GetRequired(provider, mode, runtimeTfm);
+        }
 
         var project = SourceArtifactManifestCatalog.GetRequired(provider, BenchmarkSourceMode.ProjectReference, runtimeTfm);
         var packages = SourceArtifactManifestCatalog.PackageIds.Select(static id =>

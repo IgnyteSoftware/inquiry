@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -9,7 +6,7 @@ namespace Inquiry.FeatureCatalog;
 public static class M2MMaterializationProbe
 {
     public const string Sentinel = "__UNRELATED_SENTINEL__";
-    private static readonly object Gate = new();
+    private static readonly object _gate = new();
     private static HashSet<string> _excludedTitles = new();
     private static HashSet<long> _excludedJunctionProductIds = new();
     private static int _childReads;
@@ -24,7 +21,7 @@ public static class M2MMaterializationProbe
 
     public static void Reset(IEnumerable<string> excludedTitles, IEnumerable<long> excludedJunctionProductIds)
     {
-        lock (Gate)
+        lock (_gate)
         {
             _excludedTitles = new HashSet<string>(excludedTitles);
             _excludedJunctionProductIds = new HashSet<long>(excludedJunctionProductIds);
@@ -38,18 +35,24 @@ public static class M2MMaterializationProbe
     internal static void RecordChild(string value)
     {
         Interlocked.Increment(ref _childReads);
-        lock (Gate)
+        lock (_gate)
         {
-            if (_excludedTitles.Contains(value)) Interlocked.Increment(ref _excludedChildReads);
+            if (_excludedTitles.Contains(value))
+            {
+                Interlocked.Increment(ref _excludedChildReads);
+            }
         }
     }
 
     internal static void RecordJunction(long productId)
     {
         Interlocked.Increment(ref _junctionReads);
-        lock (Gate)
+        lock (_gate)
         {
-            if (_excludedJunctionProductIds.Contains(productId)) Interlocked.Increment(ref _excludedJunctionReads);
+            if (_excludedJunctionProductIds.Contains(productId))
+            {
+                Interlocked.Increment(ref _excludedJunctionReads);
+            }
         }
     }
 }

@@ -1,4 +1,3 @@
-using System;
 using Inquiry.Entities;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;

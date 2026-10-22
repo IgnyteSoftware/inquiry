@@ -1,10 +1,7 @@
-using System;
-using System.Linq;
-using Microsoft.CodeAnalysis;
-using Inquiry.Generators.Models;
-using Inquiry.Generators.Infrastructure;
-using Inquiry.Generators;
+using System.Globalization;
 using Inquiry.Generators.Abstractions;
+using Inquiry.Generators.Models;
+using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
 
@@ -58,7 +55,7 @@ public sealed partial class InquiryGeneratorTests
     public void UnsupportedIncludeReportsInq071(string dialect)
     {
         var result = RunGenerator(PrimitiveSource, dialect: dialect);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("INCLUDE", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("INCLUDE", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -78,7 +75,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
         var result = RunGenerator(source, dialect: dialect);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("ON DELETE", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("ON DELETE", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -95,7 +92,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
         var result = RunGenerator(source, dialect: "SqlServer");
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("DefaultExpression", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("DefaultExpression", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -184,7 +181,7 @@ public sealed partial class InquiryGeneratorTests
         // primitive validator; the index over an unmapped property is caught earlier, during entity
         // discovery, which names the offending property instead of reporting a generic blank key.
         Assert.True(result.RunResult.Diagnostics.Count(d => d.Id == "INQ071") >= 4);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ094" && d.GetMessage().Contains("Missing", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ094" && d.GetMessage(CultureInfo.CurrentCulture).Contains("Missing", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -197,8 +194,8 @@ public sealed partial class InquiryGeneratorTests
             public sealed class T { [InquiryKey] public int Id { get; set; } [InquiryColumn(IsIndexed = true)] public int A { get; set; } }
             """;
         var result = RunGenerator(source, dialect: "SqlServer");
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate index", StringComparison.Ordinal));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(ExtractSchemaDdl(result), "CREATE INDEX").Cast<System.Text.RegularExpressions.Match>());
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate index", StringComparison.Ordinal));
+        Assert.Single(CreateIndexRegex().Matches(ExtractSchemaDdl(result)).Cast<System.Text.RegularExpressions.Match>());
     }
 
     [Theory]
@@ -269,14 +266,14 @@ public sealed partial class InquiryGeneratorTests
     public void UnsupportedActionsReport(string dialect, string action, bool onUpdate)
     {
         var result = RunGenerator(ActionSource(action, onUpdate), dialect: dialect);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains(onUpdate ? "ON UPDATE" : "ON DELETE", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains(onUpdate ? "ON UPDATE" : "ON DELETE", StringComparison.Ordinal));
     }
 
     [Fact]
     public void SetNullRequiresNullableProperty()
     {
         var result = RunGenerator(ActionSource("SetNull", onUpdate: false).Replace("int? PId", "int PId"), dialect: "PostgreSql");
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("nullable", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("nullable", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -356,7 +353,7 @@ public sealed partial class InquiryGeneratorTests
     public void CrossTableIndexNameScopeMatchesProvider(string dialect, bool tableLocal)
     {
         var result = RunGenerator(CrossTableNameSource, dialect: dialect);
-        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate index name", StringComparison.Ordinal)).ToArray();
+        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate index name", StringComparison.Ordinal)).ToArray();
         Assert.Equal(tableLocal ? 0 : 1, diagnostics.Length);
         Assert.Equal(tableLocal ? 2 : 1, CountPrimitiveOccurrences(ExtractSchemaDdl(result), "CREATE INDEX"));
     }
@@ -371,7 +368,7 @@ public sealed partial class InquiryGeneratorTests
     public void CrossTableCheckNameScopeMatchesProvider(string dialect, bool tableLocal)
     {
         var result = RunGenerator(CrossTableNameSource, dialect: dialect);
-        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate check constraint name", StringComparison.Ordinal)).ToArray();
+        var diagnostics = result.RunResult.Diagnostics.Where(d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate check constraint name", StringComparison.Ordinal)).ToArray();
         Assert.Equal(tableLocal ? 0 : 1, diagnostics.Length);
         Assert.Equal(tableLocal ? 2 : 1, CountPrimitiveOccurrences(ExtractSchemaDdl(result), "CK_Shared"));
     }
@@ -394,7 +391,7 @@ public sealed partial class InquiryGeneratorTests
             public sealed class Two { [InquiryKey] public int Id { get; set; } [InquiryColumn] public int A { get; set; } }
             """;
         var result = RunGenerator(source, dialect: dialect);
-        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -432,7 +429,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("[Value]", ddl);
         Assert.DoesNotContain("[Other]", ddl);
         Assert.DoesNotContain("IX_Other", ddl);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ070" && d.GetMessage().Contains("canonical mapping", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ070" && d.GetMessage(CultureInfo.CurrentCulture).Contains("canonical mapping", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -446,7 +443,7 @@ public sealed partial class InquiryGeneratorTests
             """;
         var result = RunGenerator(source, dialect: "MySql");
         var ddl = ExtractSchemaDdl(result);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ032" && d.GetMessage().Contains("index is skipped", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ032" && d.GetMessage(CultureInfo.CurrentCulture).Contains("index is skipped", StringComparison.Ordinal));
         Assert.DoesNotContain("CREATE INDEX", ddl);
         Assert.DoesNotContain("VARCHAR(32)", ddl);
     }
@@ -462,7 +459,7 @@ public sealed partial class InquiryGeneratorTests
             """;
         var result = RunGenerator(source, dialect: "SqlServer");
         var ddl = ExtractSchemaDdl(result);
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ070" && d.GetMessage().Contains("absent from the canonical", StringComparison.Ordinal));
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ070" && d.GetMessage(CultureInfo.CurrentCulture).Contains("absent from the canonical", StringComparison.Ordinal));
         Assert.DoesNotContain("FOREIGN KEY ([TargetKey])", ddl);
         Assert.DoesNotContain("ALTER TABLE", ddl);
     }
@@ -498,7 +495,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("VARCHAR(32)", ddl);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ070");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ032");
-        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -543,9 +540,9 @@ public sealed partial class InquiryGeneratorTests
     {
         var actualDialect = dialect == "SQLite" ? "Sqlite" : dialect;
         var result = RunGenerator(CaseCollisionSource, dialect: actualDialect);
-        Assert.Equal(indexCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate physical index name", StringComparison.Ordinal)));
-        Assert.Equal(checkCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ071" && d.GetMessage().Contains("duplicate physical check name", StringComparison.Ordinal)));
-        Assert.Equal(foreignKeyCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ070" && d.GetMessage().Contains("explicit constraint name", StringComparison.Ordinal)));
+        Assert.Equal(indexCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate physical index name", StringComparison.Ordinal)));
+        Assert.Equal(checkCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ071" && d.GetMessage(CultureInfo.CurrentCulture).Contains("duplicate physical check name", StringComparison.Ordinal)));
+        Assert.Equal(foreignKeyCollision, result.RunResult.Diagnostics.Any(d => d.Id == "INQ070" && d.GetMessage(CultureInfo.CurrentCulture).Contains("explicit constraint name", StringComparison.Ordinal)));
     }
 
     private static string CrossEntityCollisionSource(bool aFirst)
@@ -597,7 +594,11 @@ public sealed partial class InquiryGeneratorTests
     private static int CountPrimitiveOccurrences(string value, string token)
     {
         var count = 0;
-        for (var offset = 0; (offset = value.IndexOf(token, offset, StringComparison.Ordinal)) >= 0; offset += token.Length) count++;
+        for (var offset = 0; (offset = value.IndexOf(token, offset, StringComparison.Ordinal)) >= 0; offset += token.Length)
+        {
+            count++;
+        }
+
         return count;
     }
 
@@ -618,4 +619,7 @@ public sealed partial class InquiryGeneratorTests
         "SetDefault" => "SET DEFAULT",
         _ => action.ToUpperInvariant(),
     };
+
+    [global::System.Text.RegularExpressions.GeneratedRegex("CREATE INDEX")]
+    private static partial global::System.Text.RegularExpressions.Regex CreateIndexRegex();
 }

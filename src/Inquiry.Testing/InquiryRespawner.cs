@@ -1,6 +1,6 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Respawn;
-using System.Data.Common;
 
 namespace Inquiry.Testing;
 
@@ -38,10 +38,7 @@ public sealed class InquiryRespawner
     /// </param>
     public static async Task<InquiryRespawner> CreateAsync(DbConnection openConnection, RespawnerOptions? options = null, CancellationToken cancellationToken = default)
     {
-        if (openConnection is null)
-        {
-            throw new ArgumentNullException(nameof(openConnection));
-        }
+        ArgumentNullException.ThrowIfNull(openConnection);
 
         cancellationToken.ThrowIfCancellationRequested();
         var respawner = await Respawner.CreateAsync(openConnection, options ?? new RespawnerOptions()).ConfigureAwait(false);
@@ -60,10 +57,7 @@ public sealed class InquiryRespawner
     /// </param>
     public static async Task<InquiryRespawner> CreateAsync(IInquiryConnectionFactory factory, RespawnerOptions? options = null, CancellationToken cancellationToken = default)
     {
-        if (factory is null)
-        {
-            throw new ArgumentNullException(nameof(factory));
-        }
+        ArgumentNullException.ThrowIfNull(factory);
 
         var connection = await factory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using (connection.ConfigureAwait(false))
@@ -82,10 +76,7 @@ public sealed class InquiryRespawner
     /// </param>
     public Task ResetAsync(DbConnection openConnection, CancellationToken cancellationToken = default)
     {
-        if (openConnection is null)
-        {
-            throw new ArgumentNullException(nameof(openConnection));
-        }
+        ArgumentNullException.ThrowIfNull(openConnection);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -106,10 +97,7 @@ public sealed class InquiryRespawner
     /// </param>
     public async Task ResetAsync(IInquiryConnectionFactory factory, CancellationToken cancellationToken = default)
     {
-        if (factory is null)
-        {
-            throw new ArgumentNullException(nameof(factory));
-        }
+        ArgumentNullException.ThrowIfNull(factory);
 
         var connection = await factory.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
         await using (connection.ConfigureAwait(false))

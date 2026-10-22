@@ -10,7 +10,7 @@ namespace Inquiry.Benchmarks.SqlServer;
 
 public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly string[] InsertOrder =
+    private static readonly string[] _insertOrder =
     [
         "Categories", "Customers", "CustomerDemographics", "Region", "Shippers", "Suppliers",
         "Employees", "Territories", "Products", "Orders", "CustomerCustomerDemo",
@@ -29,6 +29,7 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
     public string ConnectionString { get; }
     public string TvpTypeName { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The database name is a fixed prefix plus a new GUID; no part comes from input.")]
     public static async Task<SqlServerCollectionBenchmarkDatabase> CreateAsync(bool applyProviderArtifacts = true)
     {
         var image = DatabaseImageCatalog.GetRequired("sqlserver");
@@ -53,7 +54,9 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
                 await connection.OpenAsync().ConfigureAwait(false);
                 await ExecuteAsync(connection, NorthwindSchema.SqlServerDdl).ConfigureAwait(false);
                 if (applyProviderArtifacts)
+                {
                     await ExecuteAsync(connection, global::Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsDdl).ConfigureAwait(false);
+                }
             }
 
             var tvpTypeName = await ResolveTvpTypeNameAsync(connectionString).ConfigureAwait(false);
@@ -73,14 +76,18 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         var manifest = NorthwindFixtureCatalog.For(FixtureTier.Standard);
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync().ConfigureAwait(false);
-        foreach (var tableName in InsertOrder)
+        foreach (var tableName in _insertOrder)
         {
             var schema = NorthwindFixtureCatalog.Schema.Tables.Single(table => table.Name == tableName);
             using var checksum = new FixtureChecksumAccumulator();
             await using var rows = new SeedRowReader(
                 NorthwindFixtureGenerator.Generate(tableName, FixtureTier.Standard, manifest.Seed), schema, checksum);
             var options = SqlBulkCopyOptions.TableLock;
-            if (schema.Columns.Any(static column => column.IsGenerated)) options |= SqlBulkCopyOptions.KeepIdentity;
+            if (schema.Columns.Any(static column => column.IsGenerated))
+            {
+                options |= SqlBulkCopyOptions.KeepIdentity;
+            }
+
             using var bulk = new SqlBulkCopy(connection, options, null)
             {
                 DestinationTableName = $"[{tableName}]",
@@ -88,22 +95,33 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
                 BulkCopyTimeout = 0,
                 EnableStreaming = true,
             };
-            foreach (var column in schema.Columns)
-                bulk.ColumnMappings.Add(column.Name, column.Name);
+            foreach (var columnName in schema.Columns.Select(static column => column.Name))
+            {
+                bulk.ColumnMappings.Add(columnName, columnName);
+            }
+
             await bulk.WriteToServerAsync(rows).ConfigureAwait(false);
             var actualChecksum = checksum.GetHashAndReset();
             if (!StringComparer.Ordinal.Equals(actualChecksum, manifest.TableChecksums[tableName]))
+            {
                 throw new InvalidOperationException($"Generated checksum drifted while streaming table '{tableName}'.");
+            }
+
             if (schema.Columns.Any(static column => column.IsGenerated))
+            {
                 await ExecuteAsync(connection,
                     $"DBCC CHECKIDENT ('[{tableName}]', RESEED, {manifest.RowCounts[tableName]}) WITH NO_INFOMSGS;")
                     .ConfigureAwait(false);
+            }
         }
 
         foreach (var table in NorthwindFixtureCatalog.Schema.Tables)
+        {
             await ExecuteAsync(connection, $"UPDATE STATISTICS [{table.Name}] WITH FULLSCAN;").ConfigureAwait(false);
+        }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "Table and column names come from the fixture schema in code; no part comes from input.")]
     private static async Task ValidateFixtureAsync(string connectionString)
     {
         var manifest = NorthwindFixtureCatalog.For(FixtureTier.Standard);
@@ -124,31 +142,49 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
             {
                 ordinal++;
                 if (!expectedRows.MoveNext())
+                {
                     throw new InvalidOperationException($"Persisted fixture has unexpected rows for '{table.Name}'.");
+                }
+
                 var expectedRow = expectedRows.Current;
                 var values = new SortedDictionary<string, object?>(StringComparer.Ordinal);
                 for (var columnIndex = 0; columnIndex < table.Columns.Count; columnIndex++)
                 {
                     var columnName = table.Columns[columnIndex].Name;
                     var value = reader.IsDBNull(columnIndex) ? null : reader.GetValue(columnIndex);
-                    if (value is DateTime dateTime) value = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                    if (value is DateTime dateTime)
+                    {
+                        value = DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+                    }
+
                     if (value is decimal decimalValue && expectedRow.Values[columnName] is decimal expectedDecimal)
                     {
                         if (decimalValue != expectedDecimal)
+                        {
                             throw new InvalidOperationException($"Persisted fixture decimal drift for '{table.Name}.{columnName}' at ordinal {ordinal}.");
+                        }
+
                         value = expectedDecimal;
                     }
                     values.Add(columnName, value);
                 }
                 var actualRow = new SeedRow(table.Name, ordinal, values);
                 if (!actualRow.Equals(expectedRow))
+                {
                     throw new InvalidOperationException($"Persisted fixture row drift for '{table.Name}' at ordinal {ordinal}.");
+                }
+
                 checksum.Append(actualRow);
             }
             if (ordinal != manifest.RowCounts[table.Name])
+            {
                 throw new InvalidOperationException($"Fixture row-count drift for '{table.Name}': expected {manifest.RowCounts[table.Name]}, found {ordinal}.");
+            }
+
             if (!StringComparer.Ordinal.Equals(checksum.GetHashAndReset(), manifest.TableChecksums[table.Name]))
+            {
                 throw new InvalidOperationException($"Persisted fixture checksum drift for '{table.Name}'.");
+            }
         }
     }
 
@@ -189,16 +225,27 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
             """;
         var names = new List<string>();
         await using var reader = await type.ExecuteReaderAsync().ConfigureAwait(false);
-        while (await reader.ReadAsync().ConfigureAwait(false)) names.Add(reader.GetString(0));
+        while (await reader.ReadAsync().ConfigureAwait(false))
+        {
+            names.Add(reader.GetString(0));
+        }
+
         if (names.Count != 1)
+        {
             throw new InvalidOperationException(
                 "SQL Server collection benchmark requires exactly one generated single-column INT NOT NULL TVP artifact before collection; run the generated provider artifact DDL.");
+        }
+
         return names[0];
     }
 
     private static async Task ExecuteAsync(SqlConnection connection, string sql)
     {
-        if (string.IsNullOrWhiteSpace(sql)) return;
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.CommandTimeout = 0;
@@ -246,13 +293,21 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         public override int GetValues(object[] values)
         {
             var count = Math.Min(values.Length, FieldCount);
-            for (var index = 0; index < count; index++) values[index] = GetValue(index);
+            for (var index = 0; index < count; index++)
+            {
+                values[index] = GetValue(index);
+            }
+
             return count;
         }
         public override bool IsDBNull(int ordinal) => GetValue(ordinal) is DBNull;
         public override bool Read()
         {
-            if (!_rows.MoveNext()) return false;
+            if (!_rows.MoveNext())
+            {
+                return false;
+            }
+
             _current = _rows.Current;
             _checksum.Append(_current);
             return true;
@@ -274,6 +329,9 @@ public sealed class SqlServerCollectionBenchmarkDatabase : IAsyncDisposable
         public override string GetString(int ordinal) => (string)GetValue(ordinal);
         public override decimal GetDecimal(int ordinal) => (decimal)GetValue(ordinal);
         public override DateTime GetDateTime(int ordinal) => (DateTime)GetValue(ordinal);
-        public override void Close() { }
+        public override void Close()
+        {
+            // The reader streams generated rows and holds no connection, so there is nothing to close.
+        }
     }
 }

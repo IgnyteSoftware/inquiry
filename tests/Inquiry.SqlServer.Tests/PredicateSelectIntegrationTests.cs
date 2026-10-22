@@ -25,11 +25,11 @@ public sealed class PredicateSelectIntegrationTests
         var c1 = (await categories.InsertReturningAsync(new Category { CategoryName = "Beverages" }))!.CategoryID!.Value;
         var c2 = (await categories.InsertReturningAsync(new Category { CategoryName = "Condiments" }))!.CategoryID!.Value;
 
-        await products.InsertAsync(new Product { ProductName = "Chai",               UnitPrice = 18m, UnitsInStock = 39, CategoryID = c1,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Chang",              UnitPrice = 19m, UnitsInStock = 17, CategoryID = c1,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Aniseed Syrup",      UnitPrice = 10m, UnitsInStock = 13, CategoryID = c2,   Discontinued = false });
-        await products.InsertAsync(new Product { ProductName = "Chef Anton's Cajun", UnitPrice = 22m, UnitsInStock = 53, CategoryID = c2,   Discontinued = true });
-        await products.InsertAsync(new Product { ProductName = "Uncategorized",      UnitPrice = 5m,  UnitsInStock = 0,  CategoryID = null, Discontinued = true });
+        await products.InsertAsync(new Product { ProductName = "Chai", UnitPrice = 18m, UnitsInStock = 39, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Chang", UnitPrice = 19m, UnitsInStock = 17, CategoryID = c1, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Aniseed Syrup", UnitPrice = 10m, UnitsInStock = 13, CategoryID = c2, Discontinued = false });
+        await products.InsertAsync(new Product { ProductName = "Chef Anton's Cajun", UnitPrice = 22m, UnitsInStock = 53, CategoryID = c2, Discontinued = true });
+        await products.InsertAsync(new Product { ProductName = "Uncategorized", UnitPrice = 5m, UnitsInStock = 0, CategoryID = null, Discontinued = true });
 
         return (c1, c2);
     }
@@ -119,9 +119,9 @@ public sealed class PredicateSelectIntegrationTests
         await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, TemporalDdl, "predindt");
         var items = harness.GetRequiredService<TemporalItemStore>();
 
-        var d1 = new DateTime(2021, 6, 15, 10, 30, 0, 1);  // .001 -> legacy datetime rounds to .000
-        var d2 = new DateTime(2022, 3, 9, 14, 45, 0, 2);   // .002 -> legacy datetime rounds to .003
-        var decoy = new DateTime(2020, 1, 1, 0, 0, 0, 7);
+        var d1 = new DateTime(2021, 6, 15, 10, 30, 0, 1, DateTimeKind.Unspecified);  // .001 -> legacy datetime rounds to .000
+        var d2 = new DateTime(2022, 3, 9, 14, 45, 0, 2, DateTimeKind.Unspecified);   // .002 -> legacy datetime rounds to .003
+        var decoy = new DateTime(2020, 1, 1, 0, 0, 0, 7, DateTimeKind.Unspecified);
 
         await items.InsertAsync(new TemporalItem { Moment = d1 });
         await items.InsertAsync(new TemporalItem { Moment = d2 });

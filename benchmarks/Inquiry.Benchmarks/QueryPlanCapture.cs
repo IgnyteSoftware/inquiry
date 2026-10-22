@@ -16,7 +16,7 @@ internal static class QueryPlanCapture
         "CustomerID, CompanyName, ContactName, ContactTitle, Address, City, " +
         "Region, PostalCode, Country, Phone, Fax";
 
-    private static readonly (string Category, string Label, string Sql)[] Statements =
+    private static readonly (string Category, string Label, string Sql)[] _statements =
     {
         // ---- ShipperCrud ---------------------------------------------------------------
         ("ShipperCrud", "SelectAll",
@@ -102,6 +102,7 @@ internal static class QueryPlanCapture
             $"({string.Join(",", Enumerable.Range(0, 100).Select(i => "$c" + i))})"),
     };
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The statements come from a constant table in code; no part comes from input.")]
     public static async Task RunAsync()
     {
         Console.WriteLine("Creating benchmark database...");
@@ -121,7 +122,9 @@ internal static class QueryPlanCapture
             var repoRoot = FindRepoRoot();
             var outputDir = Path.Combine(repoRoot, "benchmarks", "evidence", "query-plans");
             if (!Directory.Exists(outputDir))
+            {
                 Directory.CreateDirectory(outputDir);
+            }
 
             var outputPath = Path.Combine(outputDir, "sqlite-query-plans.md");
 
@@ -140,7 +143,7 @@ internal static class QueryPlanCapture
             string? currentCategory = null;
             int count = 0;
 
-            foreach (var (category, label, sql) in Statements)
+            foreach (var (category, label, sql) in _statements)
             {
                 if (category != currentCategory)
                 {
@@ -183,7 +186,9 @@ internal static class QueryPlanCapture
         finally
         {
             SqliteConnection.ClearAllPools();
-            try { File.Delete(dbPath); } catch { }
+            try
+            { File.Delete(dbPath); }
+            catch { /* best-effort; a leftover temporary database file does no harm */ }
         }
     }
 
@@ -193,7 +198,10 @@ internal static class QueryPlanCapture
         while (dir is not null)
         {
             if (Directory.Exists(Path.Combine(dir, ".git")))
+            {
                 return dir;
+            }
+
             dir = Path.GetDirectoryName(dir);
         }
 

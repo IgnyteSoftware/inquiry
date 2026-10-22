@@ -1,11 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Inquiry.Commands;
 using Inquiry.Interceptors;
 using Inquiry.Parameters;
-using Inquiry.Testing;
 using Inquiry.Sqlite.Testing;
+using Inquiry.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
 
 namespace Inquiry.Tests;
 
@@ -90,7 +91,7 @@ public sealed class InquiryTestingTests
 
             Assert.Same(expected, actual.InnerExceptions[0]);
             Assert.Equal(
-                new[] { "rollback failure", "transaction disposal failure", "scope disposal failure" },
+                ["rollback failure", "transaction disposal failure", "scope disposal failure"],
                 actual.InnerExceptions.Skip(1).Select(exception => exception.Message));
         }
     }
@@ -154,7 +155,7 @@ public sealed class InquiryTestingTests
         {
             _ = context.Services.GetRequiredService<DisposalProbe>();
             await context.Transaction.ExecuteAsync(new InquiryCommand("INSERT INTO Items (Id) VALUES (1)"), token);
-            cancellation.Cancel();
+            await cancellation.CancelAsync();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
         }, cancellation.Token));
 
@@ -200,7 +201,11 @@ public sealed class InquiryTestingTests
             {
                 await sandbox.RunAsync(async (_, token) =>
                 {
-                    if (Interlocked.Increment(ref entered) == 2) bothEntered.TrySetResult();
+                    if (Interlocked.Increment(ref entered) == 2)
+                    {
+                        bothEntered.TrySetResult();
+                    }
+
                     await bothEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
                 });
             }
@@ -436,6 +441,7 @@ public sealed class InquiryTestingTests
 
     private sealed class FailingScopeDisposable : IDisposable
     {
+        [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
         public void Dispose() => throw new InvalidOperationException("scope disposal failure");
     }
 

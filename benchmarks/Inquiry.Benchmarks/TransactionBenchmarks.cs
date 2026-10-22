@@ -48,8 +48,8 @@ public class TransactionBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "INSERT INTO Region (RegionID, RegionDescription) VALUES ($id, $desc);";
-        command.Parameters.Add("$id",   SqliteType.Integer).Value = id;
-        command.Parameters.Add("$desc", SqliteType.Text).Value    = "Region " + id;
+        command.Parameters.Add("$id", SqliteType.Integer).Value = id;
+        command.Parameters.Add("$desc", SqliteType.Text).Value = "Region " + id;
         return await command.ExecuteNonQueryAsync();
     }
 
@@ -101,8 +101,8 @@ public class TransactionBenchmarks
         await using var command = connection.CreateCommand();
         command.Transaction = (SqliteTransaction)tx;
         command.CommandText = "INSERT INTO Region (RegionID, RegionDescription) VALUES ($id, $desc);";
-        command.Parameters.Add("$id",   SqliteType.Integer).Value = id;
-        command.Parameters.Add("$desc", SqliteType.Text).Value    = "Region " + id;
+        command.Parameters.Add("$id", SqliteType.Integer).Value = id;
+        command.Parameters.Add("$desc", SqliteType.Text).Value = "Region " + id;
         var rows = await command.ExecuteNonQueryAsync();
         await tx.CommitAsync();
         return rows;

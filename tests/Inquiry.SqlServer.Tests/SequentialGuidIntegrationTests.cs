@@ -62,7 +62,7 @@ public sealed class SequentialGuidIntegrationTests
 
         var loaded = await store.SelectByKeyAsync(doc.Id);
         Assert.NotNull(loaded);
-        Assert.Equal("first", loaded!.Title);
+        Assert.Equal("first", loaded.Title);
     }
 
     [SkippableFact]
@@ -113,7 +113,10 @@ public sealed class SequentialGuidIntegrationTests
             var doc = new SeqDoc { Title = $"doc-{i}" };
             await store.InsertAsync(doc);
             ids.Add(doc.Id);
-            if (i % 5 == 0) await Task.Delay(15);
+            if (i % 5 == 0)
+            {
+                await Task.Delay(15);
+            }
         }
 
         // Sort by SqlGuid to use the same comparison SQL Server applies — avoids relying on

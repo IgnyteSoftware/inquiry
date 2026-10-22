@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Sqlite.Tests.Fixtures;
 
@@ -18,7 +15,7 @@ public sealed class WriteEnforcedFilterRoundTripTests
     private const long TenantA = 1L;
     private const long TenantB = 2L;
 
-    private static IDisposable Scope(long tenantId)
+    private static InquiryFilterContext.Scope Scope(long tenantId)
         => InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId });
 
     /// <summary>Seeds one row per tenant and returns (tenantA row id, tenantB row id).</summary>
@@ -123,7 +120,7 @@ public sealed class WriteEnforcedFilterRoundTripTests
             var returned = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = aRow, TenantId = TenantA, Title = "renamed twice" });
             Assert.NotNull(returned);
-            Assert.Equal("renamed twice", returned!.Title);
+            Assert.Equal("renamed twice", returned.Title);
 
             Assert.True(await store.DeleteAsync(aRow));
             Assert.True(await store.RestoreAsync(aRow));
@@ -152,12 +149,12 @@ public sealed class WriteEnforcedFilterRoundTripTests
             var unchanged = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = aRow, TenantId = TenantA, Title = "A doc" });
             Assert.NotNull(unchanged);
-            Assert.Equal("A doc", unchanged!.Title);
+            Assert.Equal("A doc", unchanged.Title);
 
             var moved = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = aRow, TenantId = TenantB, Title = "moved" });
             Assert.NotNull(moved);
-            Assert.Equal(TenantB, moved!.TenantId);
+            Assert.Equal(TenantB, moved.TenantId);
         }
 
         using (Scope(TenantA))

@@ -1,14 +1,13 @@
-using Inquiry;
+using System.Collections;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Inquiry.SqlServer.Parameters;
-using System.Collections;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Inquiry.SqlServer.Tests;
 
@@ -21,7 +20,7 @@ public sealed class TvpResourceLifetimePipelineTests
     [Theory]
     [InlineData(FastPath.Stream)]
     [InlineData(FastPath.List)]
-    [InlineData(FastPath.Single)]
+    [InlineData(FastPath.SingleOrDefault)]
     [InlineData(FastPath.Scalar)]
     [InlineData(FastPath.Execute)]
     public async Task InterceptorCommandConstructionFailureReleasesFastPathResources(FastPath fastPath)
@@ -132,13 +131,14 @@ public sealed class TvpResourceLifetimePipelineTests
                 await foreach (var _ in pipeline.QueryAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default))
                 {
+                    // The fast path must return before enumeration yields a row.
                 }
                 break;
             case FastPath.List:
                 await pipeline.QueryListAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default, default);
                 break;
-            case FastPath.Single:
+            case FastPath.SingleOrDefault:
                 await pipeline.QuerySingleOrDefaultAsync<ProbeEntity, int, ProbeMaterializer>(
                     " ", 0, static (_, _) => throw new BinderProbeException(), default);
                 break;
@@ -152,7 +152,7 @@ public sealed class TvpResourceLifetimePipelineTests
                 break;
             case FastPath.SequentialBatch:
                 await pipeline.ExecuteBatchAsync(
-                    " ", new[] { 0 }, static (_, _) => throw new BinderProbeException());
+                    " ", [0], static (_, _) => throw new BinderProbeException());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(fastPath), fastPath, null);
@@ -175,7 +175,10 @@ public sealed class TvpResourceLifetimePipelineTests
 
         public void InitializeCommand(DbCommand command)
         {
-            if (_resource is not null) InquiryCommandResources.Register(command, _resource);
+            if (_resource is not null)
+            {
+                InquiryCommandResources.Register(command, _resource);
+            }
         }
 
         public ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
@@ -191,7 +194,7 @@ public sealed class TvpResourceLifetimePipelineTests
         public FakeConnection(ThrowingPrepareCommand command) => _command = command;
         public int DisposeCount { get; private set; }
         protected override DbCommand CreateDbCommand() => _command;
-        protected override void Dispose(bool disposing) { if (disposing) DisposeCount++; base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DisposeCount++; } base.Dispose(disposing); }
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "test";
         public override string DataSource => "test";
@@ -206,7 +209,7 @@ public sealed class TvpResourceLifetimePipelineTests
     private sealed class CountingConnection : DbConnection
     {
         public int DisposeCount { get; private set; }
-        protected override void Dispose(bool disposing) { if (disposing) DisposeCount++; base.Dispose(disposing); }
+        protected override void Dispose(bool disposing) { if (disposing) { DisposeCount++; } base.Dispose(disposing); }
         protected override DbCommand CreateDbCommand() => throw new NotSupportedException();
         [AllowNull] public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "test";
@@ -231,7 +234,9 @@ public sealed class TvpResourceLifetimePipelineTests
         public void Dispose()
         {
             DisposeCount++;
+#pragma warning disable S3877 // The probe throws from Dispose to test that the pipeline reports cleanup failures.
             throw new CleanupProbeException();
+#pragma warning restore S3877
         }
     }
 
@@ -245,6 +250,7 @@ public sealed class TvpResourceLifetimePipelineTests
     {
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2094", Justification = "Placeholder entity type for the generic pipeline calls; the tests never materialize a row.")]
     private sealed class ProbeEntity
     {
     }
@@ -308,7 +314,13 @@ public sealed class TvpResourceLifetimePipelineTests
         public override int Count => _items.Count;
         public override object SyncRoot => _items;
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var value in values) Add(value!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var value in values)
+            {
+                Add(value);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => IndexOf(value) >= 0;
@@ -319,14 +331,28 @@ public sealed class TvpResourceLifetimePipelineTests
         public override void Insert(int index, object value) => _items.Insert(index, (DbParameter)value);
         public override void Remove(object value) => _items.Remove((DbParameter)value);
         public override void RemoveAt(int index) => _items.RemoveAt(index);
-        public override void RemoveAt(string parameterName) { var index = IndexOf(parameterName); if (index >= 0) RemoveAt(index); }
+        public override void RemoveAt(string parameterName)
+        {
+            var index = IndexOf(parameterName);
+            if (index >= 0)
+            {
+                RemoveAt(index);
+            }
+        }
         protected override DbParameter GetParameter(int index) => _items[index];
         protected override DbParameter GetParameter(string parameterName) => _items[IndexOf(parameterName)];
         protected override void SetParameter(int index, DbParameter value) => _items[index] = value;
         protected override void SetParameter(string parameterName, DbParameter value)
         {
             var index = IndexOf(parameterName);
-            if (index < 0) _items.Add(value); else _items[index] = value;
+            if (index < 0)
+            {
+                _items.Add(value);
+            }
+            else
+            {
+                _items[index] = value;
+            }
         }
     }
 
@@ -355,16 +381,23 @@ public sealed class TvpResourceLifetimePipelineTests
             public void Reset() => throw new NotSupportedException();
             public void Dispose()
             {
-                if (_disposed) return;
+                if (_disposed)
+                {
+                    return;
+                }
+
                 _disposed = true;
                 _owner.DisposeCount++;
             }
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class PrepareProbeException : Exception { }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class CleanupProbeException : Exception { }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3871", Justification = "Test-only probe exception; it never leaves this test class.")]
     private sealed class BinderProbeException : Exception { }
 
-    public enum FastPath { Stream, List, Single, Scalar, Execute, SequentialBatch }
+    public enum FastPath { Stream, List, SingleOrDefault, Scalar, Execute, SequentialBatch }
 }

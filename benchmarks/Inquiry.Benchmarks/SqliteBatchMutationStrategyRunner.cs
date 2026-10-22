@@ -95,7 +95,11 @@ internal sealed class SqliteBatchMutationStrategyRunner(string connectionString)
         for (var i = 0; i < items.Count; i++)
         {
             id.Value = items[i].Id;
-            if (value is not null) value.Value = items[i].ValueText;
+            if (value is not null)
+            {
+                value.Value = items[i].ValueText;
+            }
+
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
         await transaction.CommitAsync().ConfigureAwait(false);

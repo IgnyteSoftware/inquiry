@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.Generators.Tests;

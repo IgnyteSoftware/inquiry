@@ -1,6 +1,4 @@
 using Inquiry.Generators.Abstractions;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.MariaDb.Analyzer;
 
@@ -17,8 +15,12 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
     public override IReadOnlyList<string> ValidateComputedExpression(string expression)
     {
         var analysis = SqlExpressionLexer.Analyze(expression, ComputedExpressionCommentPolicy, false);
-        if (!analysis.HasConcatenationOperator) return analysis.Failures;
-        return analysis.Failures.Concat(new[] { "contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override" }).ToArray();
+        if (!analysis.HasConcatenationOperator)
+        {
+            return analysis.Failures;
+        }
+
+        return analysis.Failures.Concat(["contains ambiguous '||'; use CONCAT(...), OR, or a mariadb override"]).ToArray();
     }
     public override string DialectName => "MariaDb";
     public override string ProviderId => "mariadb";
@@ -29,7 +31,7 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
     public override IdentifierComparison IndexNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison CheckConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent) => action is ReferentialActionKind.NoAction or ReferentialActionKind.Restrict or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
     // ---- Native RETURNING (#58) -------------------------------------------------------------
 

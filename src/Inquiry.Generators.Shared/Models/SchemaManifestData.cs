@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Inquiry.Generators.Models;
 
 internal sealed record SchemaManifestData(string ProviderId, IReadOnlyList<SchemaManifestTableData> Tables, IReadOnlyList<SchemaManifestArtifactData> ProviderArtifacts);

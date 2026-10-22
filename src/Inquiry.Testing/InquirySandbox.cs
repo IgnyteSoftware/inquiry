@@ -1,7 +1,7 @@
-using Inquiry.Transactions;
-using Microsoft.Extensions.DependencyInjection;
 using System.Data;
 using System.Runtime.ExceptionServices;
+using Inquiry.Transactions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Testing;
 
@@ -12,7 +12,7 @@ namespace Inquiry.Testing;
 /// </summary>
 public sealed class InquirySandbox
 {
-    private static readonly AsyncLocal<bool> Active = new();
+    private static readonly AsyncLocal<bool> _active = new();
     private readonly IServiceProvider _services;
     private readonly IsolationLevel _isolationLevel;
 
@@ -38,7 +38,7 @@ public sealed class InquirySandbox
         Func<InquirySandboxContext, CancellationToken, Task> operation,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
+        ArgumentNullException.ThrowIfNull(operation);
 
         return RunAsync<object?>(async (context, token) =>
         {
@@ -59,8 +59,9 @@ public sealed class InquirySandbox
         Func<InquirySandboxContext, CancellationToken, Task<TResult>> operation,
         CancellationToken cancellationToken = default)
     {
-        if (operation is null) throw new ArgumentNullException(nameof(operation));
-        if (Active.Value)
+        ArgumentNullException.ThrowIfNull(operation);
+
+        if (_active.Value)
         {
             throw new InvalidOperationException(
                 "An Inquiry sandbox cannot be nested in the same async context. " +
@@ -68,7 +69,7 @@ public sealed class InquirySandbox
         }
 
         var scope = _services.CreateAsyncScope();
-        Active.Value = true;
+        _active.Value = true;
         IInquiryTransaction? transaction = null;
         ExceptionDispatchInfo? primaryFailure = null;
         TResult result = default!;
@@ -118,7 +119,7 @@ public sealed class InquirySandbox
         }
         finally
         {
-            Active.Value = false;
+            _active.Value = false;
         }
 
         if (primaryFailure is not null)

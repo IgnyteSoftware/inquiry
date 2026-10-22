@@ -1,11 +1,12 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
 using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Microsoft.Data.Sqlite;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -192,16 +193,16 @@ public sealed class SequentialAccessReadBehaviorTests
     [Theory]
     [InlineData(false, false, ClassReadShape.Stream)]
     [InlineData(false, false, ClassReadShape.List)]
-    [InlineData(false, false, ClassReadShape.Single)]
+    [InlineData(false, false, ClassReadShape.SingleOrDefault)]
     [InlineData(false, true, ClassReadShape.Stream)]
     [InlineData(false, true, ClassReadShape.List)]
-    [InlineData(false, true, ClassReadShape.Single)]
+    [InlineData(false, true, ClassReadShape.SingleOrDefault)]
     [InlineData(true, false, ClassReadShape.Stream)]
     [InlineData(true, false, ClassReadShape.List)]
-    [InlineData(true, false, ClassReadShape.Single)]
+    [InlineData(true, false, ClassReadShape.SingleOrDefault)]
     [InlineData(true, true, ClassReadShape.Stream)]
     [InlineData(true, true, ClassReadShape.List)]
-    [InlineData(true, true, ClassReadShape.Single)]
+    [InlineData(true, true, ClassReadShape.SingleOrDefault)]
     public async Task ClassMaterializerCapabilitySelectsReadBehaviorOnce(
         bool useTransaction,
         bool sequentialSafe,
@@ -480,23 +481,23 @@ public sealed class SequentialAccessReadBehaviorTests
         switch (shape)
         {
             case ClassReadShape.Stream:
-            {
-                var count = 0;
-                await foreach (var item in pipeline.QueryAsync(
-                    new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer))
                 {
-                    Assert.Equal(1, item.Id);
-                    count++;
-                }
+                    var count = 0;
+                    await foreach (var item in pipeline.QueryAsync(
+                        new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer))
+                    {
+                        Assert.Equal(1, item.Id);
+                        count++;
+                    }
 
-                Assert.Equal(1, count);
-                break;
-            }
+                    Assert.Equal(1, count);
+                    break;
+                }
             case ClassReadShape.List:
                 Assert.Single(await pipeline.QueryListAsync(
                     new InquiryCommand("SELECT Id, Name, Flag FROM T"), materializer));
                 break;
-            case ClassReadShape.Single:
+            case ClassReadShape.SingleOrDefault:
                 Assert.NotNull(await pipeline.QuerySingleOrDefaultAsync(
                     new InquiryCommand("SELECT Id, Name, Flag FROM T WHERE Id = 1"), materializer));
                 break;
@@ -507,19 +508,19 @@ public sealed class SequentialAccessReadBehaviorTests
 
     private sealed record TestItem(int Id, string Name, bool Flag);
 
-    private static TestItem Materialize(DbDataReader reader)
+    private static TestItem MaterializeRow(DbDataReader reader)
         => new(reader.GetInt32(0), reader.GetString(1), reader.GetInt32(2) == 1);
 
     private sealed class TestItemClassMaterializer : IInquiryEntityMaterializer<TestItem>
     {
-        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+        public TestItem Materialize(DbDataReader reader) => MaterializeRow(reader);
     }
 
     private sealed class GeneratedSafeTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
     {
         public bool IsInquirySequentialAccessSafe => true;
 
-        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+        public TestItem Materialize(DbDataReader reader) => MaterializeRow(reader);
     }
 
     private sealed class ReverseOrdinalTestItemMaterializer : IInquiryEntityMaterializer<TestItem>
@@ -546,7 +547,7 @@ public sealed class SequentialAccessReadBehaviorTests
             }
         }
 
-        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+        public TestItem Materialize(DbDataReader reader) => MaterializeRow(reader);
     }
 
     private sealed class ThrowingCapabilityMaterializer : IInquiryEntityMaterializer<TestItem>
@@ -567,7 +568,7 @@ public sealed class SequentialAccessReadBehaviorTests
 
     private readonly struct TestItemStructMaterializer : IInquiryEntityMaterializer<TestItem>
     {
-        public TestItem Materialize(DbDataReader reader) => SequentialAccessReadBehaviorTests.Materialize(reader);
+        public TestItem Materialize(DbDataReader reader) => MaterializeRow(reader);
     }
 
     private sealed class RecordingConnectionFactory : IInquiryConnectionFactory
@@ -621,7 +622,7 @@ public sealed class SequentialAccessReadBehaviorTests
     {
         Stream,
         List,
-        Single,
+        SingleOrDefault,
     }
 
     private sealed class RecordingDbConnection : DbConnection
@@ -635,6 +636,7 @@ public sealed class SequentialAccessReadBehaviorTests
             _recorded = recorded;
         }
 
+        [AllowNull]
         public override string ConnectionString
         {
             get => _inner.ConnectionString;
@@ -663,10 +665,15 @@ public sealed class SequentialAccessReadBehaviorTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously. base.DisposeAsync would also run the synchronous Dispose path, which the test does not expect.")]
         public override ValueTask DisposeAsync() => _inner.DisposeAsync();
     }
 
@@ -681,6 +688,7 @@ public sealed class SequentialAccessReadBehaviorTests
             _recorded = recorded;
         }
 
+        [AllowNull]
         public override string CommandText
         {
             get => _inner.CommandText;
@@ -750,7 +758,11 @@ public sealed class SequentialAccessReadBehaviorTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
     }

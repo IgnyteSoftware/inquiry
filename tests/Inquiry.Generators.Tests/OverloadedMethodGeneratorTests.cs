@@ -1,6 +1,3 @@
-using System;
-using Xunit;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>

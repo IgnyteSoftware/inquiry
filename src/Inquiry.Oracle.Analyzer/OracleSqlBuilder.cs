@@ -1,8 +1,5 @@
 using Inquiry.Generators.Abstractions;
 using Inquiry.Oracle.Shared;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Inquiry.Oracle.Analyzer;
 
@@ -71,8 +68,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;
-    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent @event)
-        => @event == ReferentialActionEvent.Update ? action == ReferentialActionKind.NoAction : action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
+    public override bool SupportsReferentialAction(ReferentialActionKind action, ReferentialActionEvent actionEvent)
+        => actionEvent == ReferentialActionEvent.Update ? action == ReferentialActionKind.NoAction : action is ReferentialActionKind.NoAction or ReferentialActionKind.Cascade or ReferentialActionKind.SetNull;
 
     public override string BuildReaderExpression(ReaderExpressionContext context)
     {
@@ -140,7 +137,11 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         var sb = new System.Text.StringBuilder("DECLARE ");
         for (var i = 0; i < resultSetCount; i++)
         {
-            if (i > 0) sb.Append(' ');
+            if (i > 0)
+            {
+                sb.Append(' ');
+            }
+
             sb.Append('c').Append(i).Append(" SYS_REFCURSOR;");
         }
         sb.Append(" BEGIN ").Append(procedureName).Append('(');
@@ -148,12 +149,20 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         var argIndex = 0;
         for (var i = 0; i < parameterNames.Count; i++)
         {
-            if (argIndex++ > 0) sb.Append(", ");
+            if (argIndex++ > 0)
+            {
+                sb.Append(", ");
+            }
+
             sb.Append(':').Append(OracleBindName.Encode(parameterNames[i]));
         }
         for (var i = 0; i < resultSetCount; i++)
         {
-            if (argIndex++ > 0) sb.Append(", ");
+            if (argIndex++ > 0)
+            {
+                sb.Append(", ");
+            }
+
             sb.Append('c').Append(i);
         }
         sb.Append("); ");
@@ -248,13 +257,13 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             }
         }
 
-        return s_reservedWords.Contains(identifier);
+        return _reservedWords.Contains(identifier);
     }
 
     // Oracle 23c V$RESERVED_WORDS WHERE RESERVED = 'Y' — the keywords that cause ORA-00903 / ORA-01747
     // when used unquoted as an identifier. Only the reserved subset is listed; non-reserved keywords
     // (COMMIT, ROLLBACK, etc.) work unquoted.
-    private static readonly HashSet<string> s_reservedWords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> _reservedWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "ACCESS", "ADD", "ALL", "ALTER", "AND", "ANY", "AS", "ASC",
         "AUDIT", "BETWEEN", "BY", "CHAR", "CHECK", "CLUSTER", "COLUMN",
@@ -459,7 +468,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     protected override string RenderComputedColumn(IColumn column)
     {
         if (column.TypeClass != DbTypeClass.String)
+        {
             return base.RenderComputedColumn(column);
+        }
 
         var type = column.IsUnicode ? "NVARCHAR2" : "VARCHAR2";
         return "AS (CAST(" + column.ComputedExpression + " AS " + type + "(" +
@@ -504,9 +515,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         DbTypeClass.ByteArray => "BLOB",
         // Oracle's VARCHAR2 caps at 4000 bytes; no Length (or one beyond that ceiling) falls back to CLOB
         // rather than emitting the illegal VARCHAR2(>4000).
-        _ => column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
-            ? (column.IsUnicode ? "NVARCHAR2(" + column.Length + ")" : "VARCHAR2(" + column.Length + ")")
-            : (column.IsUnicode ? "NCLOB" : "CLOB"),
+        _ when column.Length > 0 && column.Length <= MaxBoundedStringLength(column.IsUnicode)
+            => column.IsUnicode ? "NVARCHAR2(" + column.Length + ")" : "VARCHAR2(" + column.Length + ")",
+        _ => column.IsUnicode ? "NCLOB" : "CLOB",
     };
 
     protected override string GeneratedKeyClause(IColumn column)
@@ -515,8 +526,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // Oracle has no CREATE TABLE IF NOT EXISTS; the generated DDL is a single const string executed
     // as one command, and multiple PL/SQL anonymous blocks cannot share a single command, so an
     // EXECUTE IMMEDIATE wrapper is not viable here. Consumers that need idempotency should wrap each
-    // statement in their migration runner: BEGIN EXECUTE IMMEDIATE '...'; EXCEPTION WHEN OTHERS THEN
-    // IF SQLCODE != -955 THEN RAISE; END IF; END;
+    // statement in their migration runner in an EXECUTE IMMEDIATE block whose exception handler
+    // re-raises every error except SQLCODE -955 (name is already used by an existing object).
     protected override string WrapCreateTable(SqlBuildContext context, string body)
         => "CREATE TABLE " + context.Table + " (\n    " + body + "\n)";
 

@@ -17,7 +17,7 @@ internal sealed class SqlServerTransientErrorDetector : ITransientErrorDetector
     /// <c>SqlServerTransientExceptionDetector</c> (hence the connection-level additions 20/64/4221),
     /// so it is a deliberate, slightly broader superset of the bare spec list rather than drift.
     /// </summary>
-    private static readonly HashSet<int> TransientErrorNumbers = new()
+    private static readonly HashSet<int> _transientErrorNumbers = new()
     {
         -2,     // Timeout expired.
         20,     // Instance not currently configured to accept connections.
@@ -45,7 +45,7 @@ internal sealed class SqlServerTransientErrorDetector : ITransientErrorDetector
 
         foreach (SqlError error in sqlException.Errors)
         {
-            if (TransientErrorNumbers.Contains(error.Number))
+            if (_transientErrorNumbers.Contains(error.Number))
             {
                 return true;
             }

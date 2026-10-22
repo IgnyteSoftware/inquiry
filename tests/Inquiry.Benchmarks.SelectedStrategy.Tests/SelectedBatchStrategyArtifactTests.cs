@@ -6,7 +6,7 @@ namespace Inquiry.Benchmarks.SelectedStrategy.Tests;
 
 public sealed class SelectedBatchStrategyArtifactTests
 {
-    private static readonly IReadOnlyDictionary<string, Type> BenchmarkTypes =
+    private static readonly IReadOnlyDictionary<string, Type> _benchmarkTypes =
         new Dictionary<string, Type>(StringComparer.Ordinal)
         {
             ["sqlite"] = typeof(global::Inquiry.Benchmarks.BatchMutationStrategyBenchmarks),
@@ -21,7 +21,7 @@ public sealed class SelectedBatchStrategyArtifactTests
     public void CheckedManifestMatchesClosedSchemaAndEveryCompiledBenchmarkSurface()
     {
         var result = SelectedBatchStrategyArtifactValidator.Validate(
-            ManifestBytes(), new SelectedStrategyValidationContext(BenchmarkTypes));
+            ManifestBytes(), new SelectedStrategyValidationContext(_benchmarkTypes));
 
         Assert.True(result.IsValid, string.Join(Environment.NewLine, result.Errors));
         Assert.NotNull(result.Artifact);
@@ -207,7 +207,7 @@ public sealed class SelectedBatchStrategyArtifactTests
 
         var extraCapabilityCell = cell with
         {
-            RuntimeCapabilities = new Dictionary<string, string>(cell.RuntimeCapabilities!, StringComparer.Ordinal)
+            RuntimeCapabilities = new Dictionary<string, string>(cell.RuntimeCapabilities, StringComparer.Ordinal)
             {
                 ["unchecked-capability"] = "true",
             },
@@ -246,7 +246,7 @@ public sealed class SelectedBatchStrategyArtifactTests
     [Fact]
     public void RowsMustBeTheOnlyBenchmarkParameterDimension()
     {
-        var types = new Dictionary<string, Type>(BenchmarkTypes, StringComparer.Ordinal)
+        var types = new Dictionary<string, Type>(_benchmarkTypes, StringComparer.Ordinal)
         {
             ["sqlite"] = typeof(ExtraParameterDimensionBenchmark),
         };
@@ -280,7 +280,7 @@ public sealed class SelectedBatchStrategyArtifactTests
         root["undocumented"] = true;
 
         var result = SelectedBatchStrategyArtifactValidator.Validate(
-            JsonSerializer.SerializeToUtf8Bytes(root), new SelectedStrategyValidationContext(BenchmarkTypes));
+            JsonSerializer.SerializeToUtf8Bytes(root), new SelectedStrategyValidationContext(_benchmarkTypes));
 
         Assert.Contains(result.Errors, static error => error.Code == "json-schema");
     }
@@ -288,7 +288,7 @@ public sealed class SelectedBatchStrategyArtifactTests
     private static void AssertCode(SelectedBatchStrategyManifest manifest, string code)
     {
         var errors = SelectedBatchStrategyValidator.Validate(
-            manifest, new SelectedStrategyValidationContext(BenchmarkTypes));
+            manifest, new SelectedStrategyValidationContext(_benchmarkTypes));
         Assert.Contains(errors, error => error.Code == code);
     }
 

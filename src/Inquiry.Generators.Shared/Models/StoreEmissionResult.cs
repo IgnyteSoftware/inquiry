@@ -1,5 +1,5 @@
-using Inquiry.Generators.Abstractions;
 using System.Collections.Immutable;
+using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.Generators.Models;
 

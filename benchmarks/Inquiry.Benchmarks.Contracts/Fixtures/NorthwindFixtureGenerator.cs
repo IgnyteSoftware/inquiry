@@ -46,7 +46,11 @@ public static class FixtureChecksum
     public static string Compute(IEnumerable<SeedRow> rows)
     {
         using var accumulator = new FixtureChecksumAccumulator();
-        foreach (var row in rows) accumulator.Append(row);
+        foreach (var row in rows)
+        {
+            accumulator.Append(row);
+        }
+
         return accumulator.GetHashAndReset();
     }
 }
@@ -74,16 +78,25 @@ public sealed class FixtureChecksumAccumulator : IDisposable
 
 public static class NorthwindFixtureGenerator
 {
-    private static readonly DateTime Epoch = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime _epoch = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     public static IEnumerable<SeedRow> Generate(string table, FixtureTier tier, int seed)
     {
         var manifest = NorthwindFixtureCatalog.For(tier);
         if (!manifest.RowCounts.TryGetValue(table, out var count))
+        {
             throw new ArgumentOutOfRangeException(nameof(table), table, "Unknown Northwind fixture table.");
+        }
 
+        return GenerateRows(table, count, manifest, seed);
+    }
+
+    private static IEnumerable<SeedRow> GenerateRows(string table, int count, FixtureManifest manifest, int seed)
+    {
         for (var ordinal = 1; ordinal <= count; ordinal++)
+        {
             yield return GenerateRow(table, ordinal, manifest, seed);
+        }
     }
 
     public static IReadOnlyDictionary<string, string> ComputeTableChecksums(FixtureTier tier, int? seed = null)
@@ -128,8 +141,8 @@ public static class NorthwindFixtureGenerator
                 ("FirstName", $"First{i:D4}"),
                 ("Title", $"Title {i % 8:D2}"),
                 ("TitleOfCourtesy", i % 3 == 0 ? "Dr." : null),
-                ("BirthDate", Epoch.AddDays(-10_000 - (i * 31))),
-                ("HireDate", Epoch.AddDays(-2_000 + i)),
+                ("BirthDate", _epoch.AddDays(-10_000 - (i * 31))),
+                ("HireDate", _epoch.AddDays(-2_000 + i)),
                 ("Address", $"{i} Employee Avenue"),
                 ("City", $"City {i % 20:D2}"),
                 ("Region", i % 5 == 0 ? null : $"R{i % 16:D2}"),
@@ -147,9 +160,9 @@ public static class NorthwindFixtureGenerator
                 ("OrderID", i),
                 ("CustomerID", Base36(HotSetKey(i, manifest.RowCounts["Customers"]), 5)),
                 ("EmployeeID", ((i - 1) % manifest.RowCounts["Employees"]) + 1),
-                ("OrderDate", Epoch.AddDays(i % 1_461).AddMinutes(Bucket(random, 1_440))),
-                ("RequiredDate", Epoch.AddDays((i % 1_461) + 14)),
-                ("ShippedDate", i % 17 == 0 ? null : Epoch.AddDays((i % 1_461) + 3)),
+                ("OrderDate", _epoch.AddDays(i % 1_461).AddMinutes(Bucket(random, 1_440))),
+                ("RequiredDate", _epoch.AddDays((i % 1_461) + 14)),
+                ("ShippedDate", i % 17 == 0 ? null : _epoch.AddDays((i % 1_461) + 3)),
                 ("ShipVia", ((i - 1) % manifest.RowCounts["Shippers"]) + 1),
                 ("Freight", decimal.Round((decimal)(random % 50_000) / 100m, 2)),
                 ("ShipName", $"Recipient {i:D7}"),
@@ -211,15 +224,27 @@ public static class NorthwindFixtureGenerator
     private static SeedRow Row(string table, int ordinal, params (string Key, object? Value)[] values)
     {
         var sorted = new SortedDictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var (key, value) in values) sorted.Add(key, value);
+        foreach (var (key, value) in values)
+        {
+            sorted.Add(key, value);
+        }
+
         return new SeedRow(table, ordinal, new ReadOnlyDictionary<string, object?>(sorted));
     }
 
     private static string CustomerCity(int ordinal, ulong random)
     {
         var bucket = (ordinal - 1) % 100;
-        if (bucket < 50) return "Hot City";
-        if (bucket < 85) return "Warm City";
+        if (bucket < 50)
+        {
+            return "Hot City";
+        }
+
+        if (bucket < 85)
+        {
+            return "Warm City";
+        }
+
         return $"City {Bucket(random >> 16, 97):D2}";
     }
 
@@ -229,8 +254,16 @@ public static class NorthwindFixtureGenerator
         var bucket = ordinal % 20;
         var hot = Math.Max(1, count / 100);
         var warm = Math.Max(1, count / 10);
-        if (bucket < 10) return ((ordinal * 17) % hot) + 1;
-        if (bucket < 17) return hot + 1 + ((ordinal * 17) % Math.Max(1, warm - hot));
+        if (bucket < 10)
+        {
+            return ((ordinal * 17) % hot) + 1;
+        }
+
+        if (bucket < 17)
+        {
+            return hot + 1 + ((ordinal * 17) % Math.Max(1, warm - hot));
+        }
+
         return warm + 1 + ((ordinal * 17) % Math.Max(1, count - warm));
     }
 
@@ -266,7 +299,11 @@ public static class NorthwindFixtureGenerator
             buffer[i] = alphabet[remaining % 36];
             remaining /= 36;
         }
-        if (remaining != 0) throw new ArgumentOutOfRangeException(nameof(value), value, "Value exceeds the fixed-width base36 key space.");
+        if (remaining != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), value, "Value exceeds the fixed-width base36 key space.");
+        }
+
         return new string(buffer);
     }
 }

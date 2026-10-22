@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 using Inquiry.Stores;
@@ -64,7 +59,7 @@ public sealed class SequentialGuidIntegrationTests
 
         var loaded = await store.SelectByKeyAsync(doc.Id);
         Assert.NotNull(loaded);
-        Assert.Equal("first", loaded!.Title);
+        Assert.Equal("first", loaded.Title);
     }
 
     [Fact]

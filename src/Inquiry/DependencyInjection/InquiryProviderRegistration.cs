@@ -15,7 +15,9 @@ internal static class InquiryProviderRegistration
     internal static void ValidateConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
+        {
             throw new ArgumentException("Connection string cannot be empty.", nameof(connectionString));
+        }
     }
 
     internal static void ValidateOptions<TCompatibility>(
@@ -24,15 +26,29 @@ internal static class InquiryProviderRegistration
         where TCompatibility : struct, Enum
     {
         if (!Enum.IsDefined(compatibility))
+        {
             throw new ArgumentOutOfRangeException(nameof(compatibility), compatibility, "Unknown provider compatibility.");
+        }
+
         if (maxAttempts < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(maxAttempts), maxAttempts, "Max attempts must be at least 1.");
+        }
+
         if (retryBaseDelay < TimeSpan.Zero)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryBaseDelay), retryBaseDelay, "Base delay cannot be negative.");
+        }
+
         if (retryMaxDelay < TimeSpan.Zero)
+        {
             throw new ArgumentOutOfRangeException(nameof(retryMaxDelay), retryMaxDelay, "Max delay cannot be negative.");
+        }
+
         if (failoverConnectionString is not null && string.IsNullOrWhiteSpace(failoverConnectionString))
+        {
             throw new ArgumentException("Failover connection string cannot be empty.", nameof(failoverConnectionString));
+        }
     }
 
     /// <summary>
@@ -45,10 +61,7 @@ internal static class InquiryProviderRegistration
     /// </param>
     public static void EnsureNoExistingConnectionFactory(IServiceCollection services, string providerName)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         foreach (var descriptor in services)
         {

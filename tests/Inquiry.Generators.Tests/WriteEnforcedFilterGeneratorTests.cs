@@ -1,5 +1,4 @@
-using System;
-using System.Collections.Generic;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Tests;
@@ -350,7 +349,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GetTenantDocStore(result);
 
         var sql = GeneratedConst(text, "_sqlUpdateReturning");
-        var halves = sql.Split(new[] { "; " }, StringSplitOptions.None);
+        var halves = sql.Split(["; "], StringSplitOptions.None);
         Assert.Equal(2, halves.Length);
 
         // The UPDATE carries the term outright — that is what blocks the cross-tenant write.
@@ -382,7 +381,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
 
-        var halves = GeneratedConst(text, "_sqlUpdateReturning").Split(new[] { "; " }, StringSplitOptions.None);
+        var halves = GeneratedConst(text, "_sqlUpdateReturning").Split(["; "], StringSplitOptions.None);
         Assert.EndsWith("WHERE `Id` = @Id AND `Version` = @Version AND `TenantId` = @__gf_TenantId", halves[0]);
         Assert.EndsWith("WHERE `Id` = @Id AND ROW_COUNT() > 0", halves[1]);
         Assert.DoesNotContain("__gf_", halves[1]);
@@ -545,7 +544,7 @@ public sealed partial class InquiryGeneratorTests
 
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ095");
         Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
-        Assert.Contains("insert branch cannot be filtered", diagnostic.GetMessage());
+        Assert.Contains("insert branch cannot be filtered", diagnostic.GetMessage(CultureInfo.CurrentCulture));
     }
 
     [Fact]

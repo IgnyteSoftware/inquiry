@@ -1,6 +1,4 @@
-using System;
 using Inquiry.IntegrationTesting;
-using Xunit;
 
 namespace Inquiry.Sqlite.Tests;
 

@@ -1,10 +1,8 @@
-using System;
-using System.Threading.Tasks;
+using System.Globalization;
 using DotNet.Testcontainers.Configurations;
 using Inquiry.IntegrationTesting;
 using Oracle.ManagedDataAccess.Client;
 using Testcontainers.Oracle;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests.Fixtures;
 
@@ -105,7 +103,8 @@ public sealed class OracleContainerFixture : IAsyncLifetime
     private static async Task<string> WaitForServiceAsync(string connectionString)
     {
         const int maxAttempts = 30;
-        for (var attempt = 1; ; attempt++)
+        var attempt = 1;
+        while (true)
         {
             try
             {
@@ -116,17 +115,22 @@ public sealed class OracleContainerFixture : IAsyncLifetime
                 await cmd.ExecuteScalarAsync();
 
                 cmd.CommandText = "SELECT BANNER FROM V$VERSION WHERE BANNER LIKE 'Oracle Database%' FETCH FIRST 1 ROW ONLY";
-                return Convert.ToString(await cmd.ExecuteScalarAsync()) ?? "unknown";
+                return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture) ?? "unknown";
             }
             catch (OracleException) when (attempt < maxAttempts)
             {
                 await Task.Delay(2000);
             }
+
+            attempt++;
         }
     }
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

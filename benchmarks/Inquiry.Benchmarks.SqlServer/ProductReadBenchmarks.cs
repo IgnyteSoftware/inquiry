@@ -19,11 +19,12 @@ public class ProductReadBenchmarks
 {
     private SqlServerBenchmarkDatabase _db = null!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     private const int PageOffset = 20;
-    private const int PageSize   = 20;
+    private const int PageSize = 20;
     private const string NamePattern = "%Product 1%";
 
     [GlobalSetup]
@@ -65,6 +66,7 @@ public class ProductReadBenchmarks
     public async Task<long> Count_Inquiry() => await _db.Products.CountAsync();
 
     [BenchmarkCategory("Count"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> Count_Dlg() => await DlgLib.Product.SelectAllCountAsync();
 
     // ---- OffsetPage ---------------------------------------------------------------------
@@ -81,7 +83,11 @@ public class ProductReadBenchmarks
         command.Parameters.AddWithValue("@lim", PageSize);
         var n = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) n++;
+        while (await reader.ReadAsync())
+        {
+            n++;
+        }
+
         return n;
     }
 
@@ -112,6 +118,7 @@ public class ProductReadBenchmarks
     }
 
     [BenchmarkCategory("OffsetPage"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> OffsetPage_Dlg()
     {
         // DLG paging is 1-based page numbers: page 2 @ size 20 == offset 20.
@@ -131,7 +138,11 @@ public class ProductReadBenchmarks
         command.Parameters.AddWithValue("@p", NamePattern);
         var n = 0;
         await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SingleResult | CommandBehavior.SequentialAccess);
-        while (await reader.ReadAsync()) n++;
+        while (await reader.ReadAsync())
+        {
+            n++;
+        }
+
         return n;
     }
 
@@ -162,6 +173,7 @@ public class ProductReadBenchmarks
     }
 
     [BenchmarkCategory("Search"), Benchmark]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "BenchmarkDotNet requires benchmark methods to be instance methods.")]
     public async Task<int> Search_Dlg()
     {
         var list = await DlgLib.Product.SelectByFieldAsync(DlgLib.ProductFields.ProductName, NamePattern, null, DlgLib.TypeOperation.Like);

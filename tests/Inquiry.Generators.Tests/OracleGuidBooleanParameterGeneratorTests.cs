@@ -493,14 +493,19 @@ public sealed partial class InquiryGeneratorTests
         return (name, generated[start..(end + 1)]);
     }
 
+    private const string OracleScalarMetadataPattern = @"(?<parameter>[A-Za-z_][A-Za-z0-9_]*)\.DbType = global::System\.Data\.DbType\.(?:Binary|Int32);";
+
     private static void AssertOracleScalarMetadataPrecedesValue(string method)
     {
-        const string metadataPattern = @"(?<parameter>[A-Za-z_][A-Za-z0-9_]*)\.DbType = global::System\.Data\.DbType\.(?:Binary|Int32);";
-        var metadata = global::System.Text.RegularExpressions.Regex.Matches(method, metadataPattern);
+        var metadata = OracleScalarMetadataRegex().Matches(method);
         Assert.True(metadata.Count > 0, "Expected at least one Oracle Guid/boolean metadata assignment.");
-        var ordered = global::System.Text.RegularExpressions.Regex.Matches(
-            method,
-            metadataPattern + @"\r?\n\s+\k<parameter>\.Value =");
+        var ordered = OracleScalarMetadataThenValueRegex().Matches(method);
         Assert.Equal(metadata.Count, ordered.Count);
     }
+
+    [global::System.Text.RegularExpressions.GeneratedRegex(OracleScalarMetadataPattern)]
+    private static partial global::System.Text.RegularExpressions.Regex OracleScalarMetadataRegex();
+
+    [global::System.Text.RegularExpressions.GeneratedRegex(OracleScalarMetadataPattern + @"\r?\n\s+\k<parameter>\.Value =")]
+    private static partial global::System.Text.RegularExpressions.Regex OracleScalarMetadataThenValueRegex();
 }

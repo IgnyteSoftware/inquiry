@@ -1,7 +1,5 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.PostgreSql.Tests.Fixtures;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -33,10 +31,10 @@ public sealed class UnsignedKeyEagerIntegrationTests
         var loaded = await parents.GetWithChildrenAsync(AboveIntMax);
 
         Assert.NotNull(loaded);
-        Assert.Equal(AboveIntMax, loaded!.Id);
+        Assert.Equal(AboveIntMax, loaded.Id);
         Assert.Equal("Root", loaded.Name);
         Assert.Equal(2, loaded.Children.Count);
-        Assert.Equal(new[] { "A", "B" }, loaded.Children.Select(c => c.Label).OrderBy(s => s));
+        Assert.Equal(["A", "B"], loaded.Children.Select(c => c.Label).OrderBy(s => s));
         Assert.All(loaded.Children, c => Assert.Equal(AboveIntMax, c.ParentId));
     }
 }

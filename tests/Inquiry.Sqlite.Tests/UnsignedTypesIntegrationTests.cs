@@ -22,11 +22,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteByte");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.ByteVal = 200;
+        var item = MakeItem(1);
+        item.ByteVal = 200;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((byte)200, loaded!.ByteVal);
+        Assert.Equal((byte)200, loaded.ByteVal);
     }
 
     [Fact]
@@ -35,11 +36,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteI16");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int16Val = short.MaxValue;
+        var item = MakeItem(1);
+        item.Int16Val = short.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(short.MaxValue, loaded!.Int16Val);
+        Assert.Equal(short.MaxValue, loaded.Int16Val);
     }
 
     [Fact]
@@ -48,11 +50,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteI32");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int32Val = int.MaxValue;
+        var item = MakeItem(1);
+        item.Int32Val = int.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(int.MaxValue, loaded!.Int32Val);
+        Assert.Equal(int.MaxValue, loaded.Int32Val);
     }
 
     [Fact]
@@ -61,11 +64,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteI64");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.Int64Val = long.MaxValue;
+        var item = MakeItem(1);
+        item.Int64Val = long.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(long.MaxValue, loaded!.Int64Val);
+        Assert.Equal(long.MaxValue, loaded.Int64Val);
     }
 
     [Fact]
@@ -74,15 +78,16 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEI32");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumInt32Val = SampleEnumInt32.MaxSigned;
+        var item = MakeItem(1);
+        item.EnumInt32Val = SampleEnumInt32.MaxSigned;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumInt32.MaxSigned, loaded!.EnumInt32Val);
+        Assert.Equal(SampleEnumInt32.MaxSigned, loaded.EnumInt32Val);
     }
 
     // ---------------------------------------------------------------------------
-    // Bug #49 + #48: sbyte (maps to DbTypeClass.Byte → DbType.SByte on write;
+    // Bug #49 + #48: sbyte (maps to DbTypeClass.Byte → DbType.SByte on write,
     // GetFieldValue<sbyte> on read).
     // Low value (positive, within byte range) — isolates bug, not overflow.
     // ---------------------------------------------------------------------------
@@ -94,8 +99,10 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // sbyte = 42: value is positive; triggers bug #49 (DbType.SByte).
-        var item = MakeItem(1); item.SByteVal = 42;
-        await store.InsertAsync(item); // bug #49 — expected to throw before fix
+        var item = MakeItem(1);
+        item.SByteVal = 42;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49 — expected to throw before fix
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -104,11 +111,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteSB2");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.SByteVal = 42;
+        var item = MakeItem(1);
+        item.SByteVal = 42;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48 — expected to throw before fix
         Assert.NotNull(loaded);
-        Assert.Equal((sbyte)42, loaded!.SByteVal);
+        Assert.Equal((sbyte)42, loaded.SByteVal);
     }
 
     [Fact]
@@ -118,8 +126,10 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // sbyte = -1; SQLite stores INTEGER as signed 64-bit so this can be stored.
-        var item = MakeItem(1); item.SByteVal = -1;
-        await store.InsertAsync(item);
+        var item = MakeItem(1);
+        item.SByteVal = -1;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item));
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -128,11 +138,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteSB4");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.SByteVal = -1;
+        var item = MakeItem(1);
+        item.SByteVal = -1;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((sbyte)-1, loaded!.SByteVal);
+        Assert.Equal((sbyte)-1, loaded.SByteVal);
     }
 
     // ---------------------------------------------------------------------------
@@ -145,8 +156,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU161");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt16Val = 1000;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.UInt16Val = 1000;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -155,11 +168,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU162");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt16Val = 1000;
+        var item = MakeItem(1);
+        item.UInt16Val = 1000;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal((ushort)1000, loaded!.UInt16Val);
+        Assert.Equal((ushort)1000, loaded.UInt16Val);
     }
 
     [Fact]
@@ -169,11 +183,12 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // 40000 > short.MaxValue (32767); tests both bug #49 and storage-range.
-        var item = MakeItem(1); item.UInt16Val = 40000;
+        var item = MakeItem(1);
+        item.UInt16Val = 40000;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal((ushort)40000, loaded!.UInt16Val);
+        Assert.Equal((ushort)40000, loaded.UInt16Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -186,8 +201,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU321");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt32Val = 1000u;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.UInt32Val = 1000u;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -196,11 +213,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU322");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt32Val = 1000u;
+        var item = MakeItem(1);
+        item.UInt32Val = 1000u;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(1000u, loaded!.UInt32Val);
+        Assert.Equal(1000u, loaded.UInt32Val);
     }
 
     [Fact]
@@ -210,11 +228,12 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // 3_000_000_000 > int.MaxValue (2_147_483_647).
-        var item = MakeItem(1); item.UInt32Val = 3_000_000_000u;
+        var item = MakeItem(1);
+        item.UInt32Val = 3_000_000_000u;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(3_000_000_000u, loaded!.UInt32Val);
+        Assert.Equal(3_000_000_000u, loaded.UInt32Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -227,8 +246,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU641");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt64Val = 1000ul;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.UInt64Val = 1000ul;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -237,11 +258,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteU642");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.UInt64Val = 1000ul;
+        var item = MakeItem(1);
+        item.UInt64Val = 1000ul;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(1000ul, loaded!.UInt64Val);
+        Assert.Equal(1000ul, loaded.UInt64Val);
     }
 
     [Fact]
@@ -251,11 +273,12 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // ulong.MaxValue: bit-reinterpret stored as long -1, recovered as ulong.MaxValue on read.
-        var item = MakeItem(1); item.UInt64Val = ulong.MaxValue;
+        var item = MakeItem(1);
+        item.UInt64Val = ulong.MaxValue;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(ulong.MaxValue, loaded!.UInt64Val);
+        Assert.Equal(ulong.MaxValue, loaded.UInt64Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -268,8 +291,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteESB1");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumSByteVal = SampleEnumSByte.Negative;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.EnumSByteVal = SampleEnumSByte.Negative;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -278,11 +303,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteESB2");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumSByteVal = SampleEnumSByte.Negative;
+        var item = MakeItem(1);
+        item.EnumSByteVal = SampleEnumSByte.Negative;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumSByte.Negative, loaded!.EnumSByteVal);
+        Assert.Equal(SampleEnumSByte.Negative, loaded.EnumSByteVal);
     }
 
     // ---------------------------------------------------------------------------
@@ -295,8 +321,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU161");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -305,11 +333,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU162");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
+        var item = MakeItem(1);
+        item.EnumUInt16Val = SampleEnumUInt16.AboveShortMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt16.AboveShortMax, loaded!.EnumUInt16Val);
+        Assert.Equal(SampleEnumUInt16.AboveShortMax, loaded.EnumUInt16Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -322,8 +351,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU321");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -332,11 +363,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU322");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
+        var item = MakeItem(1);
+        item.EnumUInt32Val = SampleEnumUInt32.AboveIntMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt32.AboveIntMax, loaded!.EnumUInt32Val);
+        Assert.Equal(SampleEnumUInt32.AboveIntMax, loaded.EnumUInt32Val);
     }
 
     // ---------------------------------------------------------------------------
@@ -349,8 +381,10 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU641");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt64Val = SampleEnumUInt64.Large;
-        await store.InsertAsync(item); // bug #49
+        var item = MakeItem(1);
+        item.EnumUInt64Val = SampleEnumUInt64.Large;
+        var exception = await Record.ExceptionAsync(() => store.InsertAsync(item)); // bug #49
+        Assert.Null(exception);
     }
 
     [Fact]
@@ -359,11 +393,12 @@ public sealed class UnsignedTypesIntegrationTests
         await using var harness = await SqliteTestHarness.CreateAsync(FeatureSchema.UnsignedTypesSqliteDdl, "UnsignedSqliteEU642");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        var item = MakeItem(1); item.EnumUInt64Val = SampleEnumUInt64.Large;
+        var item = MakeItem(1);
+        item.EnumUInt64Val = SampleEnumUInt64.Large;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1); // bug #48
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt64.Large, loaded!.EnumUInt64Val);
+        Assert.Equal(SampleEnumUInt64.Large, loaded.EnumUInt64Val);
     }
 
     [Fact]
@@ -373,11 +408,12 @@ public sealed class UnsignedTypesIntegrationTests
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
         // AboveLongMax (> long.MaxValue) → negative long bit pattern → round-trips exactly.
-        var item = MakeItem(1); item.EnumUInt64Val = SampleEnumUInt64.AboveLongMax;
+        var item = MakeItem(1);
+        item.EnumUInt64Val = SampleEnumUInt64.AboveLongMax;
         await store.InsertAsync(item);
         var loaded = await store.SelectByKeyAsync(1);
         Assert.NotNull(loaded);
-        Assert.Equal(SampleEnumUInt64.AboveLongMax, loaded!.EnumUInt64Val);
+        Assert.Equal(SampleEnumUInt64.AboveLongMax, loaded.EnumUInt64Val);
     }
 
     // ---------------------------------------------------------------------------

@@ -1,9 +1,9 @@
+using System.Globalization;
 using Inquiry.Entities;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.PostgreSql.Tests.Fixtures;
 using Npgsql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests;
 
@@ -29,7 +29,8 @@ public sealed class SchemaPrimitiveIntegrationTests
         Assert.Contains("(\"Category\") INCLUDE (\"Payload\")", ddl);
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
         await using var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, ddl, "genprimitive");
-        await using var c = new NpgsqlConnection(harness.ConnectionString); await c.OpenAsync();
+        await using var c = new NpgsqlConnection(harness.ConnectionString);
+        await c.OpenAsync();
         Assert.Equal("ParentId,code", await StringAsync(c, "SELECT string_agg(a.attname, ',' ORDER BY k.ordinality) FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ordinality) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE i.indexrelid='\"IX_PrimitiveChild_Parent_Code\"'::regclass AND k.ordinality<=i.indnkeyatts"));
         Assert.Equal("TenantId,code", await StringAsync(c, "SELECT string_agg(a.attname, ',' ORDER BY k.ordinality) FROM pg_index i CROSS JOIN LATERAL unnest(i.indkey) WITH ORDINALITY k(attnum, ordinality) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum WHERE i.indexrelid='\"UX_PrimitiveChild_Tenant_Code\"'::regclass AND k.ordinality<=i.indnkeyatts AND i.indisunique"));
         Assert.Equal(1, await ScalarAsync(c, "SELECT COUNT(*) FROM pg_indexes WHERE indexname='IX_PrimitiveCovering_Category' AND indexdef LIKE '%INCLUDE (\"Payload\")%'"));
@@ -50,6 +51,6 @@ public sealed class SchemaPrimitiveIntegrationTests
         Assert.Equal(1, await ScalarAsync(c, "SELECT COUNT(*) FROM \"UpdateCascadeChild\" WHERE \"ParentId\"=11"));
     }
     private static async Task ExecAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; await cmd.ExecuteNonQueryAsync(); }
-    private static async Task<int> ScalarAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync()); }
-    private static async Task<string?> StringAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync()); }
+    private static async Task<int> ScalarAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
+    private static async Task<string?> StringAsync(NpgsqlConnection c, string sql) { await using var cmd = c.CreateCommand(); cmd.CommandText = sql; return Convert.ToString(await cmd.ExecuteScalarAsync(), CultureInfo.CurrentCulture); }
 }

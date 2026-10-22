@@ -2,7 +2,6 @@ using Inquiry.Benchmarks.SqlServer.Dlg;
 using Inquiry.Northwind;
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
-using Xunit;
 
 namespace Inquiry.SqlServer.Tests.Dlg;
 
@@ -51,7 +50,10 @@ public sealed class DlgDatabaseFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 
     private static async Task ApplySchemaAsync(string cs)

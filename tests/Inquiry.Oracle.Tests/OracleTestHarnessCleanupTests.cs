@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
 
@@ -25,7 +26,7 @@ public sealed class OracleTestHarnessCleanupTests
 
         Assert.NotNull(schemaUser);
         Assert.NotEqual(0, failure.Number);
-        Assert.False(await UserExistsAsync(schemaUser!));
+        Assert.False(await UserExistsAsync(schemaUser));
     }
 
     [SkippableFact]
@@ -45,10 +46,10 @@ public sealed class OracleTestHarnessCleanupTests
                     schemaUser = user;
                     cts.Cancel();
                 },
-                cts.Token));
+                cancellationToken: cts.Token));
 
         Assert.NotNull(schemaUser);
-        Assert.False(await UserExistsAsync(schemaUser!));
+        Assert.False(await UserExistsAsync(schemaUser));
     }
 
     [SkippableFact]
@@ -94,6 +95,6 @@ public sealed class OracleTestHarnessCleanupTests
         command.BindByName = true;
         command.CommandText = "SELECT COUNT(*) FROM ALL_USERS WHERE USERNAME = :username";
         command.Parameters.Add("username", OracleDbType.Varchar2).Value = schemaUser;
-        return Convert.ToInt32(await command.ExecuteScalarAsync()) != 0;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.CurrentCulture) != 0;
     }
 }

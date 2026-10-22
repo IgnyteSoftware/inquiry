@@ -58,6 +58,7 @@ public sealed class CancellationTokenPropagationTests
         {
             await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
+                // Enumeration alone must throw; the rows are not used.
             }
         });
     }
@@ -98,7 +99,7 @@ public sealed class CancellationTokenPropagationTests
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
             if (completed != execution)
             {
-                cts.Cancel();
+                await cts.CancelAsync();
                 var cleanup = ObserveAndDisposeAsync(execution, harness);
                 harness = null; // The cleanup task is now the sole owner.
 

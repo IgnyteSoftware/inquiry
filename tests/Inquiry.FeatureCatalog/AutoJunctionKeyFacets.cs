@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Data.Common;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Entities;
 using Inquiry.Stores;
 
@@ -12,7 +7,7 @@ namespace Inquiry.FeatureCatalog;
 // ---------------------------------------------------------------------------------------------
 // Auto-managed junctions over non-integer keys (#280) with overridden columns declared from both
 // sides (#281). AjCode has a bounded-string key, AjPrice a decimal key with precision and scale, and
-// AjSku a converter-backed key. AjCode <-> AjPrice overrides both column names, relative to each side;
+// AjSku a converter-backed key. AjCode <-> AjPrice overrides both column names, relative to each side.
 // AjCode -> AjSku uses the derived names. The tables are created from the generated DDL, so a dropped
 // facet or a transposed column shows up on the live engine.
 // ---------------------------------------------------------------------------------------------
@@ -197,7 +192,7 @@ public static class AutoJunctionKeyFacetAssertions
         {
             var code = await codes.GetAsync(name);
             Assert.NotNull(code);
-            AssertCode(code!, expectedPrices[name], expectedSkus[name]);
+            AssertCode(code, expectedPrices[name], expectedSkus[name]);
         }
 
         var allCodes = new List<AjCode>();
@@ -216,7 +211,7 @@ public static class AutoJunctionKeyFacetAssertions
         {
             var price = await prices.GetAsync(amount);
             Assert.NotNull(price);
-            Assert.Equal(expectedCodes[amount], Names(price!.Codes));
+            Assert.Equal(expectedCodes[amount], Names(price.Codes));
         }
 
         var allPrices = new List<AjPrice>();

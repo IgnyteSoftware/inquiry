@@ -1,5 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using System.ComponentModel;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.DependencyInjection;
 

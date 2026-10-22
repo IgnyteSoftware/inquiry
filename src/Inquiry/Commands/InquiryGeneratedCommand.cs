@@ -50,6 +50,8 @@ public readonly struct InquiryGeneratedCommand<TArgs>
         return new InquiryCommand(CommandText, command => bindParameters(command, args), CommandType);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Bug", "S3928:Parameter names used into ArgumentException constructors should match an existing one", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2208:Instantiate argument exceptions correctly", Justification = "Validation is deferred; ParamName names the constructor argument the caller supplied, which callers observe.")]
     internal void Validate()
     {
         if (string.IsNullOrWhiteSpace(CommandText))

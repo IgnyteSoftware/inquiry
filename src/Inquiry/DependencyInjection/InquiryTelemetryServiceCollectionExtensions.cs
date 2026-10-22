@@ -23,10 +23,7 @@ public static class InquiryTelemetryServiceCollectionExtensions
         this IServiceCollection services,
         Action<InquiryTelemetryOptions>? configure = null)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         foreach (var descriptor in services)
         {

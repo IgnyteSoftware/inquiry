@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.SqlServer.Tests.Fixtures;
 
@@ -20,7 +16,7 @@ public sealed class WriteEnforcedFilterIntegrationTests
     private readonly SqlServerContainerFixture _fixture;
     public WriteEnforcedFilterIntegrationTests(SqlServerContainerFixture fixture) => _fixture = fixture;
 
-    private static IDisposable Scope(long tenantId)
+    private static InquiryFilterContext.Scope Scope(long tenantId)
         => InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId });
 
     private Task<SqlServerTestHarness> CreateHarnessAsync()
@@ -85,19 +81,19 @@ public sealed class WriteEnforcedFilterIntegrationTests
             var unchanged = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = row, TenantId = 1, Title = "A doc" });
             Assert.NotNull(unchanged);
-            Assert.Equal("A doc", unchanged!.Title);
+            Assert.Equal("A doc", unchanged.Title);
 
             var renamed = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = row, TenantId = 1, Title = "renamed" });
             Assert.NotNull(renamed);
-            Assert.Equal("renamed", renamed!.Title);
+            Assert.Equal("renamed", renamed.Title);
 
             // The write CHANGES the enforced column itself. A read-back that re-tested the term
             // against the POST-update value would return null for a write that succeeded.
             var moved = await store.UpdateReturningAsync(
                 new WriteEnforcedDoc { Id = row, TenantId = 2, Title = "moved" });
             Assert.NotNull(moved);
-            Assert.Equal(2, moved!.TenantId);
+            Assert.Equal(2, moved.TenantId);
             Assert.Equal("moved", moved.Title);
         }
 
@@ -153,7 +149,7 @@ public sealed class WriteEnforcedFilterIntegrationTests
         using (Scope(2))
         {
             var titles = (await store.AllAsync()).Select(static doc => doc.Title).OrderBy(static t => t).ToArray();
-            Assert.Equal(new[] { "B1", "B2" }, titles);
+            Assert.Equal(["B1", "B2"], titles);
 
             // Positive control: inside its own scope the same delete works.
             Assert.Equal(1, await store.PurgeByTitleAsync("B1"));

@@ -1,8 +1,5 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Testcontainers.PostgreSql;
-using Xunit;
 
 namespace Inquiry.PostgreSql.Tests.Fixtures;
 
@@ -36,6 +33,9 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

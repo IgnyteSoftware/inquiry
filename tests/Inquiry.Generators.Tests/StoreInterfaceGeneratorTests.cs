@@ -1,5 +1,3 @@
-using Microsoft.CodeAnalysis;
-
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
@@ -91,7 +89,7 @@ public sealed partial class InquiryGeneratorTests
         // member would be a compile error in the output compilation); also confirm via the symbol.
         var store = result.Compilation.GetTypeByMetadataName("Demo.CustomerStore");
         Assert.NotNull(store);
-        Assert.Contains(store!.Interfaces, static i => i.ToDisplayString() == "Demo.ICustomerStore");
+        Assert.Contains(store.Interfaces, static i => i.ToDisplayString() == "Demo.ICustomerStore");
     }
 
     [Fact]

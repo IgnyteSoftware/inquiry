@@ -22,6 +22,8 @@ public class BatchMutationStrategyBenchmarks
     private DataTable _deleteTvp = null!;
 
     [Params(1, 10, 100, 1000)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1051", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S1104", Justification = "SelectedBatchStrategyContracts reads Rows by reflection as a public field.")]
     public int Rows;
 
     public bool CanCreateBatch => _runner.CanCreateBatch;
@@ -104,7 +106,10 @@ public class BatchMutationStrategyBenchmarks
     {
         var items = new BatchMutationBenchmarkItem[count];
         for (var i = 0; i < count; i++)
+        {
             items[i] = new BatchMutationBenchmarkItem { Id = firstId + i, ValueText = $"{prefix} {i}" };
+        }
+
         return items;
     }
 
@@ -113,7 +118,11 @@ public class BatchMutationStrategyBenchmarks
         var sql = new StringBuilder("INSERT INTO InquiryBatchEvidence (Id, ValueText) VALUES ");
         for (var i = 0; i < count; i++)
         {
-            if (i > 0) sql.Append(',');
+            if (i > 0)
+            {
+                sql.Append(',');
+            }
+
             sql.Append("(@id").Append(i).Append(",@value").Append(i).Append(')');
         }
         return sql.Append(';').ToString();
@@ -123,7 +132,11 @@ public class BatchMutationStrategyBenchmarks
     {
         var table = new DataTable();
         table.Columns.Add("Id", typeof(int));
-        foreach (var id in ids) table.Rows.Add(id);
+        foreach (var id in ids)
+        {
+            table.Rows.Add(id);
+        }
+
         return table;
     }
 }

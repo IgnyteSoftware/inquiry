@@ -14,13 +14,13 @@ namespace Inquiry.ReleaseTools;
 
 public static class PackageVerifier
 {
-    private static readonly TimeSpan ProjectEvaluationTimeout = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan ProcessTerminationTimeout = TimeSpan.FromSeconds(10);
-    private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>> ProjectEvaluationCache = new(StringComparer.Ordinal);
+    private static readonly TimeSpan _projectEvaluationTimeout = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan _processTerminationTimeout = TimeSpan.FromSeconds(10);
+    private static readonly ConcurrentDictionary<string, Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>> _projectEvaluationCache = new(StringComparer.Ordinal);
     // Packages ship under the Ignyte.* prefix because the bare "Inquiry" ID is taken on
     // nuget.org; assemblies keep their canonical Inquiry.* names.
     private const string PackageIdPrefix = "Ignyte.";
-    private static readonly string[] RequiredPackageIds =
+    private static readonly string[] _requiredPackageIds =
     [
         "Ignyte.Inquiry",
         "Ignyte.Inquiry.Aspire",
@@ -36,14 +36,15 @@ public static class PackageVerifier
         "Ignyte.Inquiry.Testing"
     ];
 
-    private static readonly string[] RequiredTfms = ["net8.0", "net9.0", "net10.0"];
-    private static readonly EnumerationOptions ProjectEnumerationOptions = new()
+    private static readonly string[] _requiredTfms = ["net8.0", "net9.0", "net10.0"];
+    private static readonly char[] _pathSeparators = ['/', '\\'];
+    private static readonly EnumerationOptions _projectEnumerationOptions = new()
     {
         RecurseSubdirectories = true,
         IgnoreInaccessible = false,
         AttributesToSkip = FileAttributes.ReparsePoint
     };
-    private static readonly Guid SourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
+    private static readonly Guid _sourceLinkKind = new("CC110556-A091-4D38-9FEC-25AB9A351A6A");
 
     public static void VerifyManifest(string repositoryRoot, string manifestPath)
     {
@@ -55,7 +56,7 @@ public static class PackageVerifier
         Require(manifest.SchemaVersion == "inquiry-release-v1", "schemaVersion must be inquiry-release-v1.");
         Require(IsStableSemVer(manifest.PackageVersion), "packageVersion must be a stable MAJOR.MINOR.PATCH version.");
         Require(manifest.Tag == $"v{manifest.PackageVersion}", "tag must equal v plus packageVersion.");
-        Require(packages.Count == RequiredPackageIds.Length, $"The manifest must contain exactly {RequiredPackageIds.Length} packages.");
+        Require(packages.Count == _requiredPackageIds.Length, $"The manifest must contain exactly {_requiredPackageIds.Length} packages.");
         foreach (var package in packages)
         {
             Require(!string.IsNullOrWhiteSpace(package.Id), "Package ID cannot be empty.");
@@ -65,7 +66,7 @@ public static class PackageVerifier
             "The manifest contains duplicate package IDs.");
 
         var packagesById = packages.ToDictionary(package => package.Id, StringComparer.Ordinal);
-        RequireSequence(packagesById.Keys.Order(StringComparer.Ordinal), RequiredPackageIds.Order(StringComparer.Ordinal), "package IDs");
+        RequireSequence(packagesById.Keys.Order(StringComparer.Ordinal), _requiredPackageIds.Order(StringComparer.Ordinal), "package IDs");
 
         foreach (var package in packages)
         {
@@ -92,7 +93,7 @@ public static class PackageVerifier
             Require(File.Exists(projectPath), $"Project does not exist: {package.Project}");
             Require(PackageIdPrefix + Path.GetFileNameWithoutExtension(projectPath) == package.Id,
                 $"Package ID {package.Id} must be {PackageIdPrefix} plus its project name.");
-            RequireSequence(libTfms.Order(StringComparer.Ordinal), RequiredTfms.Order(StringComparer.Ordinal), $"{package.Id} lib TFMs");
+            RequireSequence(libTfms.Order(StringComparer.Ordinal), _requiredTfms.Order(StringComparer.Ordinal), $"{package.Id} lib TFMs");
             Require(analyzers.Distinct(StringComparer.Ordinal).Count() == analyzers.Count, $"{package.Id} has duplicate analyzer assets.");
 
             foreach (var dependency in dependencies.Keys.Where(packagesById.ContainsKey))
@@ -196,7 +197,7 @@ public static class PackageVerifier
             .ToHashSet(StringComparer.Ordinal);
         var actualPaths = new HashSet<string>(StringComparer.Ordinal);
 
-        var projectPaths = Directory.EnumerateFiles(root, "*.csproj", ProjectEnumerationOptions)
+        var projectPaths = Directory.EnumerateFiles(root, "*.csproj", _projectEnumerationOptions)
             .Where(path => !IsBuildOrWorktreePath(root, path))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -205,7 +206,7 @@ public static class PackageVerifier
             var info = new FileInfo(path);
             return $"{Normalize(Path.GetRelativePath(root, path))}:{info.Length}:{info.LastWriteTimeUtc.Ticks}";
         }));
-        var evaluated = ProjectEvaluationCache.GetOrAdd(root + "\n" + signature, _ => new Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>(
+        var evaluated = _projectEvaluationCache.GetOrAdd(root + "\n" + signature, _ => new Lazy<IReadOnlyDictionary<string, (bool IsPackable, string PackageId)>>(
             () => projectPaths.ToDictionary(path => path, EvaluateProject, StringComparer.OrdinalIgnoreCase),
             LazyThreadSafetyMode.ExecutionAndPublication)).Value;
 
@@ -230,6 +231,7 @@ public static class PackageVerifier
         return segments.Any(segment => segment is ".git" or ".claude" or ".artifacts" or "artifacts" or "bin" or "obj");
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S4036", Justification = "The release tool runs the dotnet host that the build selected on PATH, which is the pinned SDK.")]
     private static (bool IsPackable, string PackageId) EvaluateProject(string projectPath)
     {
         var start = new ProcessStartInfo("dotnet")
@@ -248,21 +250,21 @@ public static class PackageVerifier
         BoundedProcessResult result;
         try
         {
-            result = BoundedProcess.Run(start, ProjectEvaluationTimeout, ProcessTerminationTimeout);
+            result = BoundedProcess.Run(start, _projectEvaluationTimeout, _processTerminationTimeout);
         }
         catch (Exception exception) when (exception is IOException or Win32Exception or InvalidOperationException)
         {
             throw new ReleaseVerificationException($"Could not evaluate {projectPath}: {exception.Message}");
         }
         Require(!result.TimedOut,
-            $"MSBuild evaluation timed out after {ProjectEvaluationTimeout.TotalSeconds:0} seconds for {projectPath}. " +
+            $"MSBuild evaluation timed out after {_projectEvaluationTimeout.TotalSeconds:0} seconds for {projectPath}. " +
             $"Process-tree kill requested: {result.ProcessTreeKillRequested}; root exited: {result.RootExited}; " +
             $"streams drained: {result.StreamsDrained}; kill error: {result.KillError ?? "none"}. " +
             $"stderr truncated: {result.StandardErrorTruncated}; stderr: {DiagnosticTail(result.StandardError)}; " +
             $"stdout: {DiagnosticTail(result.StandardOutput)}");
         Require(result.StreamsDrained,
             $"MSBuild evaluation exited for {projectPath}, but its redirected output streams did not close within " +
-            $"{ProcessTerminationTimeout.TotalSeconds:0} seconds. A descendant process may still hold inherited handles. " +
+            $"{_processTerminationTimeout.TotalSeconds:0} seconds. A descendant process may still hold inherited handles. " +
             $"stderr: {DiagnosticTail(result.StandardError)}; stdout: {DiagnosticTail(result.StandardOutput)}");
         Require(!result.StandardOutputTruncated,
             $"MSBuild evaluation output exceeded the {BoundedProcess.MaximumCapturedCharacters}-character capture limit " +
@@ -314,7 +316,7 @@ public static class PackageVerifier
         }
     }
 
-    private static IReadOnlyDictionary<string, DebugIdentity> VerifyNupkg(string root, string packagePath, ReleasePackage package, ReleaseManifest manifest, string expectedCommit, string version, string branch)
+    private static Dictionary<string, DebugIdentity> VerifyNupkg(string root, string packagePath, ReleasePackage package, ReleaseManifest manifest, string expectedCommit, string version, string branch)
     {
         try
         {
@@ -363,8 +365,8 @@ public static class PackageVerifier
                 var familyIds = manifest.Packages.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
                 foreach (var dependency in package.Dependencies.Where(item => actual.ContainsKey(item.Key)))
                 {
-                    // Sibling packages are packed at the effective (possibly -preview.N) version;
-                    // external dependencies stay at their manifest-pinned versions.
+                    // Sibling packages are packed at the effective version, which can be a -preview.N version.
+                    // External dependencies stay at their manifest-pinned versions.
                     var expectedDependencyVersion = familyIds.Contains(dependency.Key) ? version : dependency.Value;
                     Require(actual[dependency.Key] == expectedDependencyVersion,
                         $"{package.Id} dependency {dependency.Key} must be {expectedDependencyVersion}; found {actual[dependency.Key]}.");
@@ -716,7 +718,7 @@ public static class PackageVerifier
         foreach (var handle in reader.GetCustomDebugInformation(EntityHandle.ModuleDefinition))
         {
             var debug = reader.GetCustomDebugInformation(handle);
-            if (reader.GetGuid(debug.Kind) != SourceLinkKind)
+            if (reader.GetGuid(debug.Kind) != _sourceLinkKind)
             {
                 continue;
             }
@@ -740,17 +742,17 @@ public static class PackageVerifier
                 var matches = mappings.Where(mapping => SourceLinkMatch(mapping.Name, document, out _)).ToArray();
                 Require(matches.Length == 1, $"{subject} document '{document}' must match exactly one SourceLink mapping.");
                 _ = SourceLinkMatch(matches[0].Name, document, out var suffix);
-                Require(!suffix.Split('/', '\\').Any(segment => segment is "" or "." or ".."),
+                Require(!suffix.Split(_pathSeparators).Any(segment => segment is "" or "." or ".."),
                     $"{subject} document '{document}' has an unsafe SourceLink suffix.");
                 var targetPattern = matches[0].Value.GetString()!;
                 Require(targetPattern.Count(character => character == '*') == 1
                     && targetPattern.Replace("*", suffix.Replace('\\', '/'), StringComparison.Ordinal) == expectedRawPrefix + suffix.Replace('\\', '/'),
                     $"{subject} document '{document}' does not resolve to the exact repository commit URL.");
             }
-            foreach (var mapping in mappings)
+            foreach (var mappingName in mappings.Select(mapping => mapping.Name))
             {
-                Require(documentNames.Any(document => SourceLinkMatch(mapping.Name, document, out _)),
-                    $"{subject} contains an unused SourceLink mapping '{mapping.Name}'.");
+                Require(documentNames.Any(document => SourceLinkMatch(mappingName, document, out _)),
+                    $"{subject} contains an unused SourceLink mapping '{mappingName}'.");
             }
             return;
         }
@@ -920,16 +922,12 @@ public static class PackageVerifier
     {
         Require(!string.IsNullOrWhiteSpace(path), $"{name} path cannot be empty.");
         Require(!Path.IsPathRooted(path), $"{name} path must be repository-relative: {path}");
-        Require(!path.Split('/', '\\').Contains("..", StringComparer.Ordinal), $"{name} path cannot contain '..': {path}");
+        Require(!path.Split(_pathSeparators).Contains("..", StringComparer.Ordinal), $"{name} path cannot contain '..': {path}");
         Require(path == Normalize(path), $"{name} path must use canonical forward slashes: {path}");
     }
 
     private static bool IsWithin(string root, string path) =>
         path.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsWithinOrEqual(string root, string path) =>
-        string.Equals(root.TrimEnd(Path.DirectorySeparatorChar), path.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)
-        || IsWithin(root, path);
 
     private static string Normalize(string path) => path.Replace('\\', '/');
 

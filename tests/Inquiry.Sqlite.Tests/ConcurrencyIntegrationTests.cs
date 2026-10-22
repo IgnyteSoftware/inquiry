@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.DependencyInjection;
 using Inquiry.Entities;
 using Inquiry.Sqlite.DependencyInjection;

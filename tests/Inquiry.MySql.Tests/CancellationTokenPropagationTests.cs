@@ -1,6 +1,6 @@
+using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Northwind.Models;
 using Inquiry.Northwind.Stores;
-using Inquiry.MySql.Tests.Fixtures;
 
 namespace Inquiry.MySql.Tests;
 
@@ -28,7 +28,7 @@ public sealed class CancellationTokenPropagationTests
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(10)));
             if (completed != execution)
             {
-                cts.Cancel();
+                await cts.CancelAsync();
                 var cleanup = ObserveAndDisposeAsync(execution, harness);
                 harness = null;
 
@@ -52,7 +52,9 @@ public sealed class CancellationTokenPropagationTests
         finally
         {
             if (harness is not null)
+            {
                 await harness.DisposeAsync();
+            }
         }
     }
 
@@ -89,6 +91,7 @@ public sealed class CancellationTokenPropagationTests
         {
             await foreach (var _ in store.SelectAllAsync(PreCancelled))
             {
+                // Enumeration alone must throw; the rows are not used.
             }
         });
     }
@@ -124,8 +127,12 @@ public sealed class CancellationTokenPropagationTests
             var completed = await Task.WhenAny(execution, Task.Delay(TimeSpan.FromSeconds(2)));
             if (completed == execution)
             {
-                try { await execution; }
-                catch { }
+                try
+                { await execution; }
+                catch
+                {
+                    // The execution failure is expected after cancellation; the task only needs to be observed.
+                }
             }
             else
             {

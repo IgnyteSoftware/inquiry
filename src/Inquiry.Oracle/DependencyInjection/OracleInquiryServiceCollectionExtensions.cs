@@ -1,8 +1,8 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
 
 namespace Inquiry.Oracle.DependencyInjection;
 
@@ -29,10 +29,7 @@ public static class OracleInquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiryOracle(this IServiceCollection services, string connectionString)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
         InquiryProviderRegistration.ValidateConnectionString(connectionString);
@@ -49,15 +46,9 @@ public static class OracleInquiryServiceCollectionExtensions
         string connectionString,
         Action<OracleInquiryOptions> configure)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
-        if (configure is null)
-        {
-            throw new ArgumentNullException(nameof(configure));
-        }
+        ArgumentNullException.ThrowIfNull(configure);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Oracle");
         var options = new OracleInquiryOptions();
@@ -99,10 +90,7 @@ public static class OracleInquiryServiceCollectionExtensions
 
     private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
     {
-        if (configuration is null)
-        {
-            throw new ArgumentNullException(nameof(configuration));
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString(connectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))

@@ -82,3 +82,8 @@ image and the rest of the conventions, and
 - New packable projects must be added to `eng/release-manifest.json` — the package
   contract verifier fails CI if the manifest and the packable project inventory drift.
 - Keep PRs to one concern; refactors, features, and fixes travel separately.
+- Add a line under `## [Unreleased]` in `CHANGELOG.md` for every change a user, operator, or
+  consumer would notice, grouped under headings such as `Added`, `Changed`, `Fixed`, or `Security`.
+  Dependency updates and internal refactors need no entry unless someone would notice them, such as
+  a raised minimum runtime. When you cut a release, rename `## [Unreleased]` to the version and date,
+  such as `## [1.0.0] - 2026-10-22`, and start a new empty `## [Unreleased]` section above it.

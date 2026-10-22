@@ -55,7 +55,10 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     {
         ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
         if (string.IsNullOrWhiteSpace(referencedColumn))
+        {
             throw new ArgumentException("Referenced column cannot be empty.", nameof(referencedColumn));
+        }
+
         ReferencedTable = null!;
         ReferencedColumn = referencedColumn;
     }

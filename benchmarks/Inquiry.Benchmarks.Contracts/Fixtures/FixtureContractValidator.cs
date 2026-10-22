@@ -44,7 +44,10 @@ public static class FixtureContractValidator
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 
@@ -53,7 +56,10 @@ public static class FixtureContractValidator
         var errors = new List<ContractError>(Validate(manifest));
         var actual = NorthwindFixtureGenerator.ComputeTableChecksums(manifest.Tier, manifest.Seed);
         if (manifest.TableChecksums.Any(pair => !actual.TryGetValue(pair.Key, out var checksum) || checksum != pair.Value))
+        {
             errors.Add(new("fixture-row-checksum", "Generated row stream does not match the checked per-table checksums."));
+        }
+
         return errors;
     }
 
@@ -62,7 +68,10 @@ public static class FixtureContractValidator
         if (!DictionaryEqual(before.RowCounts, after.RowCounts) ||
             !DictionaryEqual(before.TableChecksums, after.TableChecksums) ||
             !DictionaryEqual(before.IdentityState, after.IdentityState))
+        {
             return [new("fixture-mutation-leakage", "Mutable fixture data or identity state leaked across cases.")];
+        }
+
         return [];
     }
 

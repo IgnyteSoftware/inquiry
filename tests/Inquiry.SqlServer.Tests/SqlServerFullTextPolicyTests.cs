@@ -1,4 +1,3 @@
-using System;
 using Inquiry.SqlServer.Tests.Fixtures;
 
 namespace Inquiry.SqlServer.Tests;

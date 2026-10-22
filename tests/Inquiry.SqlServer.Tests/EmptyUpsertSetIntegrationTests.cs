@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Inquiry.Commands;
 using Inquiry.DependencyInjection;
 using Inquiry.Entities;
@@ -122,12 +118,12 @@ public sealed class EmptyUpsertSetIntegrationTests
 
         var conflict = await store.UpsertReturningAsync(new SsKeyOnlyItem { Id = id });
         Assert.NotNull(conflict);
-        Assert.Equal(id, conflict!.Id);
+        Assert.Equal(id, conflict.Id);
         Assert.Single(await store.AllAsync());
 
         var inserted = await store.UpsertReturningAsync(new SsKeyOnlyItem { Id = null });
         Assert.NotNull(inserted);
-        Assert.NotNull(inserted!.Id);
+        Assert.NotNull(inserted.Id);
         Assert.Equal(2, (await store.AllAsync()).Count);
     }
 
@@ -161,7 +157,7 @@ public sealed class EmptyUpsertSetIntegrationTests
 
         Assert.NotNull(inserted);
         Assert.NotNull(conflict);
-        Assert.Equal(73, conflict!.Id);
+        Assert.Equal(73, conflict.Id);
         Assert.Equal(storedAt, conflict.CreatedAt);
         Assert.NotEqual(conflictingAt, conflict.CreatedAt);
         Assert.Single(await store.AllAsync());
@@ -183,14 +179,14 @@ public sealed class EmptyUpsertSetIntegrationTests
         var exception = await Assert.ThrowsAsync<SqlException>(() => store.UpsertReturningAsync(new SsFailingAuditOnlyItem
         {
             Id = 91,
-            CreatedAt = new System.DateTime(1900, 1, 1),
+            CreatedAt = new System.DateTime(1900, 1, 1, 0, 0, 0, System.DateTimeKind.Unspecified),
         }));
 
         Assert.Equal(547, exception.Number);
         Assert.True(cleanupProbe.Verified);
         var recovered = await store.UpsertReturningAsync(new SsFailingAuditOnlyItem
         {
-            CreatedAt = new System.DateTime(2024, 1, 1),
+            CreatedAt = new System.DateTime(2024, 1, 1, 0, 0, 0, System.DateTimeKind.Unspecified),
         });
         Assert.NotNull(recovered);
         Assert.Equal(1L, await store.CountAsync());
@@ -208,7 +204,7 @@ public sealed class EmptyUpsertSetIntegrationTests
         var exception = await Assert.ThrowsAsync<SqlException>(() => store.UpsertReturningAsync(new SsFailingAuditOnlyItem
         {
             Id = 92,
-            CreatedAt = new System.DateTime(1900, 1, 1),
+            CreatedAt = new System.DateTime(1900, 1, 1, 0, 0, 0, System.DateTimeKind.Unspecified),
         }));
         Assert.Equal(547, exception.Number);
         await transaction.ExecuteAsync(
@@ -216,7 +212,7 @@ public sealed class EmptyUpsertSetIntegrationTests
 
         var recovered = await store.UpsertReturningAsync(new SsFailingAuditOnlyItem
         {
-            CreatedAt = new System.DateTime(2024, 2, 1),
+            CreatedAt = new System.DateTime(2024, 2, 1, 0, 0, 0, System.DateTimeKind.Unspecified),
         });
         Assert.NotNull(recovered);
         Assert.Equal(1L, await store.CountAsync());

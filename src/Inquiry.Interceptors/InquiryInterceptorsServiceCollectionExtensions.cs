@@ -20,7 +20,7 @@ public static class InquiryInterceptorsServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquirySlowQueryLogging(this IServiceCollection services, TimeSpan? threshold = null)
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IInquiryCommandInterceptor>(provider => new SlowQueryLoggingInterceptor(
             provider.GetRequiredService<ILogger<SlowQueryLoggingInterceptor>>(),
@@ -36,7 +36,7 @@ public static class InquiryInterceptorsServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquirySqlCommenter(this IServiceCollection services, string? applicationName = null)
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IInquiryCommandInterceptor>(new SqlCommenterInterceptor(applicationName));
         return services;
@@ -49,7 +49,7 @@ public static class InquiryInterceptorsServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquiryNPlusOneDetection(this IServiceCollection services, int threshold = 2)
     {
-        if (services is null) throw new ArgumentNullException(nameof(services));
+        ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IInquiryCommandInterceptor>(provider => new NPlusOneDetectionInterceptor(
             provider.GetRequiredService<ILogger<NPlusOneDetectionInterceptor>>(),

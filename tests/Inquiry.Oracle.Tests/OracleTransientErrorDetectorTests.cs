@@ -1,5 +1,4 @@
 using System.Reflection;
-using Inquiry.Oracle;
 using Oracle.ManagedDataAccess.Client;
 
 namespace Inquiry.Oracle.Tests;
@@ -89,10 +88,26 @@ public sealed class OracleTransientErrorDetectorTests
 
     private static object? DefaultArg(Type type)
     {
-        if (type == typeof(string)) return string.Empty;
-        if (type == typeof(int)) return 0;
-        if (type == typeof(byte)) return (byte)0;
-        if (type == typeof(Exception)) return null;
+        if (type == typeof(string))
+        {
+            return string.Empty;
+        }
+
+        if (type == typeof(int))
+        {
+            return 0;
+        }
+
+        if (type == typeof(byte))
+        {
+            return (byte)0;
+        }
+
+        if (type == typeof(Exception))
+        {
+            return null;
+        }
+
         return type.IsValueType ? Activator.CreateInstance(type) : null;
     }
 }

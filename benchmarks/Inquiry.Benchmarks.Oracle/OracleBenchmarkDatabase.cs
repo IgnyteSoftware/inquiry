@@ -22,7 +22,7 @@ namespace Inquiry.Benchmarks.Oracle;
 /// </summary>
 public sealed class OracleBenchmarkDatabase : IAsyncDisposable
 {
-    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly SemaphoreSlim _gate = new(1, 1);
     private static OracleContainer? _container;
     private static ServiceProvider? _services;
     private static string? _connectionString;
@@ -30,14 +30,22 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
 
     private OracleBenchmarkDatabase(int rowCount) => RowCount = rowCount;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public string ConnectionString => _connectionString!;
 
     /// <summary>Number of Shipper rows seeded into the shared database.</summary>
     public int RowCount { get; }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public IDbContextFactory<OracleShipperContext> DbContextFactory => _dbContextFactory!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public BatchMutationBenchmarkStore BatchMutations => _services!.GetRequiredService<BatchMutationBenchmarkStore>();
 
     /// <summary>
@@ -45,7 +53,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
     /// </summary>
     public static async Task<OracleBenchmarkDatabase> CreateAsync(int seedRows)
     {
-        await Gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
             if (_container is null)
@@ -112,7 +120,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
         }
         finally
         {
-            Gate.Release();
+            _gate.Release();
         }
 
         return new OracleBenchmarkDatabase(seedRows);
@@ -121,7 +129,7 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
     private static async Task WaitForServiceAsync(string connectionString)
     {
         const int maxAttempts = 30;
-        for (var attempt = 1; ; attempt++)
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
@@ -166,12 +174,12 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
             insert.BindByName = true;
             insert.CommandText = "INSERT INTO SHIPPERS (COMPANYNAME, PHONE) VALUES (:company, :phone)";
             var pCompany = insert.Parameters.Add("company", OracleDbType.Varchar2);
-            var pPhone   = insert.Parameters.Add("phone",   OracleDbType.Varchar2);
+            var pPhone = insert.Parameters.Add("phone", OracleDbType.Varchar2);
             await insert.PrepareAsync().ConfigureAwait(false);
             for (int i = 0; i < rowCount; i++)
             {
                 pCompany.Value = $"Shipper {i}";
-                pPhone.Value   = $"555-{i:0000}";
+                pPhone.Value = $"555-{i:0000}";
                 await insert.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

@@ -1,8 +1,6 @@
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using Inquiry.MySql.Tests.Fixtures;
 using MySqlConnector;
-using Xunit;
 
 namespace Inquiry.MySql.Tests;
 

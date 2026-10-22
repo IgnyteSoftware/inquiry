@@ -31,6 +31,6 @@ public sealed class UpsertConcurrencyTests
 
         var loaded = await store.SelectByKeyAsync("CONC1");
         Assert.NotNull(loaded);
-        Assert.Contains(loaded!.CompanyName, inputs.Select(i => i.CompanyName));
+        Assert.Contains(loaded.CompanyName, inputs.Select(i => i.CompanyName));
     }
 }

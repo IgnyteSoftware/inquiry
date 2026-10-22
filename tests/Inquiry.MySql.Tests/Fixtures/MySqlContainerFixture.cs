@@ -1,9 +1,6 @@
-using System;
-using System.Threading.Tasks;
 using Inquiry.IntegrationTesting;
 using MySqlConnector;
 using Testcontainers.MySql;
-using Xunit;
 
 namespace Inquiry.MySql.Tests.Fixtures;
 
@@ -47,6 +44,9 @@ public sealed class MySqlContainerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_container is not null) await _container.DisposeAsync();
+        if (_container is not null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

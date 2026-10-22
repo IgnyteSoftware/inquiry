@@ -1,5 +1,4 @@
 using System.Reflection;
-using Inquiry.MySql;
 using MySqlConnector;
 
 namespace Inquiry.MySql.Tests;
@@ -65,9 +64,21 @@ public sealed class MySqlTransientErrorDetectorTests
 
     private static object? DefaultArg(Type type)
     {
-        if (type == typeof(string)) return string.Empty;
-        if (type == typeof(int)) return 0;
-        if (type == typeof(Exception)) return null;
+        if (type == typeof(string))
+        {
+            return string.Empty;
+        }
+
+        if (type == typeof(int))
+        {
+            return 0;
+        }
+
+        if (type == typeof(Exception))
+        {
+            return null;
+        }
+
         return type.IsValueType ? Activator.CreateInstance(type) : null;
     }
 }

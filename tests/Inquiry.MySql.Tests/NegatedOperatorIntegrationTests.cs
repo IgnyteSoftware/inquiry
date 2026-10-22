@@ -55,7 +55,7 @@ public sealed class NegatedOperatorIntegrationTests
         await store.InsertAsync(new NegatedProduct { Name = "Gizmo Test", Qty = 25 });
 
         var result = await store.NameNotLikeAsync("%Test%");
-        Assert.Equal(new[] { "Gadget", "Widget" }, result.Select(p => p.Name).OrderBy(n => n).ToArray());
+        Assert.Equal(["Gadget", "Widget"], result.Select(p => p.Name).OrderBy(n => n).ToArray());
     }
 
     [SkippableFact]
@@ -70,7 +70,7 @@ public sealed class NegatedOperatorIntegrationTests
         await store.InsertAsync(new NegatedProduct { Name = "Gizmo Test", Qty = 25 });
 
         var result = await store.QtyNotBetweenAsync(10, 20);
-        Assert.Equal(new[] { 5, 25 }, result.Select(p => p.Qty).OrderBy(q => q).ToArray());
+        Assert.Equal([5, 25], result.Select(p => p.Qty).OrderBy(q => q).ToArray());
     }
 
     [SkippableFact]
@@ -84,7 +84,7 @@ public sealed class NegatedOperatorIntegrationTests
         await store.InsertAsync(new NegatedProduct { Name = "Gadget", Qty = 15 });
         await store.InsertAsync(new NegatedProduct { Name = "Gizmo Test", Qty = 25 });
 
-        var result = await store.QtyNotInAsync(new[] { 15, 25 });
+        var result = await store.QtyNotInAsync([15, 25]);
         var only = Assert.Single(result);
         Assert.Equal(5, only.Qty);
     }

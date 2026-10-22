@@ -1,7 +1,5 @@
-using System;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Globalization;
 using Inquiry.FeatureCatalog.FullText;
 using Inquiry.IntegrationTesting;
 using Inquiry.SqlServer.Tests.Fixtures;
@@ -45,8 +43,11 @@ public sealed class FullTextSearchIntegrationTests
         {
             check.CommandText = "SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')";
             var value = await check.ExecuteScalarAsync();
-            var isInstalled = value is not null && value != DBNull.Value && Convert.ToInt32(value) == 1;
-            if (SqlServerFullTextPolicy.ShouldSkip(DockerRequirement.IsRequired(), isInstalled)) return false;
+            var isInstalled = value is not null && value != DBNull.Value && Convert.ToInt32(value, CultureInfo.CurrentCulture) == 1;
+            if (SqlServerFullTextPolicy.ShouldSkip(DockerRequirement.IsRequired(), isInstalled))
+            {
+                return false;
+            }
         }
 
         await using (var catalog = connection.CreateCommand())
@@ -85,22 +86,25 @@ public sealed class FullTextSearchIntegrationTests
             {
                 if (await reader.ReadAsync())
                 {
-                    lastStatus = reader.IsDBNull(0) ? null : Convert.ToInt32(reader.GetValue(0));
-                    lastPendingChanges = reader.IsDBNull(1) ? null : Convert.ToInt32(reader.GetValue(1));
+                    lastStatus = reader.IsDBNull(0) ? null : Convert.ToInt32(reader.GetValue(0), CultureInfo.CurrentCulture);
+                    lastPendingChanges = reader.IsDBNull(1) ? null : Convert.ToInt32(reader.GetValue(1), CultureInfo.CurrentCulture);
                 }
             }
 
             lastSentinelCount = (await articles.SearchAsync("inquiryreadinesssentinel")).Count;
-            if (lastSentinelCount == 3) return;
+            if (lastSentinelCount == 3)
+            {
+                return;
+            }
 
             await Task.Delay(250);
         }
 
         throw new TimeoutException(
             $"SQL Server full-text search did not expose the seeded sentinel within {timeout}. " +
-            $"Last TableFulltextPopulateStatus: {lastStatus?.ToString() ?? "<null>"}; " +
-            $"last TableFulltextPendingChanges: {lastPendingChanges?.ToString() ?? "<null>"}; " +
-            $"last sentinel count: {lastSentinelCount?.ToString() ?? "<null>"} (expected 3).");
+            $"Last TableFulltextPopulateStatus: {lastStatus?.ToString(CultureInfo.CurrentCulture) ?? "<null>"}; " +
+            $"last TableFulltextPendingChanges: {lastPendingChanges?.ToString(CultureInfo.CurrentCulture) ?? "<null>"}; " +
+            $"last sentinel count: {lastSentinelCount?.ToString(CultureInfo.CurrentCulture) ?? "<null>"} (expected 3).");
     }
 
     [SkippableFact]

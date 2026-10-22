@@ -1,3 +1,7 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Inquiry.Northwind;
@@ -9,8 +13,6 @@ using Inquiry.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.Tests;
 
@@ -97,21 +99,21 @@ public sealed class TransactionStateMachineTests
         var inquiry = harness.GetRequiredService<IInquiry>();
         var store = harness.GetRequiredService<CustomerStore>();
 
-        const int N = 16;
-        var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
+        const int taskCount = 16;
+        var tasks = Enumerable.Range(0, taskCount).Select(i => Task.Run(async () =>
         {
             await using var tx = await inquiry.BeginTransactionAsync();
-            await tx.ExecuteAsync(InsertCustomer("C" + i.ToString("D4"), "Concurrent " + i, "USA"));
+            await tx.ExecuteAsync(InsertCustomer("C" + i.ToString("D4", CultureInfo.CurrentCulture), "Concurrent " + i, "USA"));
             await tx.CommitAsync();
         }));
 
         await Task.WhenAll(tasks);
 
         var all = await store.SelectAllAsync();
-        Assert.Equal(N, all.Count);
-        for (var i = 0; i < N; i++)
+        Assert.Equal(taskCount, all.Count);
+        for (var i = 0; i < taskCount; i++)
         {
-            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4"));
+            Assert.Contains(all, c => c.CustomerID == "C" + i.ToString("D4", CultureInfo.CurrentCulture));
         }
     }
 
@@ -208,7 +210,10 @@ public sealed class TransactionStateMachineTests
         }, commit: true);
 
         Assert.Equal(3, ids.Count);
-        foreach (var id in ids) Assert.NotNull(await items.SelectByKeyAsync(id));
+        foreach (var id in ids)
+        {
+            Assert.NotNull(await items.SelectByKeyAsync(id));
+        }
     }
 
     [Fact]
@@ -229,7 +234,10 @@ public sealed class TransactionStateMachineTests
 
         // ids are the auto-generated keys returned by the UpsertReturning calls — but the
         // outer transaction's rollback erased the rows, so SelectByKey returns null for each.
-        foreach (var id in ids) Assert.Null(await items.SelectByKeyAsync(id));
+        foreach (var id in ids)
+        {
+            Assert.Null(await items.SelectByKeyAsync(id));
+        }
     }
 
     // ---- Medium-priority defensive edges (audit items #5, #6, #7, #8, #10) -----------
@@ -249,7 +257,7 @@ public sealed class TransactionStateMachineTests
         await outer.ExecuteAsync(InsertCustomer("OUT01", "Outer", "USA"));
 
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => outer.BeginTransactionAsync(cts.Token));
 
@@ -281,12 +289,12 @@ public sealed class TransactionStateMachineTests
         var store = harness.GetRequiredService<CustomerStore>();
         await using var tx = await inquiry.BeginTransactionAsync();
 
-        const int N = 10;
-        var tasks = Enumerable.Range(0, N).Select(i => Task.Run(async () =>
+        const int taskCount = 10;
+        var tasks = Enumerable.Range(0, taskCount).Select(i => Task.Run(async () =>
         {
             try
             {
-                await tx.ExecuteAsync(InsertCustomer("X" + i.ToString("D4"), "X " + i, "USA"));
+                await tx.ExecuteAsync(InsertCustomer("X" + i.ToString("D4", CultureInfo.CurrentCulture), "X " + i, "USA"));
                 return (Success: true, Exception: (Exception?)null);
             }
             catch (Exception ex)
@@ -300,13 +308,13 @@ public sealed class TransactionStateMachineTests
         var failures = results.Where(r => !r.Success).ToList();
 
         // No losses: every op either succeeded or faulted with an observable exception.
-        Assert.Equal(N, successes + failures.Count);
+        Assert.Equal(taskCount, successes + failures.Count);
 
         // Any failure must be the in-flight guard — not a corruption or a generic provider error.
         Assert.All(failures, f =>
         {
             Assert.IsType<InvalidOperationException>(f.Exception);
-            Assert.Contains("in flight", f.Exception!.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("in flight", f.Exception.Message, StringComparison.OrdinalIgnoreCase);
         });
 
         await tx.CommitAsync();
@@ -368,7 +376,10 @@ public sealed class TransactionStateMachineTests
         await tx.CommitAsync();
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            {
+                // Enumerate only. The test checks the exception that enumeration throws.
+            }
         });
         await tx.DisposeAsync();
     }
@@ -382,15 +393,27 @@ public sealed class TransactionStateMachineTests
         var tx = await harness.GetRequiredService<IInquiry>().BeginTransactionAsync();
         var stream = tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
 
-        if (dispose) await tx.DisposeAsync(); else await tx.RollbackAsync();
+        if (dispose)
+        {
+            await tx.DisposeAsync();
+        }
+        else
+        {
+            await tx.RollbackAsync();
+        }
+
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            {
+                // Enumerate only. The test checks the exception that enumeration throws.
+            }
         });
         await tx.DisposeAsync();
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S5034:\"ValueTask\" should be consumed correctly", Justification = "Each DisposeAsync call returns its own ValueTask, consumed once through AsTask. The test races the calls on purpose.")]
     public async Task ConcurrentRootDisposeCleansProviderResourcesExactlyOnce()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "dispose_once");
@@ -533,7 +556,10 @@ public sealed class TransactionStateMachineTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers")) { }
+            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers"))
+            {
+                // Enumerate only. The test checks the exception that enumeration throws.
+            }
         });
         Assert.Contains(mode == FailureMode.OnReaderDispose ? "reader dispose" : "command dispose", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(1, probe.ReaderDisposeCalls);
@@ -555,7 +581,7 @@ public sealed class TransactionStateMachineTests
         var terminal = mode == FailureMode.GatedCommit ? tx.CommitAsync(cts.Token) : tx.RollbackAsync(cts.Token);
         await probe.TerminalEntered.Task;
         var dispose = tx.DisposeAsync().AsTask();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => terminal);
         await dispose;
@@ -594,7 +620,10 @@ public sealed class TransactionStateMachineTests
         await inner.CommitAsync();
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            {
+                // Enumerate only. The test checks the exception that enumeration throws.
+            }
         });
         await inner.DisposeAsync();
         await outer.RollbackAsync();
@@ -610,10 +639,21 @@ public sealed class TransactionStateMachineTests
         var inner = await outer.BeginTransactionAsync();
         var stream = inner.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
 
-        if (dispose) await inner.DisposeAsync(); else await inner.RollbackAsync();
+        if (dispose)
+        {
+            await inner.DisposeAsync();
+        }
+        else
+        {
+            await inner.RollbackAsync();
+        }
+
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var _ in stream) { }
+            await foreach (var _ in stream)
+            {
+                // Enumerate only. The test checks the exception that enumeration throws.
+            }
         });
         await inner.DisposeAsync();
         await outer.RollbackAsync();
@@ -652,7 +692,9 @@ public sealed class TransactionStateMachineTests
         async Task<Exception?> Run(Func<Task> terminal)
         {
             await gate.Task;
-            try { await terminal(); return null; } catch (Exception exception) { return exception; }
+            try
+            { await terminal(); return null; }
+            catch (Exception exception) { return exception; }
         }
 
         var commit = Run(() => inner.CommitAsync());
@@ -667,6 +709,7 @@ public sealed class TransactionStateMachineTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S5034:\"ValueTask\" should be consumed correctly", Justification = "Each DisposeAsync call returns its own ValueTask, consumed once through AsTask. The test races the calls on purpose.")]
     public async Task ConcurrentSavepointDisposeCallsShareCleanup()
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "savepoint_dispose_race");
@@ -764,6 +807,7 @@ public sealed class TransactionStateMachineTests
             await foreach (var _ in tx.QueryAsync<Customer>(
                 $"SELECT CustomerID, CompanyName, ContactName, ContactTitle, Address, City, Region, PostalCode, Country, Phone, Fax FROM Customers"))
             {
+                // Enumerate only. The test checks the exception that enumeration throws.
             }
         });
         Assert.Contains("Simulated InitializeCommand failure", ex.Message);
@@ -807,7 +851,7 @@ public sealed class TransactionStateMachineTests
         var store = harness.GetRequiredService<CustomerStore>();
 
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => inquiry.BeginTransactionAsync(cancellationToken: cts.Token));
@@ -885,7 +929,7 @@ public sealed class TransactionStateMachineTests
 
         // Replace the IInquiryConnectionFactory registered by AddInquirySqlite with our
         // failing wrapper. Last-registration-wins for a singleton.
-        services.RemoveAll(typeof(IInquiryConnectionFactory));
+        services.RemoveAll<IInquiryConnectionFactory>();
         services.AddSingleton<IInquiryConnectionFactory>(new FailingConnectionFactory(connectionString, failureMode));
 
         return services.BuildServiceProvider().GetRequiredService<IInquiry>();
@@ -895,7 +939,7 @@ public sealed class TransactionStateMachineTests
     {
         var probe = new LifecycleProbe();
         var services = new ServiceCollection().AddInquiry(typeof(CustomerStore).Assembly).AddInquirySqlite(connectionString);
-        services.RemoveAll(typeof(IInquiryConnectionFactory));
+        services.RemoveAll<IInquiryConnectionFactory>();
         services.AddSingleton<IInquiryConnectionFactory>(new FailingConnectionFactory(connectionString, failureMode, probe));
         return (services.BuildServiceProvider().GetRequiredService<IInquiry>(), probe);
     }
@@ -910,7 +954,7 @@ public sealed class TransactionStateMachineTests
             .AddInquiry(typeof(CustomerStore).Assembly)
             .AddInquirySqlite(connectionString);
 
-        services.RemoveAll(typeof(IInquiryConnectionFactory));
+        services.RemoveAll<IInquiryConnectionFactory>();
         services.AddSingleton<IInquiryConnectionFactory>(new ThrowingInitializeCommandFactory(connectionString));
 
         return services.BuildServiceProvider().GetRequiredService<IInquiry>();
@@ -994,6 +1038,7 @@ public sealed class TransactionStateMachineTests
             _probe = probe;
         }
 
+        [AllowNull]
         public override string ConnectionString { get => _inner.ConnectionString; set => _inner.ConnectionString = value; }
         public override string Database => _inner.Database;
         public override string DataSource => _inner.DataSource;
@@ -1011,16 +1056,23 @@ public sealed class TransactionStateMachineTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously and then simulates a dispose failure. base.DisposeAsync would also run the synchronous Dispose path.")]
         public override async ValueTask DisposeAsync()
         {
             System.Threading.Interlocked.Increment(ref _probe.ConnectionDisposeCalls);
             await _inner.DisposeAsync();
             if (_failureMode is FailureMode.OnConnectionDispose or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated connection dispose failure.");
+            }
         }
     }
 
@@ -1033,6 +1085,7 @@ public sealed class TransactionStateMachineTests
         public FailingCommand(SqliteCommand inner, FailureMode failureMode, LifecycleProbe probe)
             => (_inner, _failureMode, _probe) = (inner, failureMode, probe);
 
+        [AllowNull]
         public override string CommandText { get => _inner.CommandText; set => _inner.CommandText = value; }
         public override int CommandTimeout { get => _inner.CommandTimeout; set => _inner.CommandTimeout = value; }
         public override CommandType CommandType { get => _inner.CommandType; set => _inner.CommandType = value; }
@@ -1076,20 +1129,28 @@ public sealed class TransactionStateMachineTests
         public override void Prepare() => _inner.Prepare();
         protected override DbParameter CreateDbParameter() => _inner.CreateParameter();
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => _inner.ExecuteReader(behavior);
-        protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken ct)
-            => new FailingReader(await _inner.ExecuteReaderAsync(behavior, ct), _failureMode, _probe);
+        protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+            => new FailingReader(await _inner.ExecuteReaderAsync(behavior, cancellationToken), _failureMode, _probe);
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _inner.Dispose();
+            if (disposing)
+            {
+                _inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously and then simulates a dispose failure. base.DisposeAsync would also run the synchronous Dispose path.")]
         public override async ValueTask DisposeAsync()
         {
             System.Threading.Interlocked.Increment(ref _probe.CommandDisposeCalls);
             await _inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnCommandDispose) throw new InvalidOperationException("Simulated command dispose failure.");
+            if (_failureMode == FailureMode.OnCommandDispose)
+            {
+                throw new InvalidOperationException("Simulated command dispose failure.");
+            }
         }
 
     }
@@ -1134,11 +1195,15 @@ public sealed class TransactionStateMachineTests
         public override System.Collections.IEnumerator GetEnumerator() => ((System.Collections.IEnumerable)_inner).GetEnumerator();
         public override Task<bool> ReadAsync(CancellationToken cancellationToken) => _inner.ReadAsync(cancellationToken);
         public override Task<bool> NextResultAsync(CancellationToken cancellationToken) => _inner.NextResultAsync(cancellationToken);
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously and then simulates a dispose failure. base.DisposeAsync would also run the synchronous Dispose path.")]
         public override async ValueTask DisposeAsync()
         {
             System.Threading.Interlocked.Increment(ref _probe.ReaderDisposeCalls);
             await _inner.DisposeAsync();
-            if (_failureMode == FailureMode.OnReaderDispose) throw new InvalidOperationException("Simulated reader dispose failure.");
+            if (_failureMode == FailureMode.OnReaderDispose)
+            {
+                throw new InvalidOperationException("Simulated reader dispose failure.");
+            }
         }
     }
 
@@ -1162,7 +1227,10 @@ public sealed class TransactionStateMachineTests
         public override void Commit()
         {
             if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
+            {
                 throw new InvalidOperationException("Simulated commit failure for tests.");
+            }
+
             Inner.Commit();
         }
 
@@ -1175,16 +1243,24 @@ public sealed class TransactionStateMachineTests
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             if (_failureMode is FailureMode.OnCommit or FailureMode.OnCommitAndAllCleanup or FailureMode.OnCommitWithHangingRollback)
+            {
                 throw new InvalidOperationException("Simulated commit failure for tests.");
+            }
+
             await Inner.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public override void Rollback()
         {
             if (_failureMode == FailureMode.OnRollback)
+            {
                 throw new InvalidOperationException("Simulated rollback failure for tests.");
+            }
+
             Inner.Rollback();
         }
+
+        public override void Rollback(string savepointName) => Inner.Rollback(savepointName);
 
         public override async Task RollbackAsync(CancellationToken cancellationToken = default)
         {
@@ -1200,30 +1276,40 @@ public sealed class TransactionStateMachineTests
                 await _probe.AllowTerminal.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             if (_failureMode is FailureMode.OnRollback or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated rollback failure for tests.");
+            }
+
             await Inner.RollbackAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        public override Task RollbackAsync(string savepointName, CancellationToken cancellationToken = default) => Inner.RollbackAsync(savepointName, cancellationToken);
+
         // Savepoint primitives — pass through to inner.
         public override void Save(string savepointName) => Inner.Save(savepointName);
-        public override Task SaveAsync(string savepointName, CancellationToken ct = default) => Inner.SaveAsync(savepointName, ct);
-        public override void Rollback(string savepointName) => Inner.Rollback(savepointName);
-        public override Task RollbackAsync(string savepointName, CancellationToken ct = default) => Inner.RollbackAsync(savepointName, ct);
+        public override Task SaveAsync(string savepointName, CancellationToken cancellationToken = default) => Inner.SaveAsync(savepointName, cancellationToken);
         public override void Release(string savepointName) => Inner.Release(savepointName);
-        public override Task ReleaseAsync(string savepointName, CancellationToken ct = default) => Inner.ReleaseAsync(savepointName, ct);
+        public override Task ReleaseAsync(string savepointName, CancellationToken cancellationToken = default) => Inner.ReleaseAsync(savepointName, cancellationToken);
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) Inner.Dispose();
+            if (disposing)
+            {
+                Inner.Dispose();
+            }
+
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double disposes its inner object asynchronously and then simulates a dispose failure. base.DisposeAsync would also run the synchronous Dispose path.")]
         public override async ValueTask DisposeAsync()
         {
             System.Threading.Interlocked.Increment(ref _probe.TransactionDisposeCalls);
             await Inner.DisposeAsync();
             if (_failureMode is FailureMode.OnTransactionDispose or FailureMode.OnCommitAndAllCleanup)
+            {
                 throw new InvalidOperationException("Simulated transaction dispose failure.");
+            }
         }
     }
 }
@@ -1260,7 +1346,11 @@ internal sealed partial class GeneratedItemAtomicService : InquiryStore<Generate
             ids.Add(inserted!.Id!.Value);
         }
 
-        if (commit) await tx.CommitAsync(cancellationToken);
+        if (commit)
+        {
+            await tx.CommitAsync(cancellationToken);
+        }
+
         return ids;
     }
 }

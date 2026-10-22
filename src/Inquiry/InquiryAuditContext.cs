@@ -1,5 +1,3 @@
-using System.Threading;
-
 namespace Inquiry;
 
 /// <summary>
@@ -12,13 +10,13 @@ namespace Inquiry;
 /// </summary>
 public static class InquiryAuditContext
 {
-    private static readonly AsyncLocal<ScopeFrame?> Current = new();
+    private static readonly AsyncLocal<ScopeFrame?> _current = new();
 
     /// <summary>
     /// Gets the current user identifier for the active async flow, or <see langword="null"/> when
     /// none is set. Auditing columns are stamped with this value.
     /// </summary>
-    public static string? CurrentUser => Current.Value?.Value;
+    public static string? CurrentUser => _current.Value?._value;
 
     /// <summary>
     /// Sets <see cref="CurrentUser"/> for the current async flow and returns a scope that restores
@@ -27,20 +25,20 @@ public static class InquiryAuditContext
     /// </summary>
     public static Scope BeginScope(string? user)
     {
-        var frame = new ScopeFrame(user, Current.Value);
-        Current.Value = frame;
+        var frame = new ScopeFrame(user, _current.Value);
+        _current.Value = frame;
         return new Scope(frame);
     }
 
     internal sealed class ScopeFrame
     {
-        internal readonly string? Value;
-        internal readonly ScopeFrame? Previous;
+        internal readonly string? _value;
+        internal readonly ScopeFrame? _previous;
 
         internal ScopeFrame(string? value, ScopeFrame? previous)
         {
-            Value = value;
-            Previous = previous;
+            _value = value;
+            _previous = previous;
         }
     }
 
@@ -59,18 +57,27 @@ public static class InquiryAuditContext
         /// </exception>
         public void Dispose()
         {
-            if (_frame is null) return;
-            var current = Current.Value;
-            if (ReferenceEquals(current, _frame))
+            if (_frame is null)
             {
-                Current.Value = _frame.Previous;
                 return;
             }
 
-            for (var frame = current; frame is not null; frame = frame.Previous)
+            var current = _current.Value;
+            if (ReferenceEquals(current, _frame))
+            {
+                _current.Value = _frame._previous;
+                return;
+            }
+
+            for (var frame = current; frame is not null; frame = frame._previous)
             {
                 if (ReferenceEquals(frame, _frame))
+                {
+                    // Disposing out of order would corrupt the ambient stack, so misuse fails loudly.
+#pragma warning disable S3877
                     throw new System.InvalidOperationException("Dispose nested ambient scopes before their parent scope.");
+#pragma warning restore S3877
+                }
             }
         }
     }

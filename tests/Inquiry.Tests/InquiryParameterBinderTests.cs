@@ -1,6 +1,7 @@
-using Inquiry.Parameters;
 using System.Data;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using Inquiry.Parameters;
 
 namespace Inquiry.Tests;
 
@@ -46,7 +47,7 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[] { parameter });
 
-        var bound = (FakeDbParameter)command.Parameters[0]!;
+        var bound = (FakeDbParameter)command.Parameters[0];
         Assert.Equal(DbType.Decimal, bound.DbType);
         Assert.Equal(ParameterDirection.Input, bound.Direction);
         Assert.Equal(10, bound.Size);
@@ -65,8 +66,8 @@ public sealed class InquiryParameterBinderTests
             new InquiryParameter("Enabled", true, DbType.Int32),
         });
 
-        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[0]!);
-        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[1]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[0]);
+        AssertMetadataPrecedesValue((FakeDbParameter)command.Parameters[1]);
     }
 
     [Fact]
@@ -84,12 +85,12 @@ public sealed class InquiryParameterBinderTests
         InquiryInExpansion.ExpandNotIn(
             boolCommand,
             "@Enabled",
-            new[] { true },
+            [true],
             maxParameterCount: 10,
             dbType: DbType.Int32);
 
-        AssertMetadataPrecedesValue((FakeDbParameter)guidCommand.Parameters[0]!);
-        AssertMetadataPrecedesValue((FakeDbParameter)boolCommand.Parameters[0]!);
+        AssertMetadataPrecedesValue((FakeDbParameter)guidCommand.Parameters[0]);
+        AssertMetadataPrecedesValue((FakeDbParameter)boolCommand.Parameters[0]);
     }
 
     [Fact]
@@ -187,14 +188,14 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[]
         {
-            new InquiryParameter("EnumKey", SampleUIntEnum.AboveIntMax, DbType.Int32),
+            new InquiryParameter("EnumKey", SampleUInt.AboveIntMax, DbType.Int32),
         });
 
         Assert.Equal(unchecked((int)3_000_000_000u), command.Parameters[0].Value);
         Assert.IsType<int>(command.Parameters[0].Value);
     }
 
-    private enum SampleUIntEnum : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
+    private enum SampleUInt : uint { Zero = 0, AboveIntMax = 3_000_000_000u }
 
     private static void AssertMetadataPrecedesValue(FakeDbParameter parameter)
     {
@@ -212,7 +213,7 @@ public sealed class InquiryParameterBinderTests
 
         InquiryParameterBinder.Bind(command, new[] { new InquiryParameter("Name", "alpha") });
 
-        var bound = (FakeDbParameter)command.Parameters[0]!;
+        var bound = (FakeDbParameter)command.Parameters[0];
         Assert.False(bound.DbTypeAssigned);
         Assert.False(bound.DirectionAssigned);
         Assert.False(bound.SizeAssigned);
@@ -227,6 +228,7 @@ public sealed class InquiryParameterBinderTests
     {
         private readonly FakeParameterCollection _parameters = new();
 
+        [AllowNull]
         public override string CommandText { get; set; } = string.Empty;
         public override int CommandTimeout { get; set; }
         public override CommandType CommandType { get; set; }
@@ -252,7 +254,13 @@ public sealed class InquiryParameterBinderTests
         public override int Count => _items.Count;
         public override object SyncRoot { get; } = new();
         public override int Add(object value) { _items.Add((DbParameter)value); return _items.Count - 1; }
-        public override void AddRange(Array values) { foreach (var v in values) Add(v!); }
+        public override void AddRange(Array values)
+        {
+            foreach (var v in values)
+            {
+                Add(v);
+            }
+        }
         public override void Clear() => _items.Clear();
         public override bool Contains(object value) => _items.Contains((DbParameter)value);
         public override bool Contains(string value) => _items.Any(p => p.ParameterName == value);
@@ -292,8 +300,10 @@ public sealed class InquiryParameterBinderTests
         public override DbType DbType { get => _dbType; set { _dbType = value; DbTypeAssigned = true; AssignmentOrder.Add(nameof(DbType)); } }
         public override ParameterDirection Direction { get => _direction; set { _direction = value; DirectionAssigned = true; } }
         public override bool IsNullable { get; set; }
+        [AllowNull]
         public override string ParameterName { get; set; } = string.Empty;
         public override int Size { get => _size; set { _size = value; SizeAssigned = true; } }
+        [AllowNull]
         public override string SourceColumn { get; set; } = string.Empty;
         public override bool SourceColumnNullMapping { get; set; }
         public override object? Value { get => _value; set { _value = value; AssignmentOrder.Add(nameof(Value)); } }

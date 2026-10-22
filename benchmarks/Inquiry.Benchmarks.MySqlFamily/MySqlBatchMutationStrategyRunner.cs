@@ -121,7 +121,11 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         for (var i = 0; i < items.Count; i++)
         {
             id.Value = items[i].Id;
-            if (value is not null) value.Value = items[i].Value;
+            if (value is not null)
+            {
+                value.Value = items[i].Value;
+            }
+
             affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }
 
@@ -145,7 +149,11 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
             var command = batch.CreateBatchCommand();
             command.CommandText = commandText;
             AddParameter(command, "id", MySqlDbType.Int32, size: 0, items[i].Id);
-            if (includeValue) AddParameter(command, "value", MySqlDbType.VarChar, size: 100, items[i].Value);
+            if (includeValue)
+            {
+                AddParameter(command, "value", MySqlDbType.VarChar, size: 100, items[i].Value);
+            }
+
             batch.BatchCommands.Add(command);
         }
 
@@ -206,7 +214,11 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         command.Transaction = transaction;
         for (var i = 0; i < items.Count; i++)
         {
-            if (i > 0) sql.Append(',');
+            if (i > 0)
+            {
+                sql.Append(',');
+            }
+
             sql.Append("(@id").Append(i).Append(", @value").Append(i).Append(')');
             command.Parameters.Add($"id{i}", MySqlDbType.Int32).Value = items[i].Id;
             command.Parameters.Add($"value{i}", MySqlDbType.VarChar, 100).Value = items[i].Value;
@@ -253,9 +265,17 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         {
             sql.Append(i == 0 ? "SELECT " : " UNION ALL SELECT ");
             sql.Append("@_u").Append(i).Append("_0");
-            if (i == 0) sql.Append(" AS `Id`");
+            if (i == 0)
+            {
+                sql.Append(" AS `Id`");
+            }
+
             sql.Append(", @_u").Append(i).Append("_1");
-            if (i == 0) sql.Append(" AS `ValueText`");
+            if (i == 0)
+            {
+                sql.Append(" AS `ValueText`");
+            }
+
             command.Parameters.Add($"_u{i}_0", MySqlDbType.Int32).Value = items[i].Id;
             command.Parameters.Add($"_u{i}_1", MySqlDbType.VarChar, 100).Value = items[i].Value;
         }
@@ -318,7 +338,11 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
         var parameter = (MySqlParameter)command.CreateParameter();
         parameter.ParameterName = name;
         parameter.MySqlDbType = type;
-        if (size > 0) parameter.Size = size;
+        if (size > 0)
+        {
+            parameter.Size = size;
+        }
+
         parameter.Value = value;
         command.Parameters.Add(parameter);
     }
@@ -327,7 +351,11 @@ internal sealed class MySqlBatchMutationStrategyRunner(string connectionString)
     {
         for (var i = 0; i < count; i++)
         {
-            if (i > 0) sql.Append(',');
+            if (i > 0)
+            {
+                sql.Append(',');
+            }
+
             sql.Append('@').Append(prefix).Append(i);
         }
     }

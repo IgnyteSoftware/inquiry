@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace Inquiry.Benchmarks.Contracts;
 
-public sealed record CommandNode(
+public sealed partial record CommandNode(
     CommandOperation Operation,
     IReadOnlyList<string> Tables,
     IReadOnlyList<string> Joins,
@@ -36,10 +36,16 @@ public sealed record CommandNode(
 
     private static string NormalizeSqlFragment(string value)
     {
-        var whitespace = Regex.Replace(value.Trim(), "\\s+", " ");
-        return Regex.Replace(whitespace, @"(?<![A-Za-z0-9_])[@:$?]([A-Za-z_][A-Za-z0-9_]*)", "$1")
+        var whitespace = WhitespacePattern().Replace(value.Trim(), " ");
+        return ParameterPrefixPattern().Replace(whitespace, "$1")
             .ToUpperInvariant();
     }
+
+    [GeneratedRegex("\\s+")]
+    private static partial Regex WhitespacePattern();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9_])[@:$?]([A-Za-z_][A-Za-z0-9_]*)")]
+    private static partial Regex ParameterPrefixPattern();
 }
 
 [method: System.Text.Json.Serialization.JsonConstructor]
@@ -50,10 +56,9 @@ public sealed record CommandGraph(IReadOnlyList<CommandNode> Commands, IReadOnly
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string SemanticHash => CanonicalHash.Sha256(CanonicalHash.Join(Commands.Select(static command => command.CanonicalSemantics)));
+    public IReadOnlyList<string> GetSqlFingerprints() => SqlStatements.Select(CanonicalHash.Sha256).ToArray();
     [System.Text.Json.Serialization.JsonIgnore]
-    public IReadOnlyList<string> SqlFingerprints => SqlStatements.Select(CanonicalHash.Sha256).ToArray();
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string SqlFingerprint => CanonicalHash.Sha256(CanonicalHash.Join(SqlFingerprints));
+    public string SqlFingerprint => CanonicalHash.Sha256(CanonicalHash.Join(GetSqlFingerprints()));
 }
 
 public sealed record ParityObservation(
@@ -97,13 +102,16 @@ public static class ParityValidator
         AddIf(!StringComparer.Ordinal.Equals(observation.CommandGraph.SemanticHash, scenario.ApprovedCommandGraph.SemanticHash), "command-graph", "Observed semantic command graph differs from the approved graph.");
         AddIf(observation.CommandGraph.Commands.Count != observation.CommandGraph.SqlStatements.Count ||
               scenario.ApprovedCommandGraph.Commands.Count != scenario.ApprovedCommandGraph.SqlStatements.Count ||
-              !observation.CommandGraph.SqlFingerprints.SequenceEqual(scenario.ApprovedCommandGraph.SqlFingerprints, StringComparer.Ordinal),
+              !observation.CommandGraph.GetSqlFingerprints().SequenceEqual(scenario.ApprovedCommandGraph.GetSqlFingerprints(), StringComparer.Ordinal),
             "sql-fingerprint", "Observed ordered per-command SQL fingerprints differ from the approved semantic-node mapping.");
         return errors;
 
         void AddIf(bool condition, string code, string message)
         {
-            if (condition) errors.Add(new(code, message));
+            if (condition)
+            {
+                errors.Add(new(code, message));
+            }
         }
     }
 }

@@ -21,7 +21,7 @@ public sealed class InquiryCancellationRaceTests
 
         var pending = InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, cts.Token);
 
-        cts.Cancel();
+        await cts.CancelAsync();
         provider.SetResult(1);
 
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pending);
@@ -38,7 +38,7 @@ public sealed class InquiryCancellationRaceTests
         using var cts = new CancellationTokenSource();
         var provider = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         provider.SetResult(42);
-        cts.Cancel();
+        await cts.CancelAsync();
 
         var result = await InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, cts.Token);
 
@@ -55,7 +55,7 @@ public sealed class InquiryCancellationRaceTests
         var driverException = new OperationCanceledException("driver", cts.Token);
 
         var pending = InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, cts.Token);
-        cts.Cancel();
+        await cts.CancelAsync();
         provider.SetException(driverException);
 
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pending);
@@ -74,7 +74,7 @@ public sealed class InquiryCancellationRaceTests
         var driverException = new InvalidOperationException("A severe error occurred on the current command.");
 
         var pending = InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, cts.Token);
-        cts.Cancel();
+        await cts.CancelAsync();
         provider.SetException(driverException);
 
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => pending);

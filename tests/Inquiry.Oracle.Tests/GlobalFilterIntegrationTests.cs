@@ -1,4 +1,3 @@
-using System.Linq;
 using Inquiry.FeatureCatalog;
 using Inquiry.Oracle.Tests.Fixtures;
 
@@ -47,7 +46,7 @@ public sealed class GlobalFilterIntegrationTests
 
         var includingDeleted = await store.AllIncludingDeletedAsync();
         Assert.Equal(
-            new[] { "PublishedActive", "PublishedDeleted" },
+            ["PublishedActive", "PublishedDeleted"],
             includingDeleted.Select(d => d.Name).OrderBy(n => n).ToArray());
     }
 

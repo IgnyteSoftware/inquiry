@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data.Common;
 
@@ -12,6 +11,7 @@ namespace Inquiry.BulkCopy;
 /// <see cref="FieldCount"/>, name/ordinal lookup — and throws for everything else.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1010:Generic interface should also be implemented", Justification = "Published API. The reader derives from DbDataReader, whose IEnumerable contract bulk-copy APIs consume; adding IEnumerable<T> would change the public surface.")]
 public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     where TEntity : class
 {
@@ -124,7 +124,10 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
             }
         }
 
+        // DbDataReader.GetOrdinal documents IndexOutOfRangeException for an unknown name.
+#pragma warning disable CA2201, S112
         throw new IndexOutOfRangeException($"Column '{name}' is not part of this bulk insert.");
+#pragma warning restore CA2201, S112
     }
 
     private TEntity Current => _current ?? throw new InvalidOperationException("Read() has not advanced to a row.");
@@ -196,7 +199,8 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
     public override int GetValues(object[] values)
     {
         ThrowIfClosed();
-        if (values is null) throw new ArgumentNullException(nameof(values));
+        ArgumentNullException.ThrowIfNull(values);
+
         var count = Math.Min(values.Length, FieldCount);
         for (var i = 0; i < count; i++)
         {
@@ -325,21 +329,38 @@ public sealed class InquiryBulkRowReader<TEntity> : DbDataReader
         ThrowIfClosed();
         if ((uint)ordinal >= (uint)FieldCount)
         {
+            // DbDataReader ordinal accessors document IndexOutOfRangeException for a bad ordinal.
+#pragma warning disable CA2201, S112
             throw new IndexOutOfRangeException($"Column ordinal {ordinal} is outside the bulk insert shape.");
+#pragma warning restore CA2201, S112
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1512:Use ArgumentOutOfRangeException throw helper", Justification = "Published API: keeps the exception message and ActualValue consumers may observe.")]
     private static void ValidateCopyArguments<T>(long dataOffset, T[]? buffer, int bufferOffset, int length)
     {
-        if (dataOffset < 0) throw new ArgumentOutOfRangeException(nameof(dataOffset));
-        if (bufferOffset < 0) throw new ArgumentOutOfRangeException(nameof(bufferOffset));
-        if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
+        if (dataOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dataOffset));
+        }
+
+        if (bufferOffset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(bufferOffset));
+        }
+
+        if (length < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length));
+        }
+
         if (buffer is not null && (bufferOffset > buffer.Length || length > buffer.Length - bufferOffset))
         {
             throw new ArgumentException("The destination range exceeds the supplied buffer.", nameof(buffer));
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1513:Use ObjectDisposedException throw helper", Justification = "Published API: keeps the exception message and ObjectName consumers may observe.")]
     private void ThrowIfClosed()
     {
         if (_isClosed)

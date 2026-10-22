@@ -15,7 +15,7 @@ public class WideBatchInsertThresholdBenchmarks
     private WideBatchEvidenceItem[] _items = null!;
 
     [Params(199, 200, 201, 209, 210, 211, 249, 250, 251)]
-    public int Rows;
+    public int Rows { get; set; }
 
     [GlobalSetup]
     public void Setup()
@@ -57,7 +57,9 @@ public class WideBatchInsertThresholdBenchmarks
             """, connection);
         command.Parameters.Add("@rows", SqlDbType.Int).Value = Rows;
         if ((int)command.ExecuteScalar()! != Rows)
+        {
             throw new InvalidOperationException("Wide insert persisted rows or values differ from the requested input.");
+        }
     }
 
     [GlobalCleanup]
@@ -87,7 +89,10 @@ public class WideBatchInsertThresholdBenchmarks
         if (useBatch)
         {
             if (!connection.CanCreateBatch)
+            {
                 throw new NotSupportedException("SqlConnection.CanCreateBatch is false; the native comparison is unavailable.");
+            }
+
             await using var batch = connection.CreateBatch();
             batch.Transaction = transaction;
             foreach (var item in _items)
@@ -110,13 +115,19 @@ public class WideBatchInsertThresholdBenchmarks
         {
             await using var command = new SqlCommand(InsertSql, connection, transaction);
             for (var column = 0; column < 10; column++)
+            {
                 command.Parameters.Add("@p" + column, SqlDbType.Int).Value = column;
+            }
+
             await command.PrepareAsync().ConfigureAwait(false);
             affected = 0;
             foreach (var item in _items)
             {
                 for (var column = 0; column < 10; column++)
+                {
                     command.Parameters[column].Value = ValueAt(item, column);
+                }
+
                 affected += await command.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
         }

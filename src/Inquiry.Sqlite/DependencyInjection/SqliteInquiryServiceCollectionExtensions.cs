@@ -1,8 +1,8 @@
+using System.Data.Common;
 using Inquiry.Connections;
 using Inquiry.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data.Common;
 
 namespace Inquiry.Sqlite.DependencyInjection;
 
@@ -29,10 +29,7 @@ public static class SqliteInquiryServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddInquirySqlite(this IServiceCollection services, string connectionString)
     {
-        if (services is null)
-        {
-            throw new ArgumentNullException(nameof(services));
-        }
+        ArgumentNullException.ThrowIfNull(services);
 
         InquiryProviderRegistration.EnsureNoExistingConnectionFactory(services, "Sqlite");
         InquiryProviderRegistration.ValidateConnectionString(connectionString);
@@ -54,10 +51,7 @@ public static class SqliteInquiryServiceCollectionExtensions
 
     private static string GetRequiredConnectionString(IConfiguration configuration, string connectionStringName)
     {
-        if (configuration is null)
-        {
-            throw new ArgumentNullException(nameof(configuration));
-        }
+        ArgumentNullException.ThrowIfNull(configuration);
 
         var connectionString = configuration.GetConnectionString(connectionStringName);
         if (string.IsNullOrWhiteSpace(connectionString))

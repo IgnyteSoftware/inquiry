@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using Inquiry;
 using Inquiry.Entities;
 using Inquiry.Sqlite.Tests.Fixtures;
 
@@ -80,7 +77,7 @@ public sealed class AdHocMaterializationTests
             $"SELECT Category, SUM(Amount), COUNT(*), MIN(Note) FROM Sale WHERE Category = {category} GROUP BY Category");
 
         Assert.NotNull(tea);
-        Assert.Equal(4.00m, tea!.TotalAmount);
+        Assert.Equal(4.00m, tea.TotalAmount);
         Assert.Equal(1, tea.SaleCount);
 
         category = "Juice";

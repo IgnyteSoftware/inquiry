@@ -13,7 +13,7 @@ namespace Inquiry.Tests.Shared;
 /// </summary>
 /// <remarks>
 /// The earlier assertion was <c>Assert.Empty(recorder.Commands)</c> alone, which proves nothing about the
-/// round-trip count: <c>QueryMultipleAsync</c> then skipped <see cref="IInquiryCommandInterceptor"/>, so an
+/// round-trip count: <c>QueryMultipleAsync</c> then skipped <c>IInquiryCommandInterceptor</c>, so an
 /// empty recorder was satisfied by one grid command, by N grid commands, and by no query at all.
 /// </remarks>
 internal static class EagerGridCommandAssertions
@@ -29,7 +29,7 @@ internal static class EagerGridCommandAssertions
         var loaded = await regions.SelectByKeyWithTerritoriesAsync(1);
 
         Assert.NotNull(loaded);
-        Assert.Single(loaded!.Territories!);
+        Assert.Single(loaded.Territories!);
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
@@ -59,8 +59,8 @@ internal static class EagerGridCommandAssertions
         var loaded = await territories.SelectByKeyWithRegionAsync("T1");
 
         Assert.NotNull(loaded);
-        Assert.NotNull(loaded!.Region);
-        Assert.Equal("Eastern", loaded.Region!.RegionDescription);
+        Assert.NotNull(loaded.Region);
+        Assert.Equal("Eastern", loaded.Region.RegionDescription);
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "Region", "Territories");
     }
 
@@ -94,11 +94,11 @@ internal static class EagerGridCommandAssertions
         var loaded = await posts.GetWithAuthorAndTagsAsync(10);
 
         Assert.NotNull(loaded);
-        Assert.Equal("First", loaded!.Title);
+        Assert.Equal("First", loaded.Title);
         Assert.NotNull(loaded.Author);
-        Assert.Equal("Ada", loaded.Author!.Name);
+        Assert.Equal("Ada", loaded.Author.Name);
         Assert.Equal(
-            new[] { "alpha", "beta" },
+            ["alpha", "beta"],
             loaded.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
 
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
@@ -120,7 +120,7 @@ internal static class EagerGridCommandAssertions
         var first = all.Single(p => p.Id == 10);
         Assert.Equal("Ada", first.Author!.Name);
         Assert.Equal(
-            new[] { "alpha", "beta" },
+            ["alpha", "beta"],
             first.Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
 
         // Second post resolves a different author and has no tags — the empty-collection branch.
@@ -195,7 +195,7 @@ internal static class EagerGridCommandAssertions
     ///   </item>
     ///   <item>
     ///     The recorder saw that same command, without a failure. Grids raise the
-    ///     <see cref="IInquiryCommandInterceptor"/> callbacks like every other path (#244), so a
+    ///     <c>IInquiryCommandInterceptor</c> callbacks like every other path (#244), so a
     ///     generated eager load that skipped them fails here.
     ///   </item>
     /// </list>
@@ -232,9 +232,9 @@ internal static class EagerGridCommandAssertions
     /// </remarks>
     private static void AssertResultSetCount(string commandText, int expected)
     {
-        const string OracleMarker = "DBMS_SQL.RETURN_RESULT";
-        var actual = commandText.Contains(OracleMarker, StringComparison.OrdinalIgnoreCase)
-            ? Regex.Matches(commandText, Regex.Escape(OracleMarker), RegexOptions.IgnoreCase).Count
+        const string oracleMarker = "DBMS_SQL.RETURN_RESULT";
+        var actual = commandText.Contains(oracleMarker, StringComparison.OrdinalIgnoreCase)
+            ? Regex.Count(commandText, Regex.Escape(oracleMarker), RegexOptions.IgnoreCase)
             : commandText.Split(';').Length;
 
         Assert.True(

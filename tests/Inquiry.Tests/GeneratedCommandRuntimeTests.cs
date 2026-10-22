@@ -1,3 +1,7 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Interceptors;
@@ -5,8 +9,6 @@ using Inquiry.Materialization;
 using Inquiry.Pipeline;
 using Inquiry.Transactions;
 using Microsoft.Data.Sqlite;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -158,7 +160,7 @@ public sealed class GeneratedCommandRuntimeTests
                 target.AddParameter(parameter);
             });
 
-        var affected = await inquiry.ExecuteBatchAsync(command, new[] { 11, 12, 13 });
+        var affected = await inquiry.ExecuteBatchAsync(command, [11, 12, 13]);
 
         var fallback = Assert.IsType<FallbackInquiry>(inquiry);
         Assert.Equal(3, affected);
@@ -210,6 +212,7 @@ public sealed class GeneratedCommandRuntimeTests
             object System.Collections.IEnumerator.Current => Current!;
             public bool MoveNext() => ++_index < items.Count;
             public void Reset() => throw new NotSupportedException();
+            [SuppressMessage("Design", "S3877:Exceptions should not be thrown from unexpected methods", Justification = "The test double throws from Dispose on purpose to test how disposal failures are handled.")]
             public void Dispose() => throw new InvalidOperationException("enumerator dispose failed");
         }
     }
@@ -222,7 +225,7 @@ public sealed class GeneratedCommandRuntimeTests
         public ValueTask CommandInitializedAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
         {
             CommandType = context.Command.CommandType;
-            ParameterValue = Convert.ToInt64(context.Command.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(context.Command.Parameters[0].Value, CultureInfo.CurrentCulture);
             return ValueTask.CompletedTask;
         }
     }
@@ -256,19 +259,19 @@ public sealed class GeneratedCommandRuntimeTests
         public IAsyncEnumerable<TEntity> QueryAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
             where TEntity : class => throw new NotSupportedException();
 
-        public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
-            where TEntity : class => throw new NotSupportedException();
-
-        public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
-            where TEntity : class => throw new NotSupportedException();
-
         public IAsyncEnumerable<TEntity> QueryAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default)
             where TEntity : class
             where TMaterializer : struct, IInquiryEntityMaterializer<TEntity> => throw new NotSupportedException();
 
+        public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
+            where TEntity : class => throw new NotSupportedException();
+
         public Task<IReadOnlyList<TEntity>> QueryListAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default, int capacityHint = -1)
             where TEntity : class
             where TMaterializer : struct, IInquiryEntityMaterializer<TEntity> => throw new NotSupportedException();
+
+        public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity>(InquiryCommand command, CancellationToken cancellationToken = default)
+            where TEntity : class => throw new NotSupportedException();
 
         public Task<TEntity?> QuerySingleOrDefaultAsync<TEntity, TMaterializer>(InquiryCommand command, TMaterializer materializer, CancellationToken cancellationToken = default)
             where TEntity : class
@@ -278,18 +281,22 @@ public sealed class GeneratedCommandRuntimeTests
             CommandText = command.CommandText;
             using var dbCommand = new SqliteCommand();
             command.DbCommandBinder?.Invoke(dbCommand);
-            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value, CultureInfo.CurrentCulture);
             return Task.FromResult<TEntity?>(default);
         }
 
         public Task<int> ExecuteAsync(InquiryCommand command, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_executeException is not null) return Task.FromException<int>(_executeException);
+            if (_executeException is not null)
+            {
+                return Task.FromException<int>(_executeException);
+            }
+
             CommandText = command.CommandText;
             using var dbCommand = new SqliteCommand();
             command.DbCommandBinder?.Invoke(dbCommand);
-            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value);
+            ParameterValue = Convert.ToInt64(dbCommand.Parameters[0].Value, CultureInfo.CurrentCulture);
             ExecuteCallCount++;
             return Task.FromResult(1);
         }

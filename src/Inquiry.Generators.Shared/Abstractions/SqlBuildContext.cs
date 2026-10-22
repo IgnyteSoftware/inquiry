@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Text;
 using Inquiry.Generators.Models;
 
 namespace Inquiry.Generators.Abstractions;
@@ -18,9 +16,13 @@ public sealed class SqlBuildContext
 {
     internal static string RotatedTokenParameterName(IEnumerable<IColumn> columns, IColumn token)
     {
-        var name = "__new_" + token.PropertyName;
+        var nameBuilder = new StringBuilder("__new_").Append(token.PropertyName);
+        var name = nameBuilder.ToString();
         while (columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
-            name = "_" + name;
+        {
+            name = nameBuilder.Insert(0, '_').ToString();
+        }
+
         return name;
     }
 
@@ -30,6 +32,10 @@ public sealed class SqlBuildContext
     internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
     internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
     internal IReadOnlyList<CheckConstraintData>? NormalizedChecks { get; init; }
+    /// <param name="builder">The dialect SQL builder.</param>
+    /// <param name="schema">The raw (unquoted) schema name, or null.</param>
+    /// <param name="tableName">The raw (unquoted) table name.</param>
+    /// <param name="columns">The columns this context builds SQL for.</param>
     /// <param name="suppressSoftDelete">
     /// When true, the soft-delete term is dropped from <see cref="ActiveRowPredicate"/> so SELECTs built
     /// from this context are not filtered by the soft-delete indicator (any global-filter terms still
@@ -37,6 +43,7 @@ public sealed class SqlBuildContext
     /// true</c> select; the SET clauses are still computed (they are never suppressed — delete/restore
     /// always touch the indicator).
     /// </param>
+    /// <param name="generateForeignKeys">Whether <c>BuildCreateTableSql</c> should emit FOREIGN KEY constraints.</param>
     /// <param name="softDeletePredicateColumn">
     /// The entity's soft-delete column, supplied only when <paramref name="columns"/> does not itself
     /// carry one. This is the projection case: a projection's column list is a subset of the entity's
@@ -244,7 +251,14 @@ public sealed class SqlBuildContext
     /// for the clauses composed here (all AND-only, so no OR grouping is ever needed).
     /// </summary>
     private static string JoinAnd(string left, string right)
-        => left.Length == 0 ? right : right.Length == 0 ? left : left + " AND " + right;
+    {
+        if (left.Length == 0)
+        {
+            return right;
+        }
+
+        return right.Length == 0 ? left : left + " AND " + right;
+    }
 
     public string Table { get; }
 
@@ -316,13 +330,13 @@ public sealed class SqlBuildContext
     /// The soft-delete term is dropped when this context was built with soft-delete suppressed
     /// (IncludeDeleted); global-filter terms always remain.
     /// </summary>
-    public string ActiveRowPredicate { get; } = string.Empty;
+    public string ActiveRowPredicate { get; }
 
     /// <summary>
     /// Table-qualified variant of <see cref="ActiveRowPredicate"/> for use in multi-table queries
     /// (e.g. many-to-many JOINs) where an unqualified column name would be ambiguous.
     /// </summary>
-    public string QualifiedActiveRowPredicate { get; } = string.Empty;
+    public string QualifiedActiveRowPredicate { get; }
 
     /// <summary>The predicate that identifies an active soft-delete row. Empty when the entity has no soft-delete column.</summary>
     public string SoftDeletePredicate { get; } = string.Empty;

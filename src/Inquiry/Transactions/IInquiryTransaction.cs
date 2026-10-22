@@ -1,6 +1,6 @@
-using Inquiry.Commands;
 using System.Data;
 using System.Data.Common;
+using Inquiry.Commands;
 
 namespace Inquiry.Transactions;
 

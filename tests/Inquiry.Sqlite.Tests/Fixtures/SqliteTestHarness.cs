@@ -1,9 +1,9 @@
+using System.Runtime.ExceptionServices;
 using Inquiry.DependencyInjection;
-using Inquiry.Sqlite.DependencyInjection;
 using Inquiry.Northwind.Stores;
+using Inquiry.Sqlite.DependencyInjection;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.ExceptionServices;
 
 namespace Inquiry.Sqlite.Tests.Fixtures;
 
@@ -51,6 +51,8 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
     /// FK enforcement. Use for the rare tests that intentionally insert orphan-FK rows.
     /// Defaults to true (FK enforcement on), matching Microsoft.Data.Sqlite's default.
     /// </param>
+    /// <param name="configureOptions">Optional callback that adjusts the Inquiry options.</param>
+    /// <param name="configureServices">Optional callback that adds or replaces services.</param>
     public static async Task<SqliteTestHarness> CreateAsync(
         string schemaDdl,
         string? namePrefix = null,
@@ -80,9 +82,14 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
 
             var serviceCollection = new ServiceCollection();
             if (configureOptions is null)
+            {
                 serviceCollection.AddInquiry(typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            }
             else
+            {
                 serviceCollection.AddInquiry(configureOptions, typeof(CustomerStore).Assembly, typeof(GeneratedItemStore).Assembly);
+            }
+
             serviceCollection.AddInquirySqlite(connectionString);
             configureServices?.Invoke(serviceCollection);
             var services = serviceCollection.BuildServiceProvider();
@@ -132,6 +139,8 @@ internal sealed class SqliteTestHarness : IAsyncDisposable
         }
 
         if (serviceFailure is not null)
+        {
             ExceptionDispatchInfo.Throw(serviceFailure);
+        }
     }
 }

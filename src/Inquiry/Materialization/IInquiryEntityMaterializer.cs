@@ -7,6 +7,7 @@ namespace Inquiry.Materialization;
 /// Materializes mapped Inquiry entities from a data reader.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S3246:Generic type parameters should be co/contravariant when possible", Justification = "Published API; adding variance changes the public contract recorded in PublicAPI.Shipped.txt.")]
 public interface IInquiryEntityMaterializer<TEntity>
     where TEntity : class
 {

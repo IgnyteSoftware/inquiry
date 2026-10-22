@@ -23,7 +23,7 @@ public class PreparedStatementBenchmarks
     private const string TargetCategoryName = "Category 0";
     private const string TargetSupplierName = "Supplier 0";
 
-    private static readonly InquiryCommand MultiJoinProductCommand = InquirySql.Sql($"""
+    private static readonly InquiryCommand _multiJoinProductCommand = InquirySql.Sql($"""
         SELECT
             p."ProductID",
             p."ProductName",
@@ -49,8 +49,9 @@ public class PreparedStatementBenchmarks
     private IInquiry _inquiryWithoutPreparation = null!;
     private IInquiry _inquiryWithPreparation = null!;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "BDN1302", Justification = "The single value keeps the parameter in the benchmark result names, so results stay comparable across runs.")]
     [Params(1000)]
-    public int Rows;
+    public int Rows { get; set; }
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -76,9 +77,9 @@ public class PreparedStatementBenchmarks
 
     [BenchmarkCategory("MultiJoinPointRead"), Benchmark(Baseline = true)]
     public Task<Product?> MultiJoinPointRead_None()
-        => _inquiryWithoutPreparation.QuerySingleOrDefaultAsync<Product>(MultiJoinProductCommand);
+        => _inquiryWithoutPreparation.QuerySingleOrDefaultAsync<Product>(_multiJoinProductCommand);
 
     [BenchmarkCategory("MultiJoinPointRead"), Benchmark]
     public Task<Product?> MultiJoinPointRead_Auto()
-        => _inquiryWithPreparation.QuerySingleOrDefaultAsync<Product>(MultiJoinProductCommand);
+        => _inquiryWithPreparation.QuerySingleOrDefaultAsync<Product>(_multiJoinProductCommand);
 }

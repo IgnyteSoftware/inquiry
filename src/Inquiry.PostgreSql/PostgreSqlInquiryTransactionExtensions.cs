@@ -1,8 +1,8 @@
+using System.Data;
+using System.Text.RegularExpressions;
 using Inquiry.Commands;
 using Inquiry.Parameters;
 using Inquiry.Transactions;
-using System.Data;
-using System.Text.RegularExpressions;
 
 namespace Inquiry.PostgreSql;
 
@@ -35,7 +35,7 @@ namespace Inquiry.PostgreSql;
 /// those policies read.
 /// </para>
 /// </remarks>
-public static class PostgreSqlInquiryTransactionExtensions
+public static partial class PostgreSqlInquiryTransactionExtensions
 {
     /// <summary>
     /// Matches a custom GUC name: two or more dot-separated identifiers, e.g. <c>app.tenant_id</c> or
@@ -50,9 +50,9 @@ public static class PostgreSqlInquiryTransactionExtensions
     /// pass it to the server — which rejects it and aborts the caller's transaction, breaking the
     /// promise that an invalid name throws before any statement runs.
     /// </remarks>
-    private static readonly Regex SettingNamePattern = new(
-        @"\A[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\z",
-        RegexOptions.CultureInvariant);
+    // The pattern cannot backtrack catastrophically, so it keeps the infinite timeout it always had.
+    [GeneratedRegex(@"\A[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: Timeout.Infinite)]
+    private static partial Regex SettingNamePattern();
 
     // set_config(name, value, is_local => true) is the function form of SET LOCAL, and unlike the
     // statement form it takes both name and value as ordinary parameters. That is the whole reason
@@ -94,8 +94,10 @@ public static class PostgreSqlInquiryTransactionExtensions
         string value,
         CancellationToken cancellationToken = default)
     {
-        if (transaction is null) throw new ArgumentNullException(nameof(transaction));
-        if (value is null) throw new ArgumentNullException(nameof(value));
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        ArgumentNullException.ThrowIfNull(value);
+
         ValidateSettingName(settingName);
 
         // Routed through the transaction's own execute surface rather than its raw Connection so the
@@ -140,8 +142,9 @@ public static class PostgreSqlInquiryTransactionExtensions
         IReadOnlyDictionary<string, string> settings,
         CancellationToken cancellationToken = default)
     {
-        if (transaction is null) throw new ArgumentNullException(nameof(transaction));
-        if (settings is null) throw new ArgumentNullException(nameof(settings));
+        ArgumentNullException.ThrowIfNull(transaction);
+
+        ArgumentNullException.ThrowIfNull(settings);
 
         foreach (var setting in settings)
         {
@@ -168,7 +171,7 @@ public static class PostgreSqlInquiryTransactionExtensions
                 nameof(settingName));
         }
 
-        if (!SettingNamePattern.IsMatch(settingName))
+        if (!SettingNamePattern().IsMatch(settingName))
         {
             throw new ArgumentException(
                 $"Setting name '{settingName}' is not a valid PostgreSQL custom configuration parameter. " +

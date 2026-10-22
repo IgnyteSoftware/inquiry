@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Interceptors;
 using Inquiry.MySql.Tests.Fixtures;

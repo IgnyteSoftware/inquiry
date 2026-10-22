@@ -1,10 +1,11 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Inquiry.Commands;
 using Inquiry.Connections;
 using Inquiry.Tests.Shared;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
-using System.Data;
-using System.Data.Common;
 
 namespace Inquiry.Tests;
 
@@ -37,7 +38,7 @@ public sealed class BatchExecutionProbeTests
         Assert.Equal(1, inner.InitializeCommandCount);
         Assert.Equal(1, inner.InitializeChunkCount);
         Assert.Equal(1, inner.FinalizeCommandCount);
-        Assert.Equal(new[] { 7 }, probe.InitializedChunkSizes);
+        Assert.Equal([7], probe.InitializedChunkSizes);
         var finalized = Assert.Single(probe.FinalizedCommands);
         Assert.Equal("work /* finalized */", finalized.CommandText);
         Assert.Equal((typeof(SqliteCommand), 17), Assert.IsType<ValueTuple<Type, int>>(finalized.Metadata));
@@ -70,6 +71,7 @@ public sealed class BatchExecutionProbeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S6966:Awaitable method should be used", Justification = "The test calls the synchronous Dispose after DisposeAsync on purpose.")]
     public async Task MixedDisposalDelegatesToInnerConnectionExactlyOnce()
     {
         var inner = new DisposalRecordingConnection();
@@ -83,6 +85,7 @@ public sealed class BatchExecutionProbeTests
     }
 
     [Fact]
+    [SuppressMessage("Usage", "S6966:Awaitable method should be used", Justification = "The test calls the synchronous Dispose after DisposeAsync on purpose.")]
     public async Task MixedFactoryDisposalDelegatesToInnerFactoryExactlyOnce()
     {
         var inner = new DisposalRecordingFactory();
@@ -131,7 +134,7 @@ public sealed class BatchExecutionProbeTests
     public void CancellingEnumerableIsSinglePassAndRecordsCancellationAndDisposal()
     {
         using var cancellation = new CancellationTokenSource();
-        var source = new SinglePassCancellingEnumerable<int>(new[] { 10, 20, 30 }, cancellation, cancelAtMoveNext: 2);
+        var source = new SinglePassCancellingEnumerable<int>([10, 20, 30], cancellation, cancelAtMoveNext: 2);
 
         using (var enumerator = source.GetEnumerator())
         {
@@ -183,9 +186,9 @@ public sealed class BatchExecutionProbeTests
         Assert.Equal(17, inner.LastBatch.Timeout);
         Assert.Equal(1, inner.LastBatch.ExecuteCount);
         Assert.Equal(1, probe.CreateBatchCount);
-        Assert.Equal(new[] { 2 }, probe.ExecutedBatchSizes);
+        Assert.Equal([2], probe.ExecutedBatchSizes);
         var executed = Assert.Single(probe.ExecutedBatches);
-        Assert.Equal(new[] { "first", "second" }, executed.Commands.Select(command => command.CommandText));
+        Assert.Equal(["first", "second"], executed.Commands.Select(command => command.CommandText));
         Assert.Equal(
             new[] { ("@id", (object?)5) },
             Assert.IsType<(string ParameterName, object? Value)[]>(executed.Commands[0].Metadata));
@@ -223,7 +226,7 @@ public sealed class BatchExecutionProbeTests
     public void ExecutionBoundaryEnumerableRecordsReadsAgainstCompletedExecutions()
     {
         var executed = 0;
-        var source = new ExecutionBoundaryEnumerable<int>(new[] { 1, 2, 3, 4, 5 }, () => executed);
+        var source = new ExecutionBoundaryEnumerable<int>([1, 2, 3, 4, 5], () => executed);
 
         using (var enumerator = source.GetEnumerator())
         {
@@ -239,7 +242,7 @@ public sealed class BatchExecutionProbeTests
             Assert.False(enumerator.MoveNext());
         }
 
-        Assert.Equal(new[] { 0, 0, 2, 2, 4, 4, 5 }, source.ObservedExecutionCounts);
+        Assert.Equal([0, 0, 2, 2, 4, 4, 5], source.ObservedExecutionCounts);
         Assert.Throws<InvalidOperationException>(() => source.GetEnumerator());
     }
 
@@ -281,6 +284,7 @@ public sealed class BatchExecutionProbeTests
     {
         internal int AsyncDisposeCount { get; private set; }
         internal int SyncDisposeCount { get; private set; }
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -294,10 +298,15 @@ public sealed class BatchExecutionProbeTests
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing) SyncDisposeCount++;
+            if (disposing)
+            {
+                SyncDisposeCount++;
+            }
+
             base.Dispose(disposing);
         }
 
+        [SuppressMessage("Usage", "CA2215:Dispose methods should call base class dispose", Justification = "The test double counts async disposal separately. base.DisposeAsync would call Dispose and count a synchronous disposal too.")]
         public override ValueTask DisposeAsync()
         {
             AsyncDisposeCount++;
@@ -326,6 +335,7 @@ public sealed class BatchExecutionProbeTests
     {
         internal BatchRecordingBatch? LastBatch { get; private set; }
         public override bool CanCreateBatch => true;
+        [AllowNull]
         public override string ConnectionString { get; set; } = string.Empty;
         public override string Database => "recording";
         public override string DataSource => "recording";
@@ -368,18 +378,22 @@ public sealed class BatchExecutionProbeTests
         protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotSupportedException();
         protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
             CommandBehavior behavior,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken)
             => Task.FromException<DbDataReader>(new NotSupportedException());
 
         private int Execute()
         {
             ExecuteCount++;
-            if (ExecuteException is not null) throw ExecuteException;
+            if (ExecuteException is not null)
+            {
+                throw ExecuteException;
+            }
+
             return _commands.Count;
         }
     }
 
-    private sealed class BatchRecordingCommand : DbBatchCommand
+    private sealed class BatchRecordingCommand : DbBatchCommand, IDisposable
     {
         private readonly SqliteCommand _command = new();
 
@@ -388,6 +402,8 @@ public sealed class BatchExecutionProbeTests
         public override int RecordsAffected => 1;
         protected override DbParameterCollection DbParameterCollection => _command.Parameters;
         public override DbParameter CreateParameter() => _command.CreateParameter();
+
+        public void Dispose() => _command.Dispose();
     }
 
     private sealed class BatchRecordingCommandCollection : DbBatchCommandCollection

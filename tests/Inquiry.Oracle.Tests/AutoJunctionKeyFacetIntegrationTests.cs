@@ -1,9 +1,7 @@
-using System.Threading.Tasks;
 using Inquiry.FeatureCatalog;
 using Inquiry.Generated;
 using Inquiry.Oracle.Tests.Fixtures;
 using Oracle.ManagedDataAccess.Client;
-using Xunit;
 
 namespace Inquiry.Oracle.Tests;
 
