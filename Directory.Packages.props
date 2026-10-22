@@ -25,14 +25,11 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.26300" />
     <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.300" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
@@ -77,6 +74,17 @@
   <!-- The provider benchmarks compare against the pinned EF Core 8 cohort. -->
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MariaDb' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MySql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Oracle' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.PostgreSql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.SqlServer'">
     <PackageVersion Update="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <!-- Transitive pinning turns a pinned transitive package into a direct dependency of every package that
+       pulls it in, so the hosting versions stay scoped to the projects that reference them. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire'">
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire.Tests'">
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
   </ItemGroup>
 
   <!-- A central entry would pin System.Collections.Immutable for the analyzers too, so only this project gets it. -->
