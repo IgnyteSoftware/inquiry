@@ -123,8 +123,9 @@ The regression gate (`benchmarks/Inquiry.Benchmarks.RegressionGate`) checks a SQ
 committed baseline for each class listed in `benchmarks/evidence/baselines/<tfm>/inventory.txt`. Run the
 suite with `--exporters json`, then run
 `dotnet run -c Release --project benchmarks/Inquiry.Benchmarks.RegressionGate -- compare <bdn-json> <baseline-json> --tfm <tfm> --env <env>`
-for each class. `--env` must equal the baseline's `environment` value; timing is compared only against a
-baseline recorded for the same TFM and environment. A **library regression** prints `REGRESSION DETECTED`
+for each class. `--env` names the machine that ran the suite, and the gate does not check it. Compare a run
+only against baselines recorded on that same machine and TFM; on any other machine, record and commit
+baselines there first. A **library regression** prints `REGRESSION DETECTED`
 and exits 1. Missing, incomplete, or mismatched evidence is an **evidence failure** and exits 2. Allocation
 budgets also apply to zero-allocation baselines: any new allocation fails. To accept a baseline, run the
 gate's `generate` command on the report (it prints the flags it needs), review the output, and commit it
