@@ -93,20 +93,13 @@ jobs:
           "prerelease=$(if ($isPreview) { 'true' } else { 'false' })" >> $env:GITHUB_OUTPUT
 
       - name: Extract release notes from the changelog
-        # Token-free on purpose: this step restores and builds the tool, and a build must
-        # never run with the release-creating GH_TOKEN in its environment.
+        # The script fails when the version has no section, the section is empty, or this is
+        # the newest release and Unreleased still has entries. A tag pushed before the
+        # changelog cut then cannot publish an immutable release with wrong notes.
+        shell: bash
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # The extractor matches the '## [VERSION]' heading exactly (a longer version that
-          # merely extends the requested one is rejected) and fails closed if the section is
-          # missing, so a tag pushed before the changelog cut cannot publish an immutable
-          # release with bare or wrong-version notes. The test -s guard keeps that fail-closed
-          # even if a later edit stops the tool's exit code from aborting the step.
-          set -euo pipefail
-          dotnet run --project eng/Inquiry.ReleaseTools --configuration Release -- \
-            extract-notes CHANGELOG.md "$VERSION" "$RUNNER_TEMP/release-notes.md"
-          test -s "$RUNNER_TEMP/release-notes.md"
+          TAG: v${{ steps.version.outputs.version }}
+        run: scripts/release-notes.sh "$TAG" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Restore the original candidate on retries
         id: candidate

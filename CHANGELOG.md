@@ -1,14 +1,10 @@
 # Changelog
 
 All notable changes to Inquiry are documented in this file.
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/2.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
-### Changed
-
-- Packages are now built under the Ignyte repository template's stricter analyzer rules. The public API and the exceptions it throws, including their messages, are unchanged.
 
 ## [1.0.0-preview.12] - 2026-10-21
 
@@ -31,15 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The Aspire, Oracle, SQL Server and Testing packages now declare `System.Security.Cryptography.Pkcs` 10.0.13 on every target framework, which fixes GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7 in the version their ADO.NET drivers pull in. Consumers on .NET 8 or .NET 9 that pin an older 8.x or 9.x Pkcs will see a package-downgrade warning until they move up.
 - MySQL and MariaDB bulk inserts that complete with server warnings throw `InquiryBulkInsertWarningException`, still an `InvalidOperationException`. It reports the rows written, whether they are in the caller's Inquiry transaction, and the warnings. Telemetry records the written row count.
 - Packages that use SQL Server or SQLite now depend on Microsoft.Data.SqlClient 7.0.3 or Microsoft.Data.Sqlite 10.0.12. The core package now depends on version 10.0.12 of the Microsoft.Extensions configuration, dependency injection and logging abstractions.
-
-### Documentation
-
 - The bulk insert guide describes per-provider transaction ownership, SQL Server per-batch commits, partial outcomes and safe retries. The testing guide no longer says that native bulk insert is always rejected in a sandbox.
 - The batch operations guide explains that `MaxBatchSize` splits entity collections into commands but never limits input, and that SQL Server table-valued parameters are not chunked.
 - The select declarations guide adds recipes for optional category filters and user-selected sorting. The stored procedure guide corrects its examples and limitations, and the runtime contract documents grid reader callbacks.
+
+### Security
+
+- The Aspire, Oracle, SQL Server and Testing packages now declare `System.Security.Cryptography.Pkcs` 10.0.13 on every target framework, which fixes GHSA-846f-f764-76mx and GHSA-2fmv-rv2c-59x7 in the version their ADO.NET drivers pull in. Consumers on .NET 8 or .NET 9 that pin an older 8.x or 9.x Pkcs will see a package-downgrade warning until they move up.
 
 ## [1.0.0-preview.11] - 2026-10-12
 
@@ -48,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - String and GUID concurrency stamps can opt into `RotateOnUpdate`. Successful updates replace the stamp; stale stamps reject writes.
 - Enforced global filters can use `PreventReassignment` to preserve their columns during entity updates and reject explicit assignments. Insert values remain caller-supplied.
 - The SQLite sample supports product search, filtering, paging, validation, editing, conflict handling and archiving across two demo workspaces. Existing Northwind relationship and transaction pages remain available.
+- Executable SQLite recipes distinguish omitted fields, explicit nulls and supplied values for partial updates, with atomic concurrency, tenant and active-row checks. Applications own the parameterized SQL; no generated PATCH API is added.
+- Query composition examples cover positional binding, predicates, expression updates and explicit SQL reports. Setup, diagnostics, store registration, projection boundaries and runtime guarantees now have explicit guidance.
 
 ### Fixed
 
@@ -69,13 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SQL Server's `InquiryTvpParameter.BindUnsupported<T>` was removed. This helper never bound a TVP; callers that need to reject unsupported binding can throw `NotSupportedException` directly.
 - Aspire's `AddInquiryMariaDb`, `AddInquiryMySql`, `AddInquiryOracle`, `AddInquiryPostgreSql`, `AddInquirySqlite`, and `AddInquirySqlServer` extensions now return `IHostApplicationBuilder` instead of `void`. Rebuild assemblies that call them; existing statement calls remain valid.
 - `IInquiry.BulkInsertAsync` now has one overload with optional `InquiryBulkInsertOptions`. Change a third positional cancellation-token argument to `cancellationToken: token` (or pass `null` for options before the token), update custom implementations to the options signature, and rebuild callers.
-- Release candidates run isolated package consumers on .NET 8/9/10 and Linux NativeAOT. Publication verifies evidence before uploads and recovers interrupted releases using retained original packages.
-- Runtime command execution, Oracle finalization and JSON array parameter formatting avoid unnecessary work. Benchmark coverage records tracing, metrics, generator builds and SQL Server insert strategies.
-
-### Documentation
-
-- Executable SQLite recipes distinguish omitted fields, explicit nulls and supplied values for partial updates, with atomic concurrency, tenant and active-row checks. Applications own the parameterized SQL; no generated PATCH API is added.
-- Query composition examples cover positional binding, predicates, expression updates and explicit SQL reports. Setup, diagnostics, store registration, projection boundaries and runtime guarantees now have explicit guidance.
+- Runtime command execution, Oracle finalization and JSON array parameter formatting avoid unnecessary work.
 
 ## [1.0.0-preview.10] - 2026-09-04
 
@@ -94,14 +86,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The new `Ignyte.Inquiry.Aspire` package registers SQL Server, PostgreSQL, MySQL, MariaDB, SQLite, or Oracle from an Aspire connection-resource name. Each registration uses the provider's shared data source or connection factory and adds Inquiry telemetry and health checks.
 - Provider dependency-injection extensions now accept externally owned shared data sources for SQL Server, PostgreSQL, MySQL, MariaDB, SQLite, and Oracle.
+- [Aspire integration](docs/site/articles/features/aspire.md) covers package setup, connection-resource registration, defaults, and existing data-source registration.
 
 ### Fixed
 
 - Generated typed data-reader access now honors the `DbDataReader` null contract and rejects null accessor entries.
-
-### Documentation
-
-- [Aspire integration](docs/site/articles/features/aspire.md) covers package setup, connection-resource registration, defaults, and existing data-source registration.
 
 ## [1.0.0-preview.8] - 2026-08-17
 
@@ -169,16 +158,13 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 - Interceptors package with slow-query logging, sqlcommenter trace-context tagging, and N+1 query detection.
 - Testing package with SQLite fixture, recording interceptor, entity factory, transaction sandbox, and Respawn reset.
 - Roslyn analyzer diagnostics (INQ001–INQ095) for compile-time validation.
+- [Column encryption](docs/site/articles/features/column-encryption.md) — application-side encryption as a value converter (encrypt in `ToProvider`, decrypt in `FromProvider`), with a worked `AesGcm` example, the loss of filtering and indexing on the ciphertext, and the SQL Server Always Encrypted / PostgreSQL pgcrypto alternatives. No new API; the existing converter seam carries it.
+- [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
+- [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
 ### Changed
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected.
-
-### Documentation
-
-- [Column encryption](docs/site/articles/features/column-encryption.md) — application-side encryption as a value converter (encrypt in `ToProvider`, decrypt in `FromProvider`), with a worked `AesGcm` example, the loss of filtering and indexing on the ciphertext, and the SQL Server Always Encrypted / PostgreSQL pgcrypto alternatives. No new API; the existing converter seam carries it.
-- [GraphQL DataLoader recipe](docs/site/articles/features/graphql-dataloader.md) — batching Hot Chocolate resolver fan-out onto a single `Compare.In` predicate method.
-- [Migrations recipe](docs/site/articles/features/migrations.md) — using `InquiryGeneratedSchema.Ddl` as the baseline script for DbUp or FluentMigrator, plus `ProviderArtifactsDdl` and `ProviderArtifactsValidationSql` for deploying and checking the SQL Server TVP types.
 
 [Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...HEAD
 [1.0.0-preview.12]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...v1.0.0-preview.12

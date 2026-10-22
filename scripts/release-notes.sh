@@ -1,0 +1,162 @@
+#!/bin/sh
+# Print the CHANGELOG.md section for one version, for use as the release body.
+# Usage: scripts/release-notes.sh VERSION [CHANGELOG]
+# VERSION can be a tag such as v1.4.0. The script fails, and prints nothing,
+# when the version has no section, the section is empty, or the version is the
+# newest release and Unreleased still has entries.
+set -eu
+
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  echo "Usage: $0 VERSION [CHANGELOG]" >&2
+  exit 2
+fi
+
+version=${1#v}
+changelog=${2:-CHANGELOG.md}
+
+if [ ! -f "$changelog" ]; then
+  echo "$changelog does not exist." >&2
+  exit 1
+fi
+
+awk -v version="$version" -v changelog="$changelog" '
+  function is_link(line) {
+    sub(/^(   |  | )/, "", line)
+    return line ~ /^\[[^]]+\]:/
+  }
+
+  function link_label(line) {
+    sub(/^(   |  | )/, "", line)
+    return tolower(substr(line, 2, index(line, "]:") - 2))
+  }
+
+  # Return the backticks or tildes that open or close a code fence, or "".
+  # Four leading spaces make an indented code block, not a fence.
+  function fence_run(line,   c, n) {
+    sub(/^(   |  | )/, "", line)
+    c = substr(line, 1, 1)
+    if (c != "`" && c != "~") { return "" }
+    n = 1
+    while (substr(line, n + 1, 1) == c) { n++ }
+    return n >= 3 ? substr(line, 1, n) : ""
+  }
+
+  function closes_fence(line,   run) {
+    run = fence_run(line)
+    if (run == "" || substr(run, 1, 1) != substr(fence, 1, 1) || length(run) < length(fence)) { return 0 }
+    sub(/^(   |  | )/, "", line)
+    return substr(line, length(run) + 1) ~ /^[ \t]*$/
+  }
+
+  function hold(line) { held[++holding] = line }
+
+  # Keep held lines that sit between entries. Before the first entry, keep
+  # only link definitions, so the body does not start with blank lines.
+  function flush(   i) {
+    for (i = 1; i <= holding; i++) {
+      if (count > 0 || is_link(held[i])) { lines[++count] = held[i] }
+    }
+    holding = 0
+  }
+
+  # At the end of a section, keep its link definitions. At the end of the
+  # file, also drop the version links, because they are the changelog footer.
+  function keep_links(at_end,   i, last) {
+    last = 0
+    for (i = 1; i <= holding; i++) {
+      if (is_link(held[i]) && !(at_end && (link_label(held[i]) in headings))) { last = i }
+    }
+    for (i = 1; i <= last; i++) {
+      if (!(at_end && is_link(held[i]) && (link_label(held[i]) in headings))) { lines[++count] = held[i] }
+    }
+    holding = 0
+  }
+
+  NR == 1 { sub(/^\357\273\277/, "") }
+
+  {
+    sub(/\r$/, "")
+    # Fenced text is content even when it looks like a heading. Comment text
+    # is never content.
+    if (fence != "") {
+      if (closes_fence($0)) { fence = "" }
+      kind = "content"
+    } else if (comment) {
+      if (index($0, "-->")) { comment = 0 }
+      kind = "filler"
+    } else if (fence_run($0) != "") {
+      fence = fence_run($0)
+      kind = "content"
+    } else if ($0 ~ /^(   |  | )?<!--/) {
+      if (!index($0, "-->")) { comment = 1 }
+      kind = "filler"
+    } else if ($0 ~ /^## /) {
+      kind = "heading"
+    } else if ($0 ~ /^#/) {
+      kind = "subheading"
+    } else if ($0 ~ /^[ \t]*$/ || is_link($0)) {
+      kind = "filler"
+    } else if (after_link && $0 ~ /^[ \t]+("[^"]*"|\047[^\047]*\047|\([^)]*\))[ \t]*$/) {
+      # An indented quoted line after a link definition is its title.
+      kind = "title"
+    } else {
+      kind = "content"
+    }
+    after_link = is_link($0)
+  }
+
+  kind == "heading" {
+    if (section == "notes") { keep_links(0) }
+    name = ""
+    if ($0 ~ /^## \[/) {
+      name = substr($0, 5)
+      name = substr(name, 1, index(name, "]") - 1)
+      headings[tolower(name)] = 1
+    }
+    if (tolower(name) == "unreleased") {
+      section = "unreleased"
+    } else if (name != "" && (name == version || name == "v" version)) {
+      found = 1
+      newest = (releases == 0)
+      section = "notes"
+      releases++
+    } else {
+      section = "other"
+      if (name != "") { releases++ }
+    }
+    next
+  }
+
+  section == "unreleased" && kind == "content" { pending = 1 }
+
+  section == "notes" {
+    if (kind == "title" && holding > 0) {
+      held[holding] = held[holding] "\n" $0
+      next
+    }
+    if (kind == "filler" || kind == "title") {
+      hold($0)
+      next
+    }
+    if (kind == "content") { entries = 1 }
+    flush()
+    lines[++count] = $0
+  }
+
+  END {
+    if (section == "notes") { keep_links(1) }
+    if (!found) {
+      printf "%s has no \"## [%s]\" section. Cut the changelog before you tag.\n", changelog, version > "/dev/stderr"
+      exit 1
+    }
+    if (!entries) {
+      printf "The \"## [%s]\" section in %s has no entries.\n", version, changelog > "/dev/stderr"
+      exit 1
+    }
+    if (newest && pending) {
+      printf "Unreleased in %s still has entries. Move them into \"## [%s]\" before you tag.\n", changelog, version > "/dev/stderr"
+      exit 1
+    }
+    for (i = 1; i <= count; i++) { print lines[i] }
+  }
+' "$changelog"

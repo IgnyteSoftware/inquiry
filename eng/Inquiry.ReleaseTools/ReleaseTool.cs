@@ -10,7 +10,7 @@ public static class ReleaseTool
         {
             if (args.Length == 0)
             {
-                return Task.FromResult(Fail(error, "Usage: verify-manifest <repository-root> <manifest> | verify-ci <repository-root> <contract> <workflow> | verify-bundle <repository-root> <manifest> <bundle-directory> <commit> [tag] [--version <version>] [--branch <refs/heads/...>] | extract-notes <changelog> <version> <output>"));
+                return Task.FromResult(Fail(error, "Usage: verify-manifest <repository-root> <manifest> | verify-ci <repository-root> <contract> <workflow> | verify-bundle <repository-root> <manifest> <bundle-directory> <commit> [tag] [--version <version>] [--branch <refs/heads/...>]"));
             }
 
             switch (args[0])
@@ -53,10 +53,6 @@ public static class ReleaseTool
                         output.WriteLine("Release bundle is valid.");
                         return Task.FromResult(0);
                     }
-                case "extract-notes" when args.Length == 4:
-                    File.WriteAllText(args[3], ReleaseNotesExtractor.Extract(ReadChangelog(args[1]), args[2]));
-                    output.WriteLine($"Extracted release notes for {args[2]}.");
-                    return Task.FromResult(0);
                 default:
                     return Task.FromResult(Fail(error, "Invalid command or arguments."));
             }
@@ -82,18 +78,6 @@ public static class ReleaseTool
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             throw new ReleaseVerificationException($"Could not read release manifest '{manifestPath}': {exception.Message}");
-        }
-    }
-
-    private static string ReadChangelog(string changelogPath)
-    {
-        try
-        {
-            return File.ReadAllText(changelogPath);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            throw new ReleaseVerificationException($"Could not read changelog '{changelogPath}': {exception.Message}");
         }
     }
 

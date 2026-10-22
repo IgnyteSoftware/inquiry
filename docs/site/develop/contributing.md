@@ -152,7 +152,9 @@ gated by `eng/release-manifest.json`, whose `packageVersion` is the single sourc
 | Tag version doesn't match the manifest, or the commit isn't on `main` | Release fails closed — nothing publishes |
 
 To cut a release: open a PR bumping `packageVersion` (and the matching `tag` and inter-package
-dependency versions) in `eng/release-manifest.json`, merge it, then push the tag. Before you push the
+dependency versions) in `eng/release-manifest.json` and cutting `CHANGELOG.md` as described in
+[CONTRIBUTING.md](https://github.com/IgnyteSoftware/inquiry/blob/main/CONTRIBUTING.md#releases-tag-driven),
+merge it, then push the tag. The release fails if the tag's version has no changelog section. Before you push the
 tag, run the Docs workflow manually on `main` and wait for it to deploy
 <https://ignytesoftware.github.io/inquiry/>. On the deployed site, check the navigation, the API
 pages for every package, and the getting-started and feature examples. Authentication uses
