@@ -47,6 +47,19 @@ single source of truth:
 Creating `v*` tags is restricted to organization admins by ruleset, and release tags can
 never be updated or deleted — a release tag is the immutable record of what shipped.
 
+To cut a release, preview or stable:
+
+1. In one commit, rename `## [Unreleased]` in `CHANGELOG.md` to the version and date, such as
+   `## [1.0.0-preview.13] - 2026-10-22`. Add a new empty `## [Unreleased]` section above the
+   renamed one. Make sure `eng/release-manifest.json` allows that version.
+2. In the same commit, update the reference links at the bottom of the file. `[unreleased]`
+   compares the new tag to `HEAD`. The new version compares the previous tag to the new tag.
+3. After the pull request merges, tag the resulting commit on `main`, such as `v1.0.0-preview.13`.
+
+The release workflow gets the release body from `scripts/release-notes.sh <tag>`. The script
+stops the release when the version has no section, the section is empty, or the version is the
+newest release and `Unreleased` still has entries.
+
 ## Packages
 
 Everything ships under the `Ignyte.` prefix (the bare `Inquiry` ID was already taken on
@@ -82,8 +95,23 @@ image and the rest of the conventions, and
 - New packable projects must be added to `eng/release-manifest.json` — the package
   contract verifier fails CI if the manifest and the packable project inventory drift.
 - Keep PRs to one concern; refactors, features, and fixes travel separately.
-- Add a line under `## [Unreleased]` in `CHANGELOG.md` for every change a user, operator, or
-  consumer would notice, grouped under headings such as `Added`, `Changed`, `Fixed`, or `Security`.
-  Dependency updates and internal refactors need no entry unless someone would notice them, such as
-  a raised minimum runtime. When you cut a release, rename `## [Unreleased]` to the version and date,
-  such as `## [1.0.0] - 2026-10-22`, and start a new empty `## [Unreleased]` section above it.
+- Add an entry under `## [Unreleased]` in `CHANGELOG.md` for every change a user, operator, or
+  consumer would notice. Follow the [changelog rules](#changelog).
+
+## Changelog
+
+`CHANGELOG.md` is the only place where release notes are written. The release body, in-app
+release notes, and any other copy come from it.
+
+- Write for the people who use, run, or build on the product. Do not paste commit messages or a
+  git log.
+- Put each entry under one of the six types: `Added`, `Changed`, `Deprecated`, `Removed`,
+  `Fixed`, or `Security`. Do not add other types.
+- Leave out refactors, build and CI work, test-only changes, and dependency updates. If one of
+  these changes what a user, operator, or consumer sees, such as a raised minimum runtime,
+  describe that effect under the correct type.
+- Say what changed and why it matters to the reader.
+- Start a breaking change with `**Breaking:**` and keep it under its type. Put a short upgrade
+  step in the entry. When the steps are long, link to a migration guide.
+- An agent can draft entries. A person reads and corrects each draft before the pull request
+  merges.
