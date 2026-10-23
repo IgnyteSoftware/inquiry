@@ -132,7 +132,7 @@ public sealed class SalesReports(IInquiry inquiry)
     public Task<IReadOnlyList<CategorySales>> ByCategoryAsync(
         DateTime since, CancellationToken ct = default)
         => inquiry.QueryListAsync<CategorySales>($"""
-            SELECT c.CategoryName, SUM(od.UnitPrice * od.Quantity)
+            SELECT c.CategoryName, SUM(od.UnitPrice * od.Quantity) AS Total
             FROM Orders o
             JOIN OrderDetails od ON od.OrderID = o.OrderID
             JOIN Products p ON p.ProductID = od.ProductID
@@ -177,7 +177,7 @@ In a data library, call `AddInquiryGeneratedStores()` from a library-owned wrapp
 An application can also define its own interface over a service. Neither is required.
 
 The SQL report has known limits. It does not inherit global filters or soft-delete rules. Its
-columns map by ordinal until #420 is implemented. The procedure call above runs a single result
+columns map by name, so each SELECT expression needs an alias that matches its property. The procedure call above runs a single result
 set into a DTO. It cannot read OUTPUT parameters or use the Oracle cursor wrapper.
 
 ### 1.0 contract consequences

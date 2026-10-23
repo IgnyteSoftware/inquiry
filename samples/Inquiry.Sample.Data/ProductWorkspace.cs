@@ -51,7 +51,7 @@ public sealed class ProductWorkspace(
         // Handwritten SQL does not inherit generated filters. Keep both predicates explicit.
         return (await inquiry.QuerySingleOrDefaultAsync<InventoryTotals>(
             $"""
-            SELECT COUNT(*), COALESCE(SUM(Stock), 0), COALESCE(SUM(Price * Stock), 0)
+            SELECT COUNT(*) AS Products, COALESCE(SUM(Stock), 0) AS Units, COALESCE(SUM(Price * Stock), 0) AS Value
             FROM ShowcaseProducts WHERE WorkspaceId = {workspaceId} AND IsDeleted = 0
             """, ct))!;
     }

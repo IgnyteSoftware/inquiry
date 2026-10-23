@@ -594,7 +594,7 @@ Trigger: An ad-hoc DTO has no assignable instance properties.
 
 Failing shape: [InquiryAdHoc] class Row with only getter-only properties.
 
-Smallest correction: Add a public/internal setter or init property for each SELECT ordinal.
+Smallest correction: Add a public/internal setter or init property for each result column.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L724).
 
@@ -1315,5 +1315,17 @@ Trigger: A junction property's `[InquiryForeignKey]` target names a different ke
 Failing shape: Child foreign keys listed as `CategoryId, TenantId` when `CategoryId` declares a foreign key to `Tags.CategoryId` and the related key order is `TenantId, CategoryId`.
 
 Smallest correction: List the child foreign-key properties in the related entity's key-declaration order, or correct the `[InquiryForeignKey]` target. See [many-to-many](features/many-to-many.md#composite-key-related-entities).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ106
+
+Result type maps two properties to the same column name. Default: error, enabled.
+
+Trigger: Two properties of an `[InquiryAdHoc]` DTO or an `[InquiryProjection]` resolve to column names that are equal without regard to case. Handwritten SQL results map columns to properties by name, so both properties would claim one result column. Entities report the same conflict as `INQ002`.
+
+Failing shape: `[InquiryAdHoc] class Row { public int Id { get; set; } public int ID { get; set; } }`.
+
+Smallest correction: Rename one of the properties, or give a projection property a distinct `[InquiryColumn]` name. See [ad-hoc DTOs](features/ad-hoc-dtos.md#column-mapping).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

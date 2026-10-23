@@ -79,8 +79,9 @@ public sealed partial class InquiryGeneratorTests
         var text = GetMultiResultStore(result);
 
         Assert.Contains("QueryMultipleAsync<", text);
-        Assert.Contains("_grid.ReadListAsync<global::Demo.Order,", text);
-        Assert.Contains("_grid.ReadListAsync<global::Demo.OrderLine,", text);
+        // Procedure rows map by column name, so each result set reads through the name-mapped struct.
+        Assert.Contains("_grid.ReadListAsync<global::Demo.Order, global::Demo.OrderInquiryEntityNameMappedMaterializer>(", text);
+        Assert.Contains("_grid.ReadListAsync<global::Demo.OrderLine, global::Demo.OrderLineInquiryEntityNameMappedMaterializer>(", text);
         Assert.Contains("return (_r0, _r1);", text);
         Assert.Contains("global::System.Data.CommandType.StoredProcedure", text);
     }

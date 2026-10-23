@@ -115,6 +115,7 @@ internal static class EntityProcessor
 
         var classMaterializerName = entitySymbol.Name + "InquiryEntityMaterializer";
         var structMaterializerName = entitySymbol.Name + "InquiryEntityStructMaterializer";
+        var nameMappedMaterializerName = entitySymbol.Name + "InquiryEntityNameMappedMaterializer";
 
         return new EntityData(
             FullyQualifiedName: entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -133,6 +134,8 @@ internal static class EntityProcessor
             IsMapped: isMapped,
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()))
         {
+            NameMappedMaterializerName = nameMappedMaterializerName,
+            NameMappedMaterializerFullName = GeneratorHelpers.GetGeneratedTypeName(entitySymbol, nameMappedMaterializerName),
             Location = LocationData.From(entitySymbol.Locations.FirstOrDefault()),
             Indexes = new EquatableArray<IndexData>(indexes.ToImmutableArray()),
             Checks = new EquatableArray<CheckConstraintData>(checks.ToImmutableArray()),
@@ -154,16 +157,9 @@ internal static class EntityProcessor
         GeneratorHelpers.AppendNamespaceStart(source, entity.Namespace);
 
         // Class materializer — registered as singleton in DI and used by ad-hoc IInquiry queries
-        // that resolve the materializer at runtime.
-        source.AppendLine($"internal sealed class {entity.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entityType}>");
-        source.AppendLine("{");
-        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
-        source.AppendLine();
-        source.AppendLine($"    public {entityType} Materialize(global::System.Data.Common.DbDataReader reader)");
-        source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");
-        source.AppendLine("    }");
-        source.AppendLine("}");
+        // that resolve the materializer at runtime. The pipeline binds it to each result set, which maps
+        // the handwritten SQL's columns by name.
+        MaterializerEmitter.EmitClassMaterializer(source, entity.ClassMaterializerName, entity.NameMappedMaterializerName, entityType);
         source.AppendLine();
 
         // Struct materializer — used by generated stores via the struct-constrained pipeline
@@ -177,6 +173,11 @@ internal static class EntityProcessor
         MaterializerEmitter.EmitMaterializeBody(source, entity.Columns, entityType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
+        source.AppendLine();
+
+        // Name-mapped struct — used for handwritten SQL and stored-procedure rows, whose column order
+        // the generator does not own.
+        MaterializerEmitter.EmitNameMappedMaterializer(source, entity.NameMappedMaterializerName, entity.Columns, entityType, sqlBuilder);
         source.AppendLine();
 
         EmitColumnListConstants(source, entity, sqlBuilder);

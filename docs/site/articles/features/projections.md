@@ -12,6 +12,12 @@ equality filter or explicit parameterized SQL when returning a DTO. See
 
 Declare a projection type with `[InquiryProjection(typeof(SourceEntity))]`. Only properties marked `[InquiryColumn]` are included; they map to columns on the source entity by name.
 
+Generated store queries select these columns in a fixed order. A projection can also receive
+handwritten SQL through `IInquiry.QueryListAsync<TProjection>` and the other `Query*` methods. There,
+each property reads the result column named by its `[InquiryColumn]`, compared without regard to case,
+as described for [ad-hoc DTOs](ad-hoc-dtos.md#column-mapping). Two properties with the same column name
+report `INQ106`.
+
 ```csharp
 using Inquiry.Entities;
 

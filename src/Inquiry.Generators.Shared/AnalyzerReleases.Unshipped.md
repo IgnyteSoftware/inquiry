@@ -105,3 +105,4 @@ INQ102 | Inquiry | Error | Filter column protection requires write enforcement
 INQ103 | Inquiry | Warning | InquiryManyToMany auto-junction option has no effect on an explicit junction
 INQ104 | Inquiry | Error | Relationship key columns store values differently
 INQ105 | Inquiry | Error | InquiryManyToMany junction foreign key contradicts its declared target
+INQ106 | Inquiry | Error | Result type maps two properties to the same column name

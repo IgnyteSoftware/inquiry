@@ -27,6 +27,12 @@ internal sealed record EntityData(
     bool IsMapped,
     EquatableArray<DiagnosticData> Diagnostics)
 {
+    /// <summary>The struct materializer that maps handwritten-SQL and procedure result columns by name.</summary>
+    public string NameMappedMaterializerName { get; init; } = string.Empty;
+
+    /// <inheritdoc cref="NameMappedMaterializerName"/>
+    public string NameMappedMaterializerFullName { get; init; } = string.Empty;
+
     public LocationData? Location { get; init; }
     public EquatableArray<IndexData> Indexes { get; init; }
     public EquatableArray<CheckConstraintData> Checks { get; init; }

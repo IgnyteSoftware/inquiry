@@ -6,7 +6,8 @@ namespace Inquiry.Generators.Models;
 /// Value-equatable model for an <c>[InquiryProjection(typeof(Entity))]</c> result type — a flat,
 /// read-only subset of an entity's columns. Mirrors the materializer-relevant parts of
 /// <see cref="EntityData"/> (no key/relations/mutations). The store emitter builds a SELECT over these
-/// columns against the parent entity's table; the materializer reads them by SELECT-list ordinal.
+/// columns against the parent entity's table, and its materializer reads them by SELECT-list ordinal.
+/// Handwritten SQL into a projection maps the columns by name instead.
 /// </summary>
 internal sealed record ProjectionData(
     string FullyQualifiedName,

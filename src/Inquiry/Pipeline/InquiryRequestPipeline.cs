@@ -312,6 +312,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
+                materializer = InquiryMaterializerBinding.Bind(materializer, reader);
             }
             catch (Exception exception)
             {
@@ -435,6 +436,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
+                materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             }
             catch (Exception exception)
             {
@@ -564,6 +566,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind(materializer, reader);
             var list = new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -632,6 +635,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             var list = capacityHint > 0 ? new List<T>(capacityHint) : new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -725,6 +729,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind(materializer, reader);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (HasInterceptors)
@@ -802,6 +807,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (HasInterceptors)
@@ -1152,6 +1158,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
+                materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             }
             catch (Exception exception)
             {
@@ -1267,6 +1274,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             var list = capacityHint >= 0 ? new List<T>(capacityHint) : new List<T>();
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -1354,6 +1362,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var reader = await dbCommand.ExecuteReaderAsync(SequentialSingleRowBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (interceptorCommand is not null)
@@ -1727,6 +1736,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 CommandBehavior.SingleResult | CommandBehavior.SingleRow | CommandBehavior.SequentialAccess,
                 cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
+            materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (interceptorCommand is not null)

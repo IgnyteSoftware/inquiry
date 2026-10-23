@@ -31,7 +31,9 @@ IInquiry is not a supported provider-authoring SDK.
 
 The same public interface contains methods that generated stores need to call from the consumer's
 assembly. Struct-materializer overloads, immutable generated-command descriptors, generated batch
-descriptors, and the generator-proven single-row path belong to that support contract. Public
+descriptors, the generator-proven single-row path, and the result-set binding types that map
+handwritten-SQL columns by name (`IInquiryResultSetBinder<TEntity, TMaterializer>`,
+`InquiryResultShape`, and `InquiryColumnMap`) belong to that support contract. Public
 accessibility is required for compilation across assemblies. EditorBrowsable.Never hides some of
 these members from completion; it is not a separate runtime capability check.
 

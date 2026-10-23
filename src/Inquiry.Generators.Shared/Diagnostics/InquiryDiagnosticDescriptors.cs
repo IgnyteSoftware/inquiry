@@ -725,7 +725,7 @@ internal static class InquiryDiagnosticDescriptors
     public static readonly DiagnosticDescriptor AdHocNoProperties = new(
         "INQ045",
         "Ad-hoc DTO declares no mappable properties",
-        "Ad-hoc DTO '{0}' has no instance property with a public or internal setter. [InquiryAdHoc] maps every such property to a SELECT-list ordinal in declaration order; declare at least one.",
+        "Ad-hoc DTO '{0}' has no instance property with a public or internal setter. [InquiryAdHoc] maps every such property to the result column with the same name; declare at least one.",
         "Inquiry",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
@@ -1052,4 +1052,10 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' relation '{1}': {2} Junction foreign keys pair by position. List the child foreign-key properties in the related entity's key-declaration order, or correct the [InquiryForeignKey] target.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq105");
+
+    public static readonly DiagnosticDescriptor DuplicateResultColumn = new(
+        "INQ106", "Result type maps two properties to the same column name",
+        "'{0}' properties '{1}' and '{2}' both match result column '{3}'. Inquiry matches result columns by name without regard to case, so each property needs a distinct column name. Rename one of the properties or change its column name.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq106");
 }

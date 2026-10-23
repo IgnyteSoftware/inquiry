@@ -210,6 +210,49 @@ dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquir
 
 The explicit Windows RID overrides the benchmark project's Linux CI default; omit it on Linux.
 
+### Handwritten-SQL name mapping ([#475](https://github.com/IgnyteSoftware/inquiry/issues/475))
+
+`AdHocNameMappingBenchmarks` exists twice: in the in-process SQLite suite (`Products`, 10 columns)
+and in the SQL Server suite (`BenchmarkSequentialAdHoc`, 14 columns with a 64 KB final
+`VARBINARY(MAX)`, 32 rows, read with `SequentialAccess`). Every leg runs the same pipeline path and SQL.
+Only the materializer differs:
+
+- `Ordinal` is the fixed-ordinal read that ad-hoc materializers used before #475 (baseline).
+- `CheckedOrdinal` is option 3 of the [#420 decision](../../docs/site/develop/api-contract-decisions.md#420-safe-defaults-for-ad-hoc-result-mapping):
+  check every column name once per result set, then read by ordinal.
+- `NameMapped` is the shipped option 2 generated materializer with columns in property order.
+- `NameMappedReordered` reverses the SELECT list, so the reordered read path runs. On SQL Server the
+  64 KB column then comes first.
+- `NameMappedClassPath` (SQLite only) goes through the DI class materializer that `IInquiry.Query*<T>`
+  resolves.
+
+```powershell
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*AdHocNameMappingBenchmarks*"
+dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks.SqlServer\Inquiry.Benchmarks.SqlServer.csproj -- --filter "*AdHocNameMappingBenchmarks*"
+```
+
+Default-job results, recorded 2026-10-22 on Windows 11, Intel Core i9-12900K, .NET 10.0.13. SQL Server
+ran in a local Docker container. Mean, with the ratio to `Ordinal`:
+
+| Suite | Category | Ordinal | CheckedOrdinal | NameMapped | NameMappedReordered | NameMappedClassPath |
+|---|---|--:|--:|--:|--:|--:|
+| SQLite | SingleRow (1 000 rows seeded) | 24.26 us | 24.79 us (1.02) | 24.76 us (1.02) | 24.93 us (1.03) | 24.96 us (1.03) |
+| SQLite | SingleRow (100 000 rows seeded) | 23.85 us | 24.92 us (1.05) | 25.20 us (1.06) | 24.65 us (1.03) | 24.83 us (1.04) |
+| SQLite | List, 1 000 rows | 1,093.8 us | 1,061.1 us (0.97) | 1,097.7 us (1.00) | 1,109.8 us (1.01) | 1,096.0 us (1.00) |
+| SQLite | List, 100 000 rows | 108,961 us | 113,903 us (1.05) | 113,905 us (1.05) | 112,329 us (1.03) | 111,109 us (1.02) |
+| SQL Server | SingleRow | 721.5 us | 711.7 us (0.99) | 705.5 us (0.98) | 711.1 us (0.99) | — |
+| SQL Server | WideList, 32 × 64 KB | 7,522.8 us | 7,575.9 us (1.01) | 7,526.3 us (1.00) | 7,552.2 us (1.00) | — |
+| SQL Server | FirstRowThenDispose | 7,432.8 us | 7,414.1 us (1.00) | 7,437.6 us (1.00) | 7,467.1 us (1.01) | — |
+
+Name mapping (option 2) costs the same as checked ordinals (option 3) on the single-row path. The
+difference is inside the run-to-run error of about ±0.2–0.4 us, so the option 3 fallback in the
+decision does not apply. Both options call `DbDataReader.GetName` for every column once per result
+set. On SQLite that costs about 0.5–1 us and 0.6 KB per query, because Microsoft.Data.Sqlite creates a
+new string for each name. On SQL Server, the names are already cached, and every leg is within noise of
+the ordinal baseline, including wide rows, a large final column read first, and early stream
+disposal. Reordered columns and the class path add no measurable cost, and repeated reads of one
+result shape allocate no map.
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,

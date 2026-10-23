@@ -68,6 +68,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("BEGIN GET_EMPLOYEE(", text);
         Assert.Contains("DBMS_SQL.RETURN_RESULT(c0);", text);
         Assert.Contains("END;", text);
+        Assert.Contains("global::Demo.EmployeeInquiryEntityNameMappedMaterializer>(_cmd, default", text);
         Assert.Contains("CommandType.Text", text);
         Assert.DoesNotContain("CommandType.StoredProcedure", text);
     }
@@ -89,6 +90,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("DECLARE c0 SYS_REFCURSOR;", text);
         Assert.Contains("BEGIN GET_ALL_EMPLOYEES(c0);", text);
+        Assert.Contains("global::Demo.EmployeeInquiryEntityNameMappedMaterializer>(_cmd, default", text);
         Assert.Contains("DBMS_SQL.RETURN_RESULT(c0);", text);
         Assert.Contains("CommandType.Text", text);
     }

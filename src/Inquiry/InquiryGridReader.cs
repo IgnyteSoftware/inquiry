@@ -68,6 +68,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         try
         {
+            materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             TEntity? result = null;
             if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -106,6 +107,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         try
         {
+            materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             TEntity? result = null;
             if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -138,6 +140,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         try
         {
+            materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
                 action(materializer.Materialize(_reader));
@@ -229,6 +232,16 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         _streaming = true;
 
+        try
+        {
+            materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
+        }
+        catch (Exception exception)
+        {
+            await FailAsync(exception, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
         // yield return cannot sit inside a try that has a catch, so each await is guarded separately —
         // the same shape InquiryRequestPipeline.QueryAsync uses. RecordFailure is set-once, so the
         // duplicated catch cannot double-record.
@@ -288,6 +301,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         try
         {
+            materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             var list = new List<TEntity>();
             while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {

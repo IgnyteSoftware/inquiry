@@ -2,9 +2,12 @@ using Microsoft.CodeAnalysis;
 
 namespace Inquiry.Generators.Abstractions;
 
-/// <summary>Compile-time description of one provider primitive read in a generated materializer.</summary>
+/// <summary>
+/// Compile-time description of one provider primitive read in a generated materializer.
+/// <see cref="Ordinal"/> is the C# expression for the column ordinal, such as <c>2</c> or <c>ordinals[2]</c>.
+/// </summary>
 public readonly record struct ReaderExpressionContext(
-    int Ordinal,
+    string Ordinal,
     string LogicalTypeName,
     string ProviderTypeName,
     SpecialType ProviderSpecialType,

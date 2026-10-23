@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Results of handwritten SQL and stored procedures now map to properties by column name, not by SELECT-list position. Before, reordering two columns of the same type compiled and put each value in the wrong property. Names compare without regard to case, and extra columns are ignored. A missing column, or two columns that match one property, throws `InvalidOperationException` before the first row is returned. The message names the type, the property and the available columns. A database `NULL` in a non-nullable property, a column of an incompatible type, or an exception from a value converter, throws `InvalidOperationException` that names the property and the column, with the original exception as `InnerException`. Generated store queries keep their fixed column lists and are unchanged. To upgrade:
+  - `[InquiryAdHoc]` DTOs: give every SELECT expression an alias that matches its property name, such as `SUM(Amount) AS TotalAmount`.
+  - Entities read through `IInquiry.QueryAsync`, `QueryListAsync` and `QuerySingleOrDefaultAsync`: return each column under the entity's mapped name from `[InquiryColumn]` or `[InquiryKey]`. A column named after the property does not count when the mapped name differs. Select every mapped column, for example with `SELECT *` or the generated column list.
+  - Stored procedures declared with `[InquiryStoredProcedure]`: make the procedure's result columns use the entity's mapped column names. Column order no longer matters.
+  - `[InquiryProjection]` types read through handwritten SQL: return each column under the property's `[InquiryColumn]` name.
+  - Code that catches `InvalidCastException`, `FormatException`, `OverflowException` or a converter's exception around these reads: catch `InvalidOperationException` and inspect `InnerException`.
+- **Breaking:** `INQ106` is a new build error for two properties of an `[InquiryAdHoc]` DTO or an `[InquiryProjection]` whose column names are equal without regard to case, such as `Id` and `ID`, or two projection properties with the same `[InquiryColumn]` name. Both would claim one result column. Rename one property, or give it a distinct `[InquiryColumn]` name.
+
 ## [1.0.0-preview.12] - 2026-10-21
 
 ### Fixed

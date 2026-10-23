@@ -643,7 +643,18 @@ Inquiry.InquiryFilterValueMissingException
 Inquiry.InquiryFilterValueMissingException.InquiryFilterValueMissingException(string! message) -> void
 static Inquiry.InquiryFilterContext.BeginScope(System.Collections.Generic.IReadOnlyDictionary<string!, object!>! values) -> Inquiry.InquiryFilterContext.Scope
 static Inquiry.InquiryFilterContext.GetRequired<T>(string! contextKey) -> T
+static Inquiry.Materialization.InquiryColumnMap.IsReadFailure(System.Exception! exception) -> bool
 Inquiry.Entities.InquiryConcurrencyTokenAttribute.RotateOnUpdate.get -> bool
 Inquiry.Entities.InquiryConcurrencyTokenAttribute.RotateOnUpdate.set -> void
 Inquiry.Entities.InquiryGlobalFilterAttribute.PreventReassignment.get -> bool
 Inquiry.Entities.InquiryGlobalFilterAttribute.PreventReassignment.set -> void
+Inquiry.Materialization.IInquiryResultSetBinder<TEntity, TMaterializer>
+Inquiry.Materialization.IInquiryResultSetBinder<TEntity, TMaterializer>.Bind(System.Data.Common.DbDataReader! reader) -> TMaterializer
+Inquiry.Materialization.InquiryColumnMap
+Inquiry.Materialization.InquiryColumnMap.IsInOrder.get -> bool
+Inquiry.Materialization.InquiryColumnMap.Ordinals.get -> int[]!
+Inquiry.Materialization.InquiryColumnMap.ReadFailed(System.Data.Common.DbDataReader! reader, int property, System.Exception! exception) -> System.InvalidOperationException!
+Inquiry.Materialization.InquiryColumnMap.ReadOrder.get -> int[]!
+Inquiry.Materialization.InquiryResultShape
+Inquiry.Materialization.InquiryResultShape.InquiryResultShape(System.Type! resultType, string![]! propertyNames, string![]! columnNames) -> void
+Inquiry.Materialization.InquiryResultShape.Map(System.Data.Common.DbDataReader! reader) -> Inquiry.Materialization.InquiryColumnMap!

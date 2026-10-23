@@ -5,8 +5,7 @@ namespace Inquiry.Sqlite.Tests;
 
 /// <summary>
 /// An ad-hoc reporting DTO: no entity, no store — just <c>[InquiryAdHoc]</c>. Properties map to
-/// SELECT-list ordinals in declaration order, so the GROUP BY query below must select
-/// (Category, SUM, COUNT, MIN) in exactly this order.
+/// result columns by name, so the GROUP BY query below aliases each aggregate to its property.
 /// </summary>
 [InquiryAdHoc]
 public sealed class CategorySalesRow
@@ -32,7 +31,7 @@ public sealed record SaleNote
 /// <summary>
 /// Ad-hoc DTO materialization end-to-end against SQLite: the generated materializer is resolved
 /// from DI by the ad-hoc <c>IInquiry.Query*</c> methods and maps hand-written reporting SQL —
-/// aggregates over a table that has no Inquiry entity at all — into the DTO by ordinal.
+/// aggregates over a table that has no Inquiry entity at all — into the DTO by column name.
 /// </summary>
 public sealed class AdHocMaterializationTests
 {
@@ -51,7 +50,7 @@ public sealed class AdHocMaterializationTests
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         IReadOnlyList<CategorySalesRow> rows = await inquiry.QueryListAsync<CategorySalesRow>(
-            $"SELECT Category, SUM(Amount), COUNT(*), MIN(Note) FROM Sale GROUP BY Category ORDER BY Category");
+            $"SELECT Category, SUM(Amount) AS TotalAmount, COUNT(*) AS SaleCount, MIN(Note) AS FirstNote FROM Sale GROUP BY Category ORDER BY Category");
 
         Assert.Equal(2, rows.Count);
 
@@ -74,7 +73,7 @@ public sealed class AdHocMaterializationTests
 
         var category = "Tea";
         var tea = await inquiry.QuerySingleOrDefaultAsync<CategorySalesRow>(
-            $"SELECT Category, SUM(Amount), COUNT(*), MIN(Note) FROM Sale WHERE Category = {category} GROUP BY Category");
+            $"SELECT Category, SUM(Amount) AS TotalAmount, COUNT(*) AS SaleCount, MIN(Note) AS FirstNote FROM Sale WHERE Category = {category} GROUP BY Category");
 
         Assert.NotNull(tea);
         Assert.Equal(4.00m, tea.TotalAmount);
@@ -82,7 +81,7 @@ public sealed class AdHocMaterializationTests
 
         category = "Juice";
         var missing = await inquiry.QuerySingleOrDefaultAsync<CategorySalesRow>(
-            $"SELECT Category, SUM(Amount), COUNT(*), MIN(Note) FROM Sale WHERE Category = {category} GROUP BY Category");
+            $"SELECT Category, SUM(Amount) AS TotalAmount, COUNT(*) AS SaleCount, MIN(Note) AS FirstNote FROM Sale WHERE Category = {category} GROUP BY Category");
 
         Assert.Null(missing);
     }

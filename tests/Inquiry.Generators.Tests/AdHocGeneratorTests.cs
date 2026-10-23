@@ -1,9 +1,9 @@
 namespace Inquiry.Generators.Tests;
 
 /// <summary>
-/// Ad-hoc DTOs: <c>[InquiryAdHoc]</c> emits class + struct materializers reading every publicly
-/// settable property by declaration-order ordinal, and registers the class materializer in DI so the
-/// ad-hoc <c>IInquiry.Query*</c> path can resolve it — no entity, table, or store involved.
+/// Ad-hoc DTOs: <c>[InquiryAdHoc]</c> emits class + struct materializers that map every publicly
+/// settable property to the result column with its name, and registers the class materializer in DI so
+/// the ad-hoc <c>IInquiry.Query*</c> path can resolve it — no entity, table, or store involved.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -27,7 +27,7 @@ public sealed partial class InquiryGeneratorTests
         """;
 
     [Fact]
-    public void AdHocDtoEmitsMaterializersReadingPropertiesByDeclarationOrdinal()
+    public void AdHocDtoEmitsNameMappedMaterializers()
     {
         var result = RunGenerator(SalesReportSource);
         AssertNoErrors(result);
@@ -39,10 +39,13 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("readonly struct CategorySalesInquiryAdHocStructMaterializer", text);
         Assert.Contains("public bool IsInquirySequentialAccessSafe => true;", text);
         Assert.DoesNotContain("IInquiryEntityMaterializer<global::Demo.CategorySales>.IsInquirySequentialAccessSafe", text);
-        Assert.Contains("Category = reader.GetString(0)", text);
-        Assert.Contains("TotalAmount = reader.GetDecimal(1)", text);
-        Assert.Contains("OrderCount = reader.GetInt32(2)", text);
-        Assert.Contains("LastOrderedAt = reader.IsDBNull(3) ? (global::System.DateTime?)null : reader.GetDateTime(3)", text);
+        Assert.Contains("value0 = reader.GetString(0);", text);
+        Assert.Contains("value2 = reader.GetInt32(2);", text);
+        Assert.Contains("IInquiryResultSetBinder<global::Demo.CategorySales, global::Inquiry.Materialization.IInquiryEntityMaterializer<global::Demo.CategorySales>>", text);
+        Assert.Contains("IInquiryResultSetBinder<global::Demo.CategorySales, CategorySalesInquiryAdHocStructMaterializer>", text);
+        Assert.Contains("new string[] { \"Category\", \"TotalAmount\", \"OrderCount\", \"LastOrderedAt\" }", text);
+        Assert.Contains("value1 = reader.GetDecimal(ordinals[1]);", text);
+        Assert.Contains("value3 = reader.IsDBNull(ordinals[3]) ? (global::System.DateTime?)null : reader.GetDateTime(ordinals[3]);", text);
     }
 
     [Fact]
@@ -100,9 +103,10 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Slim.InquiryAdHoc.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Skipped properties do not occupy an ordinal: Name is 0, Count is 1.
-        Assert.Contains("Name = reader.GetString(0)", text);
-        Assert.Contains("Count = reader.GetInt64(1)", text);
+        // Skipped properties need no column: Name and Count are the only mapped properties.
+        Assert.Contains("new string[] { \"Name\", \"Count\" }", text);
+        Assert.Contains("value0 = reader.GetString(0);", text);
+        Assert.Contains("value1 = reader.GetInt64(1);", text);
         Assert.DoesNotContain("Ignored", text);
         Assert.DoesNotContain("Display", text);
         Assert.DoesNotContain("Hidden", text);
@@ -137,9 +141,10 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("AlertRow.InquiryAdHoc.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("AlertId = reader.GetGuid(0)", text);
-        Assert.Contains("Severity = global::System.Enum.Parse<global::Demo.Severity>(reader.GetString(1))", text);
-        Assert.Contains("NumericSeverity = unchecked((global::Demo.Severity)reader.GetInt32(2))", text);
+        Assert.Contains("value0 = reader.GetGuid(0);", text);
+        Assert.Contains("value1 = global::System.Enum.Parse<global::Demo.Severity>(reader.GetString(1));", text);
+        Assert.Contains("value1 = global::System.Enum.Parse<global::Demo.Severity>(reader.GetString(ordinals[1]));", text);
+        Assert.Contains("value2 = unchecked((global::Demo.Severity)reader.GetInt32(2));", text);
         // The record's synthesized EqualityContract is get-only and must not be mapped.
         Assert.DoesNotContain("EqualityContract", text);
     }
@@ -162,6 +167,29 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ045");
         Assert.DoesNotContain(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Empty.InquiryAdHoc.g.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AdHocDtoWithPropertiesThatDifferOnlyByCaseReportsINQ106()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            [InquiryAdHoc]
+            public sealed class Ambiguous
+            {
+                public int Id { get; set; }
+
+                public int ID { get; set; }
+            }
+            """;
+
+        var result = RunGenerator(source);
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ106" &&
+            d.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("'Id' and 'ID'", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Ambiguous.InquiryAdHoc.g.cs", StringComparison.Ordinal));
     }
 
     [Fact]
