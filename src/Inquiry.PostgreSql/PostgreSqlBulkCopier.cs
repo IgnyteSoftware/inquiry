@@ -190,6 +190,18 @@ internal sealed class PostgreSqlBulkCopier : IInquiryBulkCopier
                 DbType.Binary => NpgsqlDbType.Bytea,
                 _ => NpgsqlDbType.Unknown,
             };
+
+            if (result[i] == NpgsqlDbType.Text && definition.SqlTypes?[i]?.Trim() is { } sqlType)
+            {
+                if (string.Equals(sqlType, "jsonb", StringComparison.OrdinalIgnoreCase))
+                {
+                    result[i] = NpgsqlDbType.Jsonb;
+                }
+                else if (string.Equals(sqlType, "json", StringComparison.OrdinalIgnoreCase))
+                {
+                    result[i] = NpgsqlDbType.Json;
+                }
+            }
         }
         return result;
     }

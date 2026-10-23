@@ -31,6 +31,32 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         System.Data.DbType[]? columnTypes = null,
         Type[]? fieldTypes = null,
         IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors = null)
+        : this(schema, table, columns, getValue, columnTypes, fieldTypes, typedAccessors, null)
+    {
+    }
+
+    /// <summary>Initializes the definition with per-column SQL type overrides.</summary>
+    /// <param name="schema">Raw schema name, or null for the default schema.</param>
+    /// <param name="table">Raw (unquoted) table name; the copier quotes per its dialect.</param>
+    /// <param name="columns">Raw (unquoted) column names in accessor-ordinal order.</param>
+    /// <param name="getValue">
+    /// Returns the provider-primitive value for (entity, columnOrdinal) — converters and enum
+    /// coercions already applied by the generator; <see cref="DBNull.Value"/> for null.
+    /// </param>
+    /// <param name="columnTypes"><inheritdoc cref="ColumnTypes" path="/summary"/></param>
+    /// <param name="fieldTypes"><inheritdoc cref="FieldTypes" path="/summary"/></param>
+    /// <param name="typedAccessors"><inheritdoc cref="TypedAccessors" path="/summary"/></param>
+    /// <param name="sqlTypes"><inheritdoc cref="SqlTypes" path="/summary"/></param>
+    // A separate overload keeps the seven-argument constructor that existing generated stores call.
+    public InquiryBulkInsertDefinition(
+        string? schema,
+        string table,
+        string[] columns,
+        Func<TEntity, int, object> getValue,
+        System.Data.DbType[]? columnTypes,
+        Type[]? fieldTypes,
+        IInquiryBulkColumnAccessor<TEntity>[]? typedAccessors,
+        string?[]? sqlTypes)
     {
         ArgumentNullException.ThrowIfNull(columns);
 
@@ -47,6 +73,11 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         if (fieldTypes is not null && fieldTypes.Length != columns.Length)
         {
             throw new ArgumentException("Field type metadata must have one entry per column.", nameof(fieldTypes));
+        }
+
+        if (sqlTypes is not null && sqlTypes.Length != columns.Length)
+        {
+            throw new ArgumentException("SQL type metadata must have one entry per column.", nameof(sqlTypes));
         }
 
         if (typedAccessors is not null)
@@ -71,6 +102,7 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
         ColumnTypes = columnTypes is null ? null : (System.Data.DbType[])columnTypes.Clone();
         FieldTypes = fieldTypes is null ? null : (Type[])fieldTypes.Clone();
         TypedAccessors = typedAccessors is null ? null : (IInquiryBulkColumnAccessor<TEntity>[])typedAccessors.Clone();
+        SqlTypes = sqlTypes is null ? null : (string?[])sqlTypes.Clone();
     }
 
     /// <summary>Raw schema name, or null for the provider default.</summary>
@@ -101,4 +133,11 @@ public sealed class InquiryBulkInsertDefinition<TEntity>
 
     /// <summary>Strongly typed per-column accessors emitted by the generator, or null for manual definitions.</summary>
     public IReadOnlyList<IInquiryBulkColumnAccessor<TEntity>>? TypedAccessors { get; }
+
+    /// <summary>
+    /// Per-column explicit <c>[InquiryColumn(SqlType = ...)]</c> overrides in the same ordinal order as
+    /// <see cref="Columns"/>, with <see langword="null"/> for a column without one, or <see langword="null"/>
+    /// when no column declares one. PostgreSQL uses it to write <c>json</c> and <c>jsonb</c> columns.
+    /// </summary>
+    public IReadOnlyList<string?>? SqlTypes { get; }
 }

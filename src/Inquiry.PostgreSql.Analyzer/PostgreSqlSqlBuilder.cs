@@ -19,6 +19,29 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
                 true)
             : UnsignedCollectionElement(context);
 
+    // PostgreSQL does not implicitly cast a text parameter into a json or jsonb column, so a string
+    // bound to a column declared with that SqlType must carry the matching Npgsql type.
+    public override string? BuildProviderParameterMetadata(string parameterExpression, IColumn column)
+        => NativeJsonDbType(column) is { } jsonType
+            ? $"((global::Npgsql.NpgsqlParameter){parameterExpression}).NpgsqlDbType = global::NpgsqlTypes.NpgsqlDbType.{jsonType};"
+            : null;
+
+    private static string? NativeJsonDbType(IColumn column)
+    {
+        if (column.TypeClass != DbTypeClass.String || column.SqlType is not { } sqlType)
+        {
+            return null;
+        }
+
+        sqlType = sqlType.Trim();
+        if (string.Equals(sqlType, "jsonb", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Jsonb";
+        }
+
+        return string.Equals(sqlType, "json", StringComparison.OrdinalIgnoreCase) ? "Json" : null;
+    }
+
     private static CollectionElementExpression UnsignedCollectionElement(CollectionElementExpressionContext context)
         => context.ProviderSpecialType switch
         {

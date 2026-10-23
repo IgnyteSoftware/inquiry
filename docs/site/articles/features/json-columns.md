@@ -34,7 +34,22 @@ By default an `[InquiryJson]` value is stored as the dialect's plain **string** 
 | Sqlite | `TEXT` |
 | Oracle | `CLOB` (or `VARCHAR2(n)` when a `Length` is set) |
 
-To store the value in a provider's native JSON type, opt in with an explicit override — `[InquiryColumn(SqlType = "JSONB")]` on PostgreSQL, `[InquiryColumn(SqlType = "JSON")]` on MySQL / SQL Server / Oracle — and add any validating check constraint yourself. (The `::jsonb` cast used by [JSON-path querying](json-path-querying.md) is applied at query time and works against a text column too — it is not a DDL type.)
+To store the value in a provider's native JSON type, opt in with an explicit `SqlType` override and add any validating check constraint yourself. The override works on an `[InquiryJson]` property and on a plain `string` property that holds JSON text:
+
+| Dialect | Opt-in | Behavior |
+|---|---|---|
+| PostgreSQL | `SqlType = "jsonb"` or `"json"` | PostgreSQL does not cast `text` to `json`/`jsonb` implicitly, so Inquiry binds these columns as `NpgsqlDbType.Jsonb` or `NpgsqlDbType.Json`. This applies to inserts, updates, upserts, batch writes, binary `COPY` bulk inserts, `[InquirySet]` assignments of a bare `@parameter`, and single-value predicates such as `Compare.Equal`. The match is case-insensitive. `Compare.In` and `Compare.NotIn` on the whole column are not supported: their values still bind as text, and PostgreSQL rejects the query. |
+| MySQL | `SqlType = "JSON"` | The server validates and normalizes the document on write. A read returns the normalized text. |
+| MariaDB | `SqlType = "JSON"` | `JSON` is an alias for `LONGTEXT` with a `JSON_VALID` check. |
+| SQL Server | `SqlType = "JSON"` | Requires SQL Server 2025 or Azure SQL, which have the native `json` type. Earlier versions reject the type, so use `NVARCHAR(MAX)` with an `ISJSON` check there. |
+| Oracle | `SqlType = "JSON"` | Requires Oracle 21c or later. |
+| Sqlite | — | No native JSON type. Keep the default `TEXT` column. |
+
+A native type can change the text that you read back: `jsonb` and MySQL `JSON` store a normalized document, so key order and whitespace can differ from what you wrote. An `[InquiryJson]` property is not affected, because it deserializes the value. A plain `string` property gets the normalized text.
+
+Inside a longer `[InquirySet]` expression, such as `to_jsonb(@value)`, a parameter keeps its plain type, so the expression receives text.
+
+The `::jsonb` cast used by [JSON-path querying](json-path-querying.md) is applied at query time and works against a text column too. It is not a DDL type. JSON-path criteria need a plain `string` property (an `[InquiryJson]` property is rejected with `INQ060`), and the path value always binds as text.
 
 ## The generator emits
 

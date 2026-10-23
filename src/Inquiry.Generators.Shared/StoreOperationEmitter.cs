@@ -620,12 +620,18 @@ internal static class StoreOperationEmitter
         SqlBuilder sqlBuilder,
         string paramVar,
         string indent,
-        bool predicate)
+        bool predicate,
+        bool usesProviderType = true)
     {
         var dbType = ResolveDbType(column, sqlBuilder);
         if (dbType is not null)
         {
             source.AppendLine($"{indent}{paramVar}.DbType = {dbType};");
+        }
+
+        if (usesProviderType && sqlBuilder.BuildProviderParameterMetadata(paramVar, column) is { } providerMetadata)
+        {
+            source.AppendLine($"{indent}{providerMetadata}");
         }
 
         if (predicate)
@@ -1218,7 +1224,7 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                var _p{i} = _c.CreateParameter();");
                 source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
-                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true);
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{i}", "                ", predicate: true, binding.UsesProviderType);
                 source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{i});");
             }
@@ -1265,7 +1271,7 @@ internal static class StoreOperationEmitter
                 var arg = state.Reference(binding.MethodParameterIndex);
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
-                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: false, binding.UsesProviderType);
                 source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
@@ -1314,7 +1320,7 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterNameFromSql(binding.SqlParameterName))}\";");
-                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true);
+                AppendColumnParameterMetadata(source, binding.Column, sqlBuilder, $"_p{pi}", "                ", predicate: true, binding.UsesProviderType);
                 source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(binding.Column, arg, sqlBuilder, method.Parameters[binding.MethodParameterIndex].IsNullable)};");
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
@@ -3262,7 +3268,15 @@ internal static class StoreOperationEmitter
 
             source.AppendLine($"            new global::Inquiry.BulkCopy.InquiryBulkColumnAccessor<{entityType}, {fieldTypeNames[i]}>(static _e => {typedValue}{nullPredicate}),");
         }
-        source.AppendLine("        });");
+        if (insertable.Any(static c => !string.IsNullOrEmpty(c.SqlType)))
+        {
+            source.AppendLine("        },");
+            source.AppendLine($"        new string?[] {{ {string.Join(", ", insertable.Select(c => GeneratorHelpers.Literal(string.IsNullOrEmpty(c.SqlType) ? null : c.SqlType)))} }});");
+        }
+        else
+        {
+            source.AppendLine("        });");
+        }
         source.AppendLine();
 
         var hasStamps = HasSequentialGuidKey(entity);

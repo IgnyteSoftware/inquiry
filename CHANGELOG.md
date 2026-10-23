@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Code that catches `InvalidCastException`, `FormatException`, `OverflowException` or a converter's exception around these reads: catch `InvalidOperationException` and inspect `InnerException`.
 - **Breaking:** `INQ106` is a new build error for two properties of an `[InquiryAdHoc]` DTO or an `[InquiryProjection]` whose column names are equal without regard to case, such as `Id` and `ID`, or two projection properties with the same `[InquiryColumn]` name. Both would claim one result column. Rename one property, or give it a distinct `[InquiryColumn]` name.
 
+### Fixed
+
+- PostgreSQL columns declared with `[InquiryColumn(SqlType = "jsonb")]` or `SqlType = "json"` now accept writes. Before, Inquiry sent the value as `text`, and PostgreSQL rejected inserts, updates, upserts and batch writes with "column is of type jsonb but expression is of type text". Bulk inserts failed with "unsupported jsonb version number". Inquiry now binds these columns as `NpgsqlDbType.Jsonb` or `NpgsqlDbType.Json`, for `[InquiryJson]` properties and for plain `string` properties. JSON-path predicate values, and parameters inside a longer `[InquirySet]` expression, still bind as text. `Compare.In` and `Compare.NotIn` on a whole `json` or `jsonb` column are not supported.
+
 ## [1.0.0-preview.12] - 2026-10-21
 
 ### Fixed

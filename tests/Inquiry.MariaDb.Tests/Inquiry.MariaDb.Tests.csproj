@@ -25,6 +25,8 @@
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
     <Compile Include="..\Inquiry.UpdateActionCatalog\*.cs" LinkBase="UpdateActionCatalog" />
     <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" />
+    <!-- Native JSON columns: SQL Server keeps its own fixture because its CI image (2022) has no json type. -->
+    <Compile Include="..\Inquiry.FeatureCatalog\NativeJson\*.cs" LinkBase="FeatureCatalog\NativeJson" />
     <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" Link="Shared\EagerGridCommandAssertions.cs" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />

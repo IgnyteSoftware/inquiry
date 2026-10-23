@@ -9,7 +9,7 @@ namespace Inquiry.Generators.Models;
 /// </summary>
 internal sealed class PredicateBinding
 {
-    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection, bool isNegatedCollection = false, bool elementIsNullable = false)
+    public PredicateBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool isCollection, bool isNegatedCollection = false, bool elementIsNullable = false, bool usesProviderType = true)
     {
         SqlParameterName = sqlParameterName;
         MethodParameterIndex = methodParameterIndex;
@@ -17,6 +17,7 @@ internal sealed class PredicateBinding
         IsCollection = isCollection;
         IsNegatedCollection = isNegatedCollection;
         ElementIsNullable = elementIsNullable;
+        UsesProviderType = usesProviderType;
     }
 
     public string SqlParameterName { get; }
@@ -33,22 +34,29 @@ internal sealed class PredicateBinding
 
     public bool ElementIsNullable { get; }
 
+    /// <summary>False when the value must not take the column's provider-specific store type.</summary>
+    public bool UsesProviderType { get; }
+
     /// <summary>The exact provider resolution discovered for this binding and reused during emission.</summary>
     public CollectionParameterResolution? CollectionResolution { get; set; }
 }
 
 internal sealed class SetBinding
 {
-    public SetBinding(string sqlParameterName, int methodParameterIndex, ColumnData column)
+    public SetBinding(string sqlParameterName, int methodParameterIndex, ColumnData column, bool usesProviderType)
     {
         SqlParameterName = sqlParameterName;
         MethodParameterIndex = methodParameterIndex;
         Column = column;
+        UsesProviderType = usesProviderType;
     }
 
     public string SqlParameterName { get; }
     public int MethodParameterIndex { get; }
     public ColumnData Column { get; }
+
+    /// <summary><inheritdoc cref="PredicateBinding.UsesProviderType" path="/summary"/></summary>
+    public bool UsesProviderType { get; }
 }
 
 /// <summary>
