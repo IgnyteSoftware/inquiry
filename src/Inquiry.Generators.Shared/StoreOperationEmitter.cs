@@ -429,7 +429,8 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.StoredProcedure:
-                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, structMat, cancellation, entities, procedureTvpBindings);
+                // The procedure body owns its result columns, so rows map by column name, not ordinal.
+                EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, entity.NameMappedMaterializerFullName, cancellation, entities, procedureTvpBindings);
                 break;
         }
     }
@@ -1772,8 +1773,8 @@ internal static class StoreOperationEmitter
         for (var i = 0; i < fqns.Length; i++)
         {
             var fqn = fqns[i];
-            var structMat = entities[fqn].StructMaterializerFullName;
-            source.AppendLine($"        var _r{i} = await _grid.ReadListAsync<{fqn}, {structMat}>(default, {cancellation}).ConfigureAwait(false);");
+            var nameMappedMat = entities[fqn].NameMappedMaterializerFullName;
+            source.AppendLine($"        var _r{i} = await _grid.ReadListAsync<{fqn}, {nameMappedMat}>(default, {cancellation}).ConfigureAwait(false);");
         }
         var tupleElements = string.Join(", ", Enumerable.Range(0, fqns.Length).Select(static i => $"_r{i}"));
         source.AppendLine($"        return ({tupleElements});");

@@ -151,8 +151,12 @@ Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Serve
   mapped entity; otherwise the method reports `INQ051`. `[InquiryAdHoc]` DTOs are not accepted as
   procedure rows. To read a procedure into a DTO today, call it through `IInquiry` with an
   `InquiryCommand` that uses `CommandType.StoredProcedure`.
-- **Column order.** Rows map by ordinal, in the entity's property order. Column names in the
-  procedure's SELECT are not checked, so the procedure must return its columns in that order.
+- **Column names.** Rows map by column name, not by position. Each entity property reads the result
+  column with its mapped name (from `[InquiryColumn]` or `[InquiryKey]`), compared without regard to
+  case. A column named after the property does not count when the mapped name differs. Extra columns
+  are ignored. A missing column throws `InvalidOperationException` before the first row is returned,
+  and the message lists the procedure's result columns. The same rules apply to a procedure called
+  through `IInquiry` into an `[InquiryAdHoc]` DTO, which matches property names.
 - **One channel per method.** A method returns rows, an affected-row count, or one scalar read-back
   (OUTPUT, RETURN, or INOUT). Rows cannot combine with a read-back (`INQ051`).
 - **No buffered single list.** `Task<IReadOnlyList<TEntity>>` reports `INQ005`. A tuple needs at

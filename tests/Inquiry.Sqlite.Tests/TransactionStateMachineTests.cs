@@ -391,7 +391,7 @@ public sealed class TransactionStateMachineTests
     {
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "deferred_root_terminal");
         var tx = await harness.GetRequiredService<IInquiry>().BeginTransactionAsync();
-        var stream = tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
+        var stream = tx.QueryAsync<Customer>($"SELECT * FROM Customers");
 
         if (dispose)
         {
@@ -556,7 +556,7 @@ public sealed class TransactionStateMachineTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers"))
+            await foreach (var _ in tx.QueryAsync<Customer>($"SELECT * FROM Customers"))
             {
                 // Enumerate only. The test checks the exception that enumeration throws.
             }
@@ -637,7 +637,7 @@ public sealed class TransactionStateMachineTests
         await using var harness = await SqliteTestHarness.CreateAsync(NorthwindSchema.SqliteDdl, "deferred_savepoint_terminal");
         await using var outer = await harness.GetRequiredService<IInquiry>().BeginTransactionAsync();
         var inner = await outer.BeginTransactionAsync();
-        var stream = inner.QueryAsync<Customer>($"SELECT CustomerID, CompanyName FROM Customers");
+        var stream = inner.QueryAsync<Customer>($"SELECT * FROM Customers");
 
         if (dispose)
         {

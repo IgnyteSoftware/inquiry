@@ -35,6 +35,11 @@ internal static class ProjectionProcessor
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.ProjectionNoColumns, location, symbol.Name));
         }
 
+        if (AdHocProcessor.ReportDuplicateColumnNames(columns, symbol.Name, location, diagnostics))
+        {
+            isMapped = false;
+        }
+
         var classMaterializerName = symbol.Name + "InquiryProjectionMaterializer";
         var structMaterializerName = symbol.Name + "InquiryProjectionStructMaterializer";
 
@@ -62,15 +67,10 @@ internal static class ProjectionProcessor
         source.AppendLine("#nullable enable");
         GeneratorHelpers.AppendNamespaceStart(source, projection.Namespace);
 
-        source.AppendLine($"internal sealed class {projection.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{projectionType}>");
-        source.AppendLine("{");
-        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
-        source.AppendLine();
-        source.AppendLine($"    public {projectionType} Materialize(global::System.Data.Common.DbDataReader reader)");
-        source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, sqlBuilder, indent: "        ");
-        source.AppendLine("    }");
-        source.AppendLine("}");
+        // The DI class materializer serves handwritten SQL, so the pipeline binds it to map columns by
+        // name. The struct below serves generated store SQL and keeps fixed ordinals.
+        var nameMappedName = projection.Name + "InquiryProjectionNameMappedMaterializer";
+        MaterializerEmitter.EmitClassMaterializer(source, projection.ClassMaterializerName, nameMappedName, projectionType);
         source.AppendLine();
 
         source.AppendLine($"internal readonly struct {projection.StructMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{projectionType}>");
@@ -80,6 +80,8 @@ internal static class ProjectionProcessor
         MaterializerEmitter.EmitMaterializeBody(source, projection.Columns, projectionType, sqlBuilder, indent: "        ");
         source.AppendLine("    }");
         source.AppendLine("}");
+        source.AppendLine();
+        MaterializerEmitter.EmitNameMappedMaterializer(source, nameMappedName, projection.Columns, projectionType, sqlBuilder);
 
         GeneratorHelpers.AppendNamespaceEnd(source, projection.Namespace);
 

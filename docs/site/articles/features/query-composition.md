@@ -151,7 +151,7 @@ public static class StockReports
         IInquiry inquiry, long tenantId, int minimumStock, long minimumTotal,
         CancellationToken ct = default)
         => inquiry.QueryListAsync<StockReport>($"""
-            SELECT Category, SUM(UnitsInStock), COUNT(*)
+            SELECT Category, SUM(UnitsInStock) AS Units, COUNT(*) AS ProductCount
             FROM Products
             WHERE TenantId = {tenantId} AND IsDeleted = 0 AND Discontinued = 0
               AND UnitsInStock >= {minimumStock}
@@ -167,12 +167,13 @@ provider as usual. Each interpolated value becomes a bound parameter. Pass the i
 expression directly to `IInquiry`; do not first convert it to a string. Keep identifiers and SQL
 structure fixed rather than interpolating caller-controlled SQL fragments.
 
-The materializer reads by ordinal: category at 0, summed units at 1, count at 2. Aliases do not
-change that order. These SQLite aggregate values map to `long`; check provider aggregate types
-when porting the report. The executed example returned `Tools / 11 / 1` after the stock update,
+The materializer matches each property to the result column with the same name, without regard to
+case. The aliases give the aggregates those names. Column order does not matter, and extra columns
+are ignored. A missing column throws before the first row is returned. These SQLite aggregate values
+map to `long`; check provider aggregate types when porting the report. The executed example returned `Tools / 11 / 1` after the stock update,
 excluding an archived product and another tenant's product.
 
 Raw SQL does not inherit generated global filters, ambient tenant predicates, or soft-delete
 policy. This author owns the explicit TenantId/IsDeleted conditions and must pass an authorized
 tenant. For full entity reads, prefer supported generated queries and column-list composition over
-`SELECT *`; custom reports should list their result columns in materializer order.
+`SELECT *`; custom reports should alias each result column to its property name.

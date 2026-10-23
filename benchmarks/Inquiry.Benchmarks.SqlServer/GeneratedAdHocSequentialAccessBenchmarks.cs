@@ -90,8 +90,7 @@ public class GeneratedAdHocSequentialAccessBenchmarks
     private DbDataReader _dispatchReader = null!;
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1859", Justification = "The benchmark measures interface dispatch, so the field keeps the interface type.")]
     private IInquiryEntityMaterializer<SequentialBenchmarkRow> _classMaterializer = null!;
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1805", Justification = "The stateless struct materializer is used as its default value; the explicit initializer shows that this is intended.")]
-    private readonly SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer = new();
+    private SequentialBenchmarkRowInquiryAdHocStructMaterializer _structMaterializer;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -99,7 +98,10 @@ public class GeneratedAdHocSequentialAccessBenchmarks
         _db = SqlServerBenchmarkDatabase.CreateAsync(seedRows: 1000).GetAwaiter().GetResult();
         _inquiry = _db.Inquiry;
         _dispatchReader = CreateDispatchReader();
-        _classMaterializer = new SequentialBenchmarkRowInquiryAdHocMaterializer();
+        // Generated ad-hoc materializers map columns by name, so bind them to the reader's columns the way
+        // the pipeline does before the first row.
+        _classMaterializer = new SequentialBenchmarkRowInquiryAdHocMaterializer().Bind(_dispatchReader);
+        _structMaterializer = default(SequentialBenchmarkRowInquiryAdHocStructMaterializer).Bind(_dispatchReader);
     }
 
     [GlobalCleanup]

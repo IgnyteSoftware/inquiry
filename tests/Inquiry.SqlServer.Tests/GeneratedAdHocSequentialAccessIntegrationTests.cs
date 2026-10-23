@@ -31,6 +31,9 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
     private const string SelectSql =
         "SELECT [Id], [C01], [C02], [C03], [C04], [C05], [C06], [C07], [C08], [C09], [C10], [C11], [C12], [Payload] " +
         "FROM [SequentialAdHocRow] ORDER BY [Id]";
+    private const string ReversedSql =
+        "SELECT [Payload], [C12], [C11], [C10], [C09], [C08], [C07], [C06], [C05], [C04], [C03], [C02], [C01], [Id] " +
+        "FROM [SequentialAdHocRow] ORDER BY [Id]";
     private const string Ddl = """
         CREATE TABLE [SequentialAdHocRow] (
             [Id] INT NOT NULL PRIMARY KEY,
@@ -76,6 +79,15 @@ public sealed class GeneratedAdHocSequentialAccessIntegrationTests
         }
         Assert.Equal(1, firstOnly);
         Assert.Equal(RowCount, await inquiry.ExecuteScalarAsync<int>($"SELECT COUNT(*) FROM [SequentialAdHocRow]"));
+
+        // Name mapping reads the reversed columns in ascending ordinal order, which SequentialAccess requires.
+        AssertRows(await inquiry.QueryListAsync<SqlServerSequentialAdHocRow>(new Inquiry.Commands.InquiryCommand(ReversedSql)));
+        var reversed = new List<SqlServerSequentialAdHocRow>();
+        await foreach (var row in inquiry.QueryAsync<SqlServerSequentialAdHocRow>(new Inquiry.Commands.InquiryCommand(ReversedSql)))
+        {
+            reversed.Add(row);
+        }
+        AssertRows(reversed);
 
         await using var transaction = await inquiry.BeginTransactionAsync();
         await foreach (var row in transaction.QueryAsync<SqlServerSequentialAdHocRow>(new Inquiry.Commands.InquiryCommand(SelectSql)))

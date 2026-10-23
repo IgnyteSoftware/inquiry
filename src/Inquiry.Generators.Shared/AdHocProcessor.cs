@@ -12,9 +12,9 @@ namespace Inquiry.Generators;
 /// <summary>
 /// Discovers <c>[InquiryAdHoc]</c> DTOs and emits a materializer per type. An ad-hoc DTO is a plain
 /// result shape for hand-written <c>IInquiry.Query*</c> SQL — no table, key, or column attributes.
-/// Every public instance property with a public/internal setter maps to one SELECT-list ordinal in
-/// declaration order, so it reuses the same <see cref="MaterializerEmitter"/> as entities; the
-/// materializer registers in DI exactly like an entity's, which is what the ad-hoc query path resolves.
+/// Every public instance property with a public/internal setter maps to the result column with the same
+/// name, compared without regard to case. The materializer registers in DI exactly like an entity's,
+/// which is what the ad-hoc query path resolves.
 /// </summary>
 internal static class AdHocProcessor
 {
@@ -29,6 +29,11 @@ internal static class AdHocProcessor
         if (columns.Count == 0)
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.AdHocNoProperties, location, symbol.Name));
+            isMapped = false;
+        }
+
+        if (ReportDuplicateColumnNames(columns, symbol.Name, location, diagnostics))
+        {
             isMapped = false;
         }
 
@@ -66,24 +71,10 @@ internal static class AdHocProcessor
         source.AppendLine("#nullable enable");
         GeneratorHelpers.AppendNamespaceStart(source, adHoc.Namespace);
 
-        source.AppendLine($"internal sealed class {adHoc.ClassMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{adHocType}>");
-        source.AppendLine("{");
-        source.AppendLine("    public bool IsInquirySequentialAccessSafe => true;");
+        // Ad-hoc DTOs only ever hold handwritten-SQL results, so both materializers map columns by name.
+        MaterializerEmitter.EmitClassMaterializer(source, adHoc.ClassMaterializerName, adHoc.StructMaterializerName, adHocType);
         source.AppendLine();
-        source.AppendLine($"    public {adHocType} Materialize(global::System.Data.Common.DbDataReader reader)");
-        source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, sqlBuilder, indent: "        ");
-        source.AppendLine("    }");
-        source.AppendLine("}");
-        source.AppendLine();
-
-        source.AppendLine($"internal readonly struct {adHoc.StructMaterializerName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{adHocType}>");
-        source.AppendLine("{");
-        source.AppendLine($"    public {adHocType} Materialize(global::System.Data.Common.DbDataReader reader)");
-        source.AppendLine("    {");
-        MaterializerEmitter.EmitMaterializeBody(source, adHoc.Columns, adHocType, sqlBuilder, indent: "        ");
-        source.AppendLine("    }");
-        source.AppendLine("}");
+        MaterializerEmitter.EmitNameMappedMaterializer(source, adHoc.StructMaterializerName, adHoc.Columns, adHocType, sqlBuilder);
 
         GeneratorHelpers.AppendNamespaceEnd(source, adHoc.Namespace);
 
@@ -98,11 +89,10 @@ internal static class AdHocProcessor
         foreach (var property in symbol.GetMembers().OfType<IPropertySymbol>())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Ordinal mapping needs no per-property attributes: every public instance property
-            // with a public/internal setter (set or init) maps, in declaration order. Get-only
-            // (computed), static, indexer, and privately-settable properties are skipped and do
-            // not occupy an ordinal. A record's synthesized EqualityContract is get-only, so it
-            // is skipped here too.
+            // Name mapping needs no per-property attributes: every public instance property with a
+            // public/internal setter (set or init) maps to the column with its name. Get-only
+            // (computed), static, indexer, and privately-settable properties are skipped and need
+            // no column. A record's synthesized EqualityContract is get-only, so it is skipped here too.
             if (property.IsStatic || property.IsIndexer || property.SetMethod is null)
             {
                 continue;
@@ -119,7 +109,7 @@ internal static class AdHocProcessor
                 GeneratorHelpers.GetEntityAttribute(property, "InquiryEnumAsStringAttribute") is not null;
 
             // Only the fields MaterializerEmitter reads are populated (ad-hoc DTOs never feed DDL
-            // or mutations); the column name is irrelevant to ordinal reads.
+            // or mutations). The property name is the result column name the materializer matches.
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
@@ -130,6 +120,34 @@ internal static class AdHocProcessor
         }
 
         return columns;
+    }
+
+    /// <summary>
+    /// Reports INQ106 for each pair of properties whose column names are equal under the runtime name
+    /// comparer. Each such pair would claim the same result column.
+    /// </summary>
+    internal static bool ReportDuplicateColumnNames(
+        IReadOnlyList<ColumnData> columns,
+        string typeName,
+        Location? location,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        var first = new Dictionary<string, ColumnData>(StringComparer.OrdinalIgnoreCase);
+        var found = false;
+        foreach (var column in columns)
+        {
+            if (first.TryGetValue(column.ColumnName, out var earlier))
+            {
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.DuplicateResultColumn, location, typeName, earlier.PropertyName, column.PropertyName, column.ColumnName));
+                found = true;
+                continue;
+            }
+
+            first.Add(column.ColumnName, column);
+        }
+
+        return found;
     }
 
     private static bool HasAccessibleParameterlessConstructor(INamedTypeSymbol symbol)

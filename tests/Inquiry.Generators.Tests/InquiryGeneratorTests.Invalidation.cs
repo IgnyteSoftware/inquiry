@@ -140,7 +140,7 @@ public sealed partial class InquiryGeneratorTests
 
         if (edit == "dto")
         {
-            Assert.Contains("Count = reader.GetInt64(0)", outputText, StringComparison.Ordinal);
+            Assert.Contains("value0 = reader.GetInt64(0);", outputText, StringComparison.Ordinal);
         }
 
         if (edit == "related key")

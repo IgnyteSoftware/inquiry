@@ -60,7 +60,9 @@ public interface IInquiry
     // These bypass the DI lookup that the class-materializer path needs and let the JIT
     // specialize the pipeline body per concrete TMaterializer struct, so the per-row
     // Materialize call inlines into the read loop. Generated stores pass
-    // default(SomeEntityStructMaterializer) — the struct has no fields and no state.
+    // default(SomeEntityStructMaterializer) — the struct has no fields and no state. Name-mapped
+    // structs for stored-procedure rows also start as default; the pipeline binds them to each
+    // result set, and an unbound instance maps the columns on every row.
 
     /// <summary>
     /// Streams materialized rows using a struct materializer. JIT-specialized per

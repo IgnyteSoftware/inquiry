@@ -12,7 +12,8 @@ replace every failure with a universal exception.
 | Generator-proven key lookup or top-one query | Returns the matching entity or null. The optimized generated path relies on the generated query's cardinality rather than probing a second row. |
 | Buffered query with no rows | Empty list; no exception merely because no rows matched. |
 | Scalar SQL NULL / DBNull | `default(T)`, including zero for non-nullable numeric types. Choose a nullable result to preserve NULL. |
-| Scalar conversion or materialization | Conversion/provider errors, such as `InvalidCastException`, `FormatException`, or `OverflowException`; user converters can throw their own types. |
+| Scalar conversion or materialization | Conversion/provider errors, such as `InvalidCastException`, `FormatException`, or `OverflowException`; user converters can throw their own types. Generated store queries throw these unchanged. Handwritten SQL and stored-procedure rows wrap them in `InvalidOperationException`, which names the property and the column and keeps the original as `InnerException`. |
+| Handwritten SQL or procedure result columns do not match the result type | `InvalidOperationException` before the first row, naming the type, the property, and the available columns. A missing column and two columns that match one property both fail this way. See [ad-hoc DTOs](features/ad-hoc-dtos.md#column-mapping). |
 | Invalid arguments or configuration | Argument exceptions or `InvalidOperationException`, depending on the API and failed guard. Generated methods do not promise uniform null validation for every input. |
 | Concurrency-token update/delete matches no row | Existing false/null result, or `InquiryConcurrencyException` when `ThrowOnConcurrencyConflict` is enabled. |
 | Database failure | The provider's exception and diagnostic fields, normally a `DbException` subtype. Preserve these when logging or classifying failures. |
