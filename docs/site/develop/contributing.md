@@ -115,24 +115,28 @@ A separate **scheduled weekly workflow**
 runs every Monday and repeats the full three-TFM integration matrix, re-verifying every provider against
 current container images.
 
-The weekly **benchmark workflow**
-([`benchmarks.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/benchmarks.yml))
-runs the in-process SQLite suite on **net8.0** and **net10.0** and checks every class listed in
-`benchmarks/evidence/baselines/<tfm>/inventory.txt` against its committed baseline. Timing is compared only
-against a baseline recorded for the same TFM and runner environment (OS, architecture, and runner image).
-A missing inventory, baseline, report, case, or statistic, or a baseline from another environment, fails the
-job as an **evidence failure**. A budget violation fails it as a **library regression**. The job summary
-names which one happened. Allocation budgets also apply to zero-allocation baselines: any new allocation
-fails. Each run keeps the per-class comparison output and the baseline candidates for 90 days. Candidates
-contain only validated baseline JSON; generator diagnostics are kept in a separate folder. To accept a
-baseline, review the candidate from a run on the matching runner and commit it under the TFM directory.
+**Benchmarks do not run in CI.** Run them on a development machine, or to produce numbers for the
+documentation. The **build-and-unit** job still compiles every benchmark project, including the regression gate, as part
+of `Inquiry.slnx`.
+
+The regression gate (`benchmarks/Inquiry.Benchmarks.RegressionGate`) checks a SQLite report against the
+committed baseline for each class listed in `benchmarks/evidence/baselines/<tfm>/inventory.txt`. Run the
+suite with `--exporters json`, then run
+`dotnet run -c Release --project benchmarks/Inquiry.Benchmarks.RegressionGate -- compare <bdn-json> <baseline-json> --tfm <tfm> --env <env>`
+for each class. `--env` names the machine that ran the suite, and the gate does not check it. Compare a run
+only against baselines recorded on that same machine and TFM; on any other machine, record and commit
+baselines there first. A **library regression** prints `REGRESSION DETECTED`
+and exits 1. Missing, incomplete, or mismatched evidence is an **evidence failure** and exits 2. Allocation
+budgets also apply to zero-allocation baselines: any new allocation fails. To accept a baseline, run the
+gate's `generate` command on the report (it prints the flags it needs), review the output, and commit it
+under the TFM directory.
 
 Benchmark evidence for a release candidate:
 
 | Provider | Required evidence at the candidate commit |
 |---|---|
-| SQLite | A `benchmarks.yml` run with no filter in which both TFM jobs pass the regression gate for every inventoried class. Keep the run link with the release. |
-| PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | No scheduled job or accepted baseline. Run `dotnet run -c Release -f <tfm> --project benchmarks/Inquiry.Benchmarks.<Provider> -- --filter '*' --exporters json` with Docker for net8.0 and net10.0. Each JSON report must pass `regression-gate generate`, which rejects cases without statistics. Keep the reports with the release. This timing is informational: it cannot prove or clear a regression. |
+| SQLite | A local run with no filter on net8.0 and net10.0 in which `regression-gate compare` passes for every inventoried class. Keep the reports and comparison output with the release. |
+| PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | No accepted baseline. Run `dotnet run -c Release -f <tfm> --project benchmarks/Inquiry.Benchmarks.<Provider> -- --filter '*' --exporters json` with Docker for net8.0 and net10.0. Each JSON report must pass `regression-gate generate`, which rejects cases without statistics. Keep the reports with the release. This timing is informational: it cannot prove or clear a regression. |
 
 **Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
 `tests/Directory.Build.props` extends the same gate to every test project, so a new compiler/analyzer

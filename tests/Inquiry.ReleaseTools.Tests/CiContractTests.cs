@@ -189,7 +189,7 @@ public sealed class CiContractTests
     [InlineData("    permissions:\n      contents: read\n    outputs:", "    permissions:\n      contents: read\n      id-token: write\n    outputs:")]
     [InlineData("      - name: Download the producer artifact by immutable ID\n        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8\n        with:\n          artifact-ids: ${{ needs.package-producer.outputs.artifact-id }}\n          path: .artifacts/downloaded\n          merge-multiple: true\n      - name: Attest", "      - name: Download the producer artifact by immutable ID\n        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8\n        with:\n          artifact-ids: ${{ needs.package-producer.outputs.artifact-id }}\n          path: .artifacts/downloaded\n          merge-multiple: true\n      - run: ./build.sh\n      - name: Attest")]
     [InlineData("docfx docs/site/docfx.json --warningsAsErrors", "docfx docs/site/docfx.json")]
-    [InlineData("    needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier, docs]", "    needs: [build-and-unit, aot-smoke, integration, benchmark-smoke, package-producer, package-verifier]")]
+    [InlineData("    needs: [build-and-unit, aot-smoke, integration, package-producer, package-verifier, docs]", "    needs: [build-and-unit, aot-smoke, integration, package-producer, package-verifier]")]
     public void Contract_drift_is_rejected(string oldValue, string newValue)
     {
         var workflow = File.ReadAllText(Path.Combine(RepositoryFixture.Root, ".github", "workflows", "ci.yml"))

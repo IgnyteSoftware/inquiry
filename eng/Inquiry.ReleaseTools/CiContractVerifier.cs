@@ -17,10 +17,10 @@ public static partial class CiContractVerifier
     };
 
     private static readonly string[] _requiredJobIds =
-        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-verifier", "docs"];
+        ["build-and-unit", "aot-smoke", "integration", "package-producer", "package-verifier", "docs"];
     // package-provenance is not required: fork pull requests cannot attest, so it is skipped there.
     private static readonly string[] _jobIds =
-        ["build-and-unit", "aot-smoke", "integration", "benchmark-smoke", "package-producer", "package-provenance", "package-verifier", "docs", "ci-required-v1"];
+        ["build-and-unit", "aot-smoke", "integration", "package-producer", "package-provenance", "package-verifier", "docs", "ci-required-v1"];
     private const string TrustedProvenanceCondition =
         "vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)";
     private static readonly string[] _integrationProviders =
@@ -115,7 +115,6 @@ public static partial class CiContractVerifier
         var allowed = jobId switch
         {
             "integration" => new[] { "runs-on", "timeout-minutes", "env", "strategy", "steps" },
-            "benchmark-smoke" => new[] { "runs-on", "timeout-minutes", "steps" },
             "package-producer" => new[] { "runs-on", "timeout-minutes", "permissions", "outputs", "steps" },
             "package-provenance" => new[] { "if", "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
             "package-verifier" => new[] { "needs", "runs-on", "timeout-minutes", "permissions", "steps" },
@@ -210,7 +209,6 @@ public static partial class CiContractVerifier
             "build-and-unit" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             "aot-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "integration" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
-            "benchmark-smoke" => new[] { "actions/checkout", "actions/setup-dotnet" },
             "package-producer" => new[] { "actions/checkout", "actions/setup-dotnet", "actions/upload-artifact" },
             // No checkout or SDK: the job holding the OIDC token must not run repository code.
             "package-provenance" => new[] { "actions/download-artifact", "actions/attest-build-provenance" },
@@ -253,7 +251,7 @@ public static partial class CiContractVerifier
         {
             var aggregatorStep = Map(steps.Single(), "ci-required-v1 step", "name", "env", "run");
             var env = Map(aggregatorStep["env"], "ci-required-v1.env",
-                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "BENCHMARK_SMOKE_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT", "DOCS_RESULT");
+                "BUILD_AND_UNIT_RESULT", "AOT_SMOKE_RESULT", "INTEGRATION_RESULT", "PACKAGE_PRODUCER_RESULT", "PACKAGE_VERIFIER_RESULT", "DOCS_RESULT");
             var expected = _requiredJobIds.ToDictionary(
                 item => item.Replace('-', '_').ToUpperInvariant() + "_RESULT",
                 item => $"${{{{ needs.{item}.result }}}}",
@@ -281,9 +279,6 @@ public static partial class CiContractVerifier
             "docker build --file tests/Inquiry.SqlServer.Tests/Fixtures/SqlServerFts.Dockerfile --tag inquiry-sqlserver-fts:2022-cu14 .",
             "uid=\"$(docker run --rm --entrypoint /usr/bin/id inquiry-sqlserver-fts:2022-cu14 -u)\"\ntest -n \"$uid\"\ntest \"$uid\" != \"0\"\necho \"SQL Server image runtime UID: $uid\"",
             "dotnet test tests/Inquiry.${{ matrix.provider }}.Tests/Inquiry.${{ matrix.provider }}.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger \"trx;LogFileName=${{ matrix.provider }}-${{ matrix.tfm }}.trx\" --results-directory test-results\nif [ \"${{ matrix.provider }}\" = \"SqlServer\" ]; then\n  dotnet test tests/Inquiry.Benchmarks.SqlServer.Tests/Inquiry.Benchmarks.SqlServer.Tests.csproj -c Release -f ${{ matrix.tfm }} --logger \"trx;LogFileName=SqlServer-collection-${{ matrix.tfm }}.trx\" --results-directory test-results\nfi");
-        RequireRuns(jobs, "benchmark-smoke",
-            "dotnet build benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release\ndotnet build benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj -c Release",
-            "dotnet run --project benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj -c Release -f net8.0 -- \\\n  --filter \"*ShipperCrudBenchmarks.SelectAll_AdoNet*\" \\\n  --job Dry \\\n  --exporters json");
         RequireRuns(jobs, "package-producer",
             "./eng/pack-release.ps1 -OutputPath \"$env:RUNNER_TEMP/package-contract\" -Commit ((git rev-parse HEAD).Trim())",
             "test -n \"$ARTIFACT_ID\"\necho \"$ARTIFACT_DIGEST\" | grep -Eq '^[0-9a-f]{64}$'");
@@ -297,7 +292,7 @@ public static partial class CiContractVerifier
             "dotnet tool install --global docfx --version 2.78.5",
             "docfx docs/site/docfx.json --warningsAsErrors");
         RequireRuns(jobs, "ci-required-v1",
-            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$BENCHMARK_SMOKE_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success\ntest \"$DOCS_RESULT\" = success");
+            "test \"$BUILD_AND_UNIT_RESULT\" = success\ntest \"$AOT_SMOKE_RESULT\" = success\ntest \"$INTEGRATION_RESULT\" = success\ntest \"$PACKAGE_PRODUCER_RESULT\" = success\ntest \"$PACKAGE_VERIFIER_RESULT\" = success\ntest \"$DOCS_RESULT\" = success");
 
         var workflowText = string.Join('\n', jobs.Values.Select(node => node.ToString()));
         Require(!workflowText.Contains("dotnet nuget push", StringComparison.OrdinalIgnoreCase), "Normal CI must not publish packages.");
@@ -347,7 +342,6 @@ public static partial class CiContractVerifier
             {
                 "aot-smoke" => "10.0.x",
                 "docs" => "8.0.x",
-                "benchmark-smoke" => "8.0.x\n10.0.x",
                 _ => "8.0.x\n9.0.x\n10.0.x"
             };
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,

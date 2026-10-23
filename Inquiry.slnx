@@ -8,6 +8,7 @@
     <Project Path="benchmarks/Inquiry.Benchmarks.MySql/Inquiry.Benchmarks.MySql.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.Oracle/Inquiry.Benchmarks.Oracle.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.PostgreSql/Inquiry.Benchmarks.PostgreSql.csproj" />
+    <Project Path="benchmarks/Inquiry.Benchmarks.RegressionGate/Inquiry.Benchmarks.RegressionGate.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks/Inquiry.Benchmarks.csproj" />
   </Folder>
