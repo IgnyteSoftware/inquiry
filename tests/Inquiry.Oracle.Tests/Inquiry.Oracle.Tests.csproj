@@ -30,6 +30,8 @@
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" LinkBase="Shared" />
     <!-- W9 full-text search is NOT supported on Oracle (generator emits INQ035); FullText is excluded. -->
     <!-- <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" /> -->
+    <!-- Native JSON columns: SQL Server keeps its own fixture because its CI image (2022) has no json type. -->
+    <Compile Include="..\Inquiry.FeatureCatalog\NativeJson\*.cs" LinkBase="FeatureCatalog\NativeJson" />
   </ItemGroup>
 
   <ItemGroup>

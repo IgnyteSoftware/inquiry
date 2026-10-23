@@ -305,6 +305,12 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual bool EmitsParameterSizePrecision => false;
 
+    /// <summary>
+    /// Returns a statement that sets provider-specific type metadata on a column-backed parameter, or
+    /// <see langword="null"/> when the portable <c>DbType</c> is enough.
+    /// </summary>
+    public virtual string? BuildProviderParameterMetadata(string parameterExpression, IColumn column) => null;
+
     // ---- Batch insert / update ---------------------------------------------------------
 
     /// <summary>Internal generator strategy used for generated InsertAll descriptors.</summary>

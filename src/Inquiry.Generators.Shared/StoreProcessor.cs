@@ -3466,10 +3466,11 @@ internal static class StoreProcessor
                         return Fail($"parameter '@{name}' cannot bind assignments with different target-column metadata");
                     }
 
-                    if (!resolvedBindings.ContainsKey(name))
-                    {
-                        resolvedBindings.Add(name, new SetBinding("@" + name, parameterIndex, target));
-                    }
+                    // Only a bare "@name" assignment stores the value as is. Inside an expression the value
+                    // keeps its plain type, so a call such as to_jsonb(@name) still receives text.
+                    var isBareAssignment = setExpression.Expression.Trim() == "@" + name;
+                    resolvedBindings[name] = new SetBinding("@" + name, parameterIndex, target,
+                        isBareAssignment && (existingBinding?.UsesProviderType ?? true));
                     expression.Append(sqlBuilder.ParameterName(name));
                     validationExpression.Append('0');
                     next = end;
@@ -3619,6 +3620,8 @@ internal static class StoreProcessor
             // the path's leaf segment ("$.address.city" → "city") so the generated SQL binds @city rather
             // than @<column>, and two paths on the same column don't collide as @<column>/@<column>2.
             var paramBase = predicate.JsonPath is { } leafPath ? JsonPathParameterBase(leafPath, column.PropertyName) : column.PropertyName;
+            // A JSON-path value is compared with extracted text, so it must not bind as the column's native JSON type.
+            var usesProviderType = predicate.JsonPath is null;
 
             switch (predicate.Op)
             {
@@ -3644,8 +3647,8 @@ internal static class StoreProcessor
                         // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
                         // reconciles the sigil on Oracle.
                         predicates.Add(ToSqlPredicate(predicate, column, lo, hi));
-                        bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false));
-                        bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false));
+                        bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
+                        bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 2;
                         break;
                     }
@@ -3692,7 +3695,7 @@ internal static class StoreProcessor
 
                         var name = UniqueName(usedNames, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
+                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
                         break;
                     }
@@ -3709,7 +3712,7 @@ internal static class StoreProcessor
 
                         var name = UniqueName(usedNames, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false));
+                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
                         break;
                     }

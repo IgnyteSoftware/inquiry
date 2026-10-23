@@ -624,6 +624,19 @@ public static class FeatureSchema
         """;
 
     // ---------------------------------------------------------------------------
+    // Native JSON integration table: NativeJsonDoc (columns use the engine's native JSON type). SQL Server keeps
+    // its own fixture, because the json type needs SQL Server 2025.
+    // ---------------------------------------------------------------------------
+
+    public const string NativeJsonMySqlDdl = """
+        CREATE TABLE NativeJsonDoc (Id INT NOT NULL PRIMARY KEY, Settings JSON NULL, Payload JSON NULL);
+        """;
+
+    public const string NativeJsonOracleDdl = """
+        CREATE TABLE NativeJsonDoc (Id NUMBER(10) NOT NULL PRIMARY KEY, Settings JSON NULL, Payload JSON NULL);
+        """;
+
+    // ---------------------------------------------------------------------------
     // ViewEntity integration tables: Sale (base table) + v_CategoryTotals (VIEW).
     // ---------------------------------------------------------------------------
 
