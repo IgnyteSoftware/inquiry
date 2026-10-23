@@ -32,7 +32,8 @@ Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Columns.get -> System.Coll
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.ColumnTypes.get -> System.Collections.Generic.IReadOnlyList<System.Data.DbType>?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.FieldTypes.get -> System.Collections.Generic.IReadOnlyList<System.Type!>?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.GetValue.get -> System.Func<TEntity!, int, object!>!
-Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes = null, System.Type![]? fieldTypes = null, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors = null, string?[]? sqlTypes = null) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes = null, System.Type![]? fieldTypes = null, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors = null) -> void
+Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.InquiryBulkInsertDefinition(string? schema, string! table, string![]! columns, System.Func<TEntity!, int, object!>! getValue, System.Data.DbType[]? columnTypes, System.Type![]? fieldTypes, Inquiry.BulkCopy.IInquiryBulkColumnAccessor<TEntity!>![]? typedAccessors, string?[]? sqlTypes) -> void
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Schema.get -> string?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.SqlTypes.get -> System.Collections.Generic.IReadOnlyList<string?>?
 Inquiry.BulkCopy.InquiryBulkInsertDefinition<TEntity>.Table.get -> string!
