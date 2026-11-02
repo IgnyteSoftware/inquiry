@@ -74,8 +74,7 @@ public sealed partial class InquiryGeneratorTests
             [InquiryWhere("Data", Compare.Equal, JsonPath = "$.address.city")]
             public partial Task<IReadOnlyList<Catalog>> SearchAsync(string name, string city, CancellationToken cancellationToken = default);
             """));
-        AssertNoErrors(result);
-        var text = GetCatalogStore(result);
+        var text = PositionalStoreText(result, "CatalogStore.InquiryStore.g.cs");
 
         // Nested path, AND-composed after the ordinary LIKE criterion.
         Assert.Contains("\\\"Name\\\" LIKE @Name AND json_extract(\\\"Data\\\", '$.address.city') = @city", text);

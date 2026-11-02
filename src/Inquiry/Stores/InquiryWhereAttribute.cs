@@ -2,8 +2,9 @@ namespace Inquiry.Stores;
 
 /// <summary>
 /// Declares one WHERE criterion on a <see cref="InquirySelectAllByPredicateAttribute"/> method.
-/// Apply it multiple times; the criteria are combined in declaration order and bind positionally to
-/// the method's non-<see cref="System.Threading.CancellationToken"/> parameters.
+/// Apply it multiple times; the criteria are combined in declaration order. By default they bind
+/// positionally to the method's non-<see cref="System.Threading.CancellationToken"/> parameters. Set
+/// <see cref="Parameter"/> (and <see cref="UpperParameter"/> for a range) to bind by name instead.
 /// </summary>
 /// <remarks>
 /// Parameter consumption per operator: scalar operators (comparison and <see cref="Compare.Like"/>)
@@ -11,6 +12,11 @@ namespace Inquiry.Stores;
 /// takes one collection parameter; <see cref="Compare.IsNull"/> and <see cref="Compare.IsNotNull"/>
 /// take none. Criteria join with AND unless <see cref="Or"/> is set. Use <see cref="OpenGroups"/>,
 /// <see cref="CloseGroups"/>, and <see cref="Not"/> for explicit Boolean grouping.
+/// <para>
+/// A method uses one binding form. When any value-consuming criterion sets <see cref="Parameter"/>,
+/// every value-consuming criterion must, and each value parameter must be bound exactly once. Offset
+/// paging and <see cref="System.Threading.CancellationToken"/> parameters stay trailing and positional.
+/// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = true, Inherited = false)]
 public sealed class InquiryWhereAttribute : Attribute
@@ -71,4 +77,22 @@ public sealed class InquiryWhereAttribute : Attribute
     /// Null (the default) for an ordinary column comparison. See INQ060 for the placement rules.
     /// </summary>
     public string? JsonPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the method parameter that supplies this criterion's value, usually
+    /// written as <c>nameof(parameter)</c>. For <see cref="Compare.Between"/> and
+    /// <see cref="Compare.NotBetween"/> it names the lower bound. For <see cref="Compare.In"/> and
+    /// <see cref="Compare.NotIn"/> it names the collection parameter. <see cref="Compare.IsNull"/> and
+    /// <see cref="Compare.IsNotNull"/> take no parameter. Null (the default) binds by position.
+    /// On a specification attribute, write the name as a string; every method that uses the
+    /// specification must declare a parameter with that name.
+    /// </summary>
+    public string? Parameter { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the method parameter that supplies the upper bound of a
+    /// <see cref="Compare.Between"/> or <see cref="Compare.NotBetween"/> criterion. Set it together with
+    /// <see cref="Parameter"/>, which names the lower bound. Other operators do not accept it.
+    /// </summary>
+    public string? UpperParameter { get; set; }
 }

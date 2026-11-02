@@ -24,4 +24,10 @@ internal sealed record PredicateData(
     /// and the WHERE renders the dialect's JSON extraction of this path instead of the bare column.
     /// </summary>
     public string? JsonPath { get; init; }
+
+    /// <summary>The method parameter named by <c>[InquiryWhere.Parameter]</c>, or null for positional binding.</summary>
+    public string? Parameter { get; init; }
+
+    /// <summary>The method parameter named by <c>[InquiryWhere.UpperParameter]</c> (a range's upper bound).</summary>
+    public string? UpperParameter { get; init; }
 }

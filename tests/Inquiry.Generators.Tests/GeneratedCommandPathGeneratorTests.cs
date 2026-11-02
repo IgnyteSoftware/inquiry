@@ -52,11 +52,7 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source);
-        AssertNoErrors(result);
-        var text = Assert.Single(
-            result.RunResult.GeneratedTrees,
-            static tree => tree.FilePath.EndsWith("ProbeStore.InquiryStore.g.cs", StringComparison.Ordinal))
-            .GetText().ToString();
+        var text = PositionalStoreText(result, "ProbeStore.InquiryStore.g.cs");
 
         Assert.DoesNotContain("new global::Inquiry.Commands.InquiryCommand", text);
         Assert.Contains("InquiryGeneratedCommand<byte>", text);

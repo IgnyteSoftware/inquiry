@@ -30,7 +30,7 @@ public partial class JsonPathDocStore : InquiryStore<JsonPathDoc>
     public partial Task<IReadOnlyList<JsonPathDoc>> ByCityAsync(string city, CancellationToken cancellationToken = default);
 
     [InquirySelectAllByPredicate]
-    [InquiryWhere("Name", Compare.Like)]
-    [InquiryWhere("Data", Compare.Equal, JsonPath = "$.status")]
+    [InquiryWhere("Name", Compare.Like, Parameter = nameof(name))]
+    [InquiryWhere("Data", Compare.Equal, JsonPath = "$.status", Parameter = nameof(status))]
     public partial Task<IReadOnlyList<JsonPathDoc>> ByNameAndStatusAsync(string name, string status, CancellationToken cancellationToken = default);
 }

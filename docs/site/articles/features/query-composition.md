@@ -94,15 +94,115 @@ WHERE ("Category" = @Category AND (@Name IS NULL OR "Name" = @Name))
   AND "IsDeleted" = 0 AND "TenantId" = @__gf_TenantId
 ```
 
-Predicate parameters bind by position, not by their C# names. Swapping `category` and `name` in the
-method declaration can still compile because both are strings, but it reverses what the predicates
-receive. Keep the declaration order aligned with expanded criteria and inspect generated SQL when
-reordering attributes or parameters. A specification does not establish name-based binding.
+By default, predicate parameters bind by position, not by their C# names. Swapping `category` and
+`name` in the method declaration can still compile because both are strings, but it reverses what
+the predicates receive. This method reports warning `INQ112` for that reason. To make the binding
+safe against reordering, [bind the criteria by name](#bind-criteria-by-name).
 
 Scalar comparisons consume one argument, Between/NotBetween consume two (lower then upper),
 In/NotIn consume one collection, and IsNull/IsNotNull consume none. Cancellation and paging
 parameters belong after predicate arguments. Specifications reuse criteria; they do not supply
 argument values or create a runtime query builder.
+
+## Bind criteria by name
+
+Set `Parameter = nameof(x)` on a criterion to take its value from parameter `x`. The attribute order
+still sets the Boolean structure. The parameter order no longer matters.
+
+```csharp
+[InquirySpecification]
+[InquiryWhere(nameof(Product.Category), Parameter = "category")]
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class ForCategoryAttribute : Attribute { }
+
+public partial class ProductStore
+{
+    [InquirySelectAllByPredicate(OrderBy = "Name ASC", Paged = true), ForCategory]
+    [InquiryWhere(nameof(Product.UnitsInStock), Compare.Between,
+        Parameter = nameof(minimumStock), UpperParameter = nameof(maximumStock))]
+    [InquiryWhere(nameof(Product.Id), Compare.NotIn, Parameter = nameof(excludedIds))]
+    public partial Task<IReadOnlyList<Product>> StockPageAsync(
+        int maximumStock, string category, int minimumStock, IReadOnlyList<long> excludedIds,
+        int offset, int limit, CancellationToken ct = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere(nameof(Product.Category), Parameter = nameof(category))]
+    [InquiryWhere(nameof(Product.Name), Compare.IsNull)]
+    public partial Task<IReadOnlyList<Product>> UnnamedAsync(
+        string category, CancellationToken ct = default);
+}
+```
+
+SQLite emits this for `StockPageAsync`. At run time, `@Id` expands to one parameter per element:
+
+```sql
+SELECT "Id", "Category", "Name", "Discontinued", "UnitsInStock", "TenantId", "IsDeleted"
+FROM "Products"
+WHERE "Category" = @Category AND "UnitsInStock" BETWEEN @UnitsInStock_lo AND @UnitsInStock_hi
+  AND ("Id" NOT IN (@Id))
+  AND "IsDeleted" = 0 AND "TenantId" = @__gf_TenantId
+ORDER BY "Name" ASC LIMIT @__limit OFFSET @__offset
+```
+
+`minimumStock` is the lower bound and `maximumStock` the upper bound, although `maximumStock` is
+declared first. The rules:
+
+- A method uses one form. If one criterion that takes a value sets `Parameter`, every such criterion
+  must set it, including the criteria a specification adds.
+- `Between` and `NotBetween` take `Parameter` for the lower bound and `UpperParameter` for the upper
+  bound. `In` and `NotIn` name one collection parameter. `IsNull` and `IsNotNull` take no parameter.
+- Each value parameter is bound exactly once. An unknown name, an unused parameter, a parameter
+  bound twice, or a parameter on `IsNull`/`IsNotNull` is error `INQ109`.
+- A specification names its parameters as strings, because `nameof` cannot see the method. Every
+  method that uses the specification must declare parameters with those names.
+- Offset `offset`/`limit` parameters and the `CancellationToken` stay trailing and positional, and a
+  criterion cannot name them. Keyset-paged methods (`[InquiryKeysetPage]`) take no criteria.
+- Type checks are the same as for positional binding: a type mismatch is `INQ019`, and an `Optional`
+  criterion still needs a nullable parameter (`INQ098`).
+- Names are never inferred. A criterion without `Parameter` binds by position.
+
+### Named criteria on set-based updates
+
+With named criteria, every value binds by name, so an update value can sit anywhere in the
+parameter list:
+
+```csharp
+public partial class ProductStore
+{
+    [InquiryUpdate]
+    [InquirySet(nameof(Product.UnitsInStock), "{UnitsInStock} + @amount")]
+    [InquiryWhere(nameof(Product.Id), Parameter = nameof(id))]
+    public partial Task<int> AddStockByIdAsync(long id, int amount, CancellationToken ct = default);
+
+    [InquiryUpdate]
+    [InquiryWhere(nameof(Product.Category), Parameter = nameof(category))]
+    [InquiryWhere(nameof(Product.UnitsInStock), Compare.LessThan, Parameter = nameof(threshold))]
+    public partial Task<int> DiscontinueLowStockAsync(
+        string category, bool discontinued, int threshold, CancellationToken ct = default);
+}
+```
+
+```sql
+UPDATE "Products" SET "UnitsInStock" = "UnitsInStock" + @amount
+WHERE "Id" = @Id AND "IsDeleted" = 0 AND "TenantId" = @__gf_TenantId
+
+UPDATE "Products" SET "Discontinued" = @Discontinued
+WHERE "Category" = @Category AND "UnitsInStock" < @UnitsInStock
+  AND "IsDeleted" = 0 AND "TenantId" = @__gf_TenantId
+```
+
+`@amount` binds by its name, as before, but it no longer has to come first. Without `[InquirySet]`,
+each parameter that no criterion names is an update value and maps to the column with its name, so
+`discontinued` sets `Discontinued`. A parameter used by `[InquirySet]` cannot also be named by a
+criterion.
+
+### Migrate a positional method
+
+Positional binding stays supported, and existing methods need no change. To move a method to named
+binding, add `Parameter = nameof(...)` to each criterion that takes a value, and `UpperParameter` to
+each `Between`. The generated SQL does not change. For a specification, add `Parameter = "..."` to
+each of its criteria, then convert every method that uses it, because those methods must also name
+their own criteria. Start with the methods that report `INQ112`.
 
 ## Expression assignments
 

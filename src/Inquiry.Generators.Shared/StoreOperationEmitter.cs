@@ -1282,7 +1282,7 @@ internal static class StoreOperationEmitter
             for (var i = 0; i < setColumns.Count; i++)
             {
                 var column = setColumns[i];
-                var arg = state.Reference(i);
+                var arg = state.Reference(plan.SetParameterIndexes[i]);
                 source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
                 source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.PropertyName))}\";");
                 AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{pi}", "                ", predicate: false);

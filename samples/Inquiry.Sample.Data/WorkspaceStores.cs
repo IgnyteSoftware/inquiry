@@ -4,10 +4,10 @@ using Inquiry.Stores;
 namespace Inquiry.Sample.Data;
 
 [InquirySpecification]
-[InquiryWhere(nameof(WorkspaceProduct.Name), Compare.Like, Optional = true)]
-[InquiryWhere(nameof(WorkspaceProduct.Price), Compare.GreaterThanOrEqual, Optional = true)]
-[InquiryWhere(nameof(WorkspaceProduct.Price), Compare.LessThanOrEqual, Optional = true)]
-[InquiryWhere(nameof(WorkspaceProduct.Stock), Compare.GreaterThanOrEqual, Optional = true)]
+[InquiryWhere(nameof(WorkspaceProduct.Name), Compare.Like, Optional = true, Parameter = "name")]
+[InquiryWhere(nameof(WorkspaceProduct.Price), Compare.GreaterThanOrEqual, Optional = true, Parameter = "minimum")]
+[InquiryWhere(nameof(WorkspaceProduct.Price), Compare.LessThanOrEqual, Optional = true, Parameter = "maximum")]
+[InquiryWhere(nameof(WorkspaceProduct.Stock), Compare.GreaterThanOrEqual, Optional = true, Parameter = "minimumStock")]
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class ProductSearchAttribute : Attribute;
 
@@ -16,7 +16,7 @@ public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
 {
     [InquirySelectAllByPredicate(OrderBy = "Name ASC, Id ASC", Paged = true)]
     [ProductSearch]
-    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true)]
+    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true, Parameter = nameof(categoryId))]
     public partial Task<InquiryPagedResult<WorkspaceProduct>> NameAsync(
         string? name, decimal? minimum, decimal? maximum, int? minimumStock, int? categoryId,
         int offset, int limit, CancellationToken ct = default);
@@ -30,7 +30,7 @@ public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
 
     [InquirySelectAllByPredicate(OrderBy = "Name DESC, Id DESC", Paged = true)]
     [ProductSearch]
-    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true)]
+    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true, Parameter = nameof(categoryId))]
     public partial Task<InquiryPagedResult<WorkspaceProduct>> NameDescendingAsync(
         string? name, decimal? minimum, decimal? maximum, int? minimumStock, int? categoryId,
         int offset, int limit, CancellationToken ct = default);
@@ -44,7 +44,7 @@ public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
 
     [InquirySelectAllByPredicate(OrderBy = "Price ASC, Id ASC", Paged = true)]
     [ProductSearch]
-    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true)]
+    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true, Parameter = nameof(categoryId))]
     public partial Task<InquiryPagedResult<WorkspaceProduct>> PriceAsync(
         string? name, decimal? minimum, decimal? maximum, int? minimumStock, int? categoryId,
         int offset, int limit, CancellationToken ct = default);
@@ -58,7 +58,7 @@ public partial class WorkspaceProductStore : InquiryStore<WorkspaceProduct>
 
     [InquirySelectAllByPredicate(OrderBy = "Price DESC, Id DESC", Paged = true)]
     [ProductSearch]
-    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true)]
+    [InquiryWhere(nameof(WorkspaceProduct.CategoryId), Optional = true, Parameter = nameof(categoryId))]
     public partial Task<InquiryPagedResult<WorkspaceProduct>> PriceDescendingAsync(
         string? name, decimal? minimum, decimal? maximum, int? minimumStock, int? categoryId,
         int offset, int limit, CancellationToken ct = default);

@@ -30,7 +30,7 @@ public partial class CatalogStore : InquiryStore<CatalogItem>
 }
 ```
 
-`JsonPath` works on any `[InquiryWhere]` criterion, so it composes with AND/OR, the other operators (`Like`, `In`, `IsNull`, …), and the active-row / soft-delete filters exactly like an ordinary criterion. The bound parameter binds positionally just like every other predicate parameter; the generated parameter name is taken from the path's leaf segment (`$.address.city` → `@city`).
+`JsonPath` works on any `[InquiryWhere]` criterion, so it composes with AND/OR, the other operators (`Like`, `In`, `IsNull`, …), and the active-row / soft-delete filters exactly like an ordinary criterion. The bound parameter binds like every other predicate parameter, by position or by [name](query-composition.md#bind-criteria-by-name); the generated parameter name is taken from the path's leaf segment (`$.address.city` → `@city`).
 
 ## The generator emits
 

@@ -64,7 +64,7 @@ public sealed partial class InquiryGeneratorTests
             public partial Task<IReadOnlyList<Item>> SearchAsync(
                 string category, int score, string? name, CancellationToken cancellationToken = default);
             """));
-        var text = GeneratedStoreText(result, "ItemStore.InquiryStore.g.cs");
+        var text = PositionalStoreText(result, "ItemStore.InquiryStore.g.cs");
 
         Assert.Contains("WHERE NOT (\\\"Category\\\" = @Category OR \\\"Score\\\" > @Score) AND (@Name IS NULL OR \\\"Name\\\" = @Name)", text);
     }
@@ -81,7 +81,7 @@ public sealed partial class InquiryGeneratorTests
             public partial Task<IReadOnlyList<Item>> SearchAsync(
                 string category, int score, string name, long id, CancellationToken cancellationToken = default);
             """));
-        var text = GeneratedStoreText(result, "ItemStore.InquiryStore.g.cs");
+        var text = PositionalStoreText(result, "ItemStore.InquiryStore.g.cs");
 
         Assert.Contains("WHERE (\\\"Category\\\" = @Category AND (\\\"Score\\\" > @Score OR \\\"Name\\\" = @Name) OR \\\"Id\\\" = @Id)", text);
     }

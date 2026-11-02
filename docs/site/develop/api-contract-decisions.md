@@ -287,6 +287,19 @@ each value-consuming criterion of a method.
   paging, and set-based updates.
 - Optionally add the same-type positional diagnostic. Use Info severity if it lands after 1.0.
 
+### Implementation (#476)
+
+#476 implements the named form with the proposed names, `Parameter` and `UpperParameter`. The names
+follow `InquiryStoredProcedureAttribute.OutputParameter`, the existing string property that names a
+method parameter. Rule violations report error `INQ109`.
+
+Decision on the optional diagnostic: ship it in 1.0 as warning `INQ112`. It fires when two or more
+positional criteria of one method bind parameters of the same type. A `Between` criterion counts
+once. Because it ships before the freeze, it can be a warning. Changing its severity or trigger after
+1.0 follows the rule above.
+
+Keyset-paged methods take no `[InquiryWhere]` criteria, so the named form does not apply to them.
+
 ### Confidence
 
 Medium. The direction is clear. The timing, the property names, and the optional diagnostic need a

@@ -561,6 +561,10 @@ Inquiry.Stores.InquiryWhereAttribute.Optional.set -> void
 Inquiry.Stores.InquiryWhereAttribute.Op.get -> Inquiry.Stores.Compare
 Inquiry.Stores.InquiryWhereAttribute.Or.get -> bool
 Inquiry.Stores.InquiryWhereAttribute.Or.set -> void
+Inquiry.Stores.InquiryWhereAttribute.Parameter.get -> string?
+Inquiry.Stores.InquiryWhereAttribute.Parameter.set -> void
+Inquiry.Stores.InquiryWhereAttribute.UpperParameter.get -> string?
+Inquiry.Stores.InquiryWhereAttribute.UpperParameter.set -> void
 Inquiry.Stores.KeysetDirection
 Inquiry.Stores.KeysetDirection.Backward = 1 -> Inquiry.Stores.KeysetDirection
 Inquiry.Stores.KeysetDirection.Forward = 0 -> Inquiry.Stores.KeysetDirection

@@ -46,7 +46,8 @@ omitted fields, SQL NULL, and supplied values without loading the row first.
 
 `[InquiryWhere]` works exactly as on
 [predicate selects](crud.md): repeat it per criterion, criteria combine in declaration order
-(AND by default, `Or = true` to join with OR), and parameters bind positionally —
+(AND by default, `Or = true` to join with OR), and parameters bind positionally unless the criteria
+[name their parameters](query-composition.md#named-criteria-on-set-based-updates) —
 `Compare.Between` / `Compare.NotBetween` consume two, `Compare.In` / `Compare.NotIn` one collection
 (expanded at run time; an empty `NotIn` matches every row), `IsNull`/`IsNotNull` none. The full operator
 set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotLike` (string fields), `In`

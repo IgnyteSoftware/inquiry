@@ -205,14 +205,14 @@ internal sealed partial class ParameterBindingProbeStore : InquiryStore<Paramete
     public partial Task<bool> ExistsByFilter1Async(int filter1, CancellationToken cancellationToken = default);
 
     [InquiryExists]
-    [InquiryWhere("Filter1")]
-    [InquiryWhere("Filter2")]
-    [InquiryWhere("Filter3")]
-    [InquiryWhere("Filter4")]
-    [InquiryWhere("Filter5")]
-    [InquiryWhere("Filter6")]
-    [InquiryWhere("Filter7")]
-    [InquiryWhere("Filter8")]
+    [InquiryWhere("Filter1", Parameter = nameof(filter1))]
+    [InquiryWhere("Filter2", Parameter = nameof(filter2))]
+    [InquiryWhere("Filter3", Parameter = nameof(filter3))]
+    [InquiryWhere("Filter4", Parameter = nameof(filter4))]
+    [InquiryWhere("Filter5", Parameter = nameof(filter5))]
+    [InquiryWhere("Filter6", Parameter = nameof(filter6))]
+    [InquiryWhere("Filter7", Parameter = nameof(filter7))]
+    [InquiryWhere("Filter8", Parameter = nameof(filter8))]
     public partial Task<bool> ExistsByEightFiltersAsync(
         int filter1,
         int filter2,
