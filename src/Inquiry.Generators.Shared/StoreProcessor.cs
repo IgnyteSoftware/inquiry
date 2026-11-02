@@ -298,6 +298,13 @@ internal static class StoreProcessor
         var procOutputIsString = false;
         var procOutputIsDecimal = false;
         var procResultSetTypeFqns = ImmutableArray<string>.Empty;
+        // Any Task<IReadOnlyList<T>> is a row list here, whatever T is. Otherwise a scalar read-back
+        // would accept the list as its scalar type.
+        var procReturnsRowList = operation == StoreOperation.StoredProcedure &&
+            method.ReturnType is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } procTask &&
+            procTask.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>" &&
+            procTask.TypeArguments[0] is INamedTypeSymbol { IsGenericType: true } procList &&
+            procList.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Collections.Generic.IReadOnlyList<T>";
         if (operation == StoreOperation.StoredProcedure)
         {
             if (HasScalarProcedureOutput(attribute))
@@ -306,6 +313,13 @@ internal static class StoreProcessor
                 {
                     diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
                         "OutputParameter/ReturnsValue cannot be combined with a multi-result-set return type."));
+                    return null;
+                }
+
+                if (procReturnsRowList)
+                {
+                    diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                        "OutputParameter/ReturnsValue cannot be combined with a Task<IReadOnlyList<T>> row result. Remove OutputParameter and ReturnsValue to return the rows, or declare Task<TScalar> to return the scalar."));
                     return null;
                 }
 
@@ -404,6 +418,13 @@ internal static class StoreProcessor
             {
                 diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
                     "IsInputOutput cannot be combined with OutputParameter, ReturnsValue, or a multi-result-set return type."));
+                return null;
+            }
+
+            if (procReturnsRowList)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoredProcedureScalarOutputInvalid, location, method.Name,
+                    "IsInputOutput cannot be combined with a Task<IReadOnlyList<T>> row result. Remove IsInputOutput to return the rows, or declare Task<T> with the INOUT parameter's type to return its value."));
                 return null;
             }
 
@@ -1435,6 +1456,11 @@ internal static class StoreProcessor
         if (GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType))
         {
             return ProcedureReturnKind.TaskOfEntity;
+        }
+
+        if (IsTaskOfReadOnlyList(returnType, entityType))
+        {
+            return ProcedureReturnKind.TaskOfEntityList;
         }
 
         if (GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32))
@@ -2736,7 +2762,7 @@ internal static class StoreProcessor
             case StoreOperation.StoredProcedure:
                 {
                     var returnsRows = method.ProcedureReturn is ProcedureReturnKind.AsyncEnumerableOfEntity
-                        or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfMultipleResultSets;
+                        or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfEntityList or ProcedureReturnKind.TaskOfMultipleResultSets;
                     var resultSetCount = method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets
                         ? method.ProcedureResultSetTypeFqns.Count
                         : 1;

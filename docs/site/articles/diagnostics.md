@@ -8,7 +8,7 @@ Entries describe small failing shapes and corrections, not complete standalone p
 ## First errors in a starter project
 
 - Missing entity mapping: [INQ008](#inq008), then [INQ001](#inq001) if the table has no key.
-- Unsupported method result: [INQ005](#inq005). Procedure list returns are not supported.
+- Unsupported method result: [INQ005](#inq005).
 - Predicate binding mismatch: [INQ019](#inq019), or [INQ006](#inq006) for the broader operation signature.
 - Ambiguous or unknown dialect: [INQ014](#inq014) and [INQ043](#inq043).
 
@@ -63,17 +63,17 @@ Failing declaration inside a partial InquiryStore&lt;Product&gt;:
 
 ```csharp
 [InquiryStoredProcedure("GetProducts")]
-public partial Task<IReadOnlyList<Product>> GetProductsAsync(CancellationToken ct = default);
+public partial Task<List<Product>> GetProductsAsync(CancellationToken ct = default);
 ```
 
-Corrected declaration for procedure SELECT rows:
+Corrected declaration for buffered procedure SELECT rows:
 
 ```csharp
 [InquiryStoredProcedure("GetProducts")]
-public partial IAsyncEnumerable<Product> GetProductsAsync(CancellationToken ct = default);
+public partial Task<IReadOnlyList<Product>> GetProductsAsync(CancellationToken ct = default);
 ```
 
-Consume and, if needed, buffer that stream inside its service scope. Task&lt;Product?&gt; is the supported
+Declare IAsyncEnumerable&lt;Product&gt; instead to stream the rows. Task&lt;Product?&gt; is the supported
 zero-or-one-row alternative, not a list. Task&lt;int&gt; without read-back options means provider affected
 rows, not a row list or universal success value. Use the separate OUTPUT/RETURN/INOUT declarations
 only for their intended channels. See [Stored procedures](features/stored-procedures.md); do not invoke
@@ -148,9 +148,9 @@ Query method return type is not supported. Default: error, enabled.
 
 Trigger: The method return shape is not supported for its operation.
 
-Failing shape: A procedure returns Task&lt;IReadOnlyList&lt;Product&gt;&gt;.
+Failing shape: A procedure returns Task&lt;List&lt;Product&gt;&gt;.
 
-Smallest correction: Use IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list).
+Smallest correction: Use Task&lt;IReadOnlyList&lt;Product&gt;&gt; or IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L90).
 
@@ -662,11 +662,11 @@ Smallest correction: Keep one CreatedAt and at most one ModifiedAt annotation.
 
 Stored-procedure scalar output is misconfigured. Default: error, enabled.
 
-Trigger: Stored-procedure output/return settings conflict or have a wrong result type.
+Trigger: Stored-procedure output/return settings conflict, have a wrong result type, or are combined with a row result such as Task&lt;IReadOnlyList&lt;T&gt;&gt;.
 
 Failing shape: OutputParameter and ReturnsValue both set.
 
-Smallest correction: Choose one read-back channel; ReturnsValue requires Task&lt;int&gt;. Match INOUT type and return type.
+Smallest correction: Choose one read-back channel; ReturnsValue requires Task&lt;int&gt;. Match INOUT type and return type. Rows and a read-back need separate declarations: remove the read-back to return rows.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L860).
 
