@@ -48,6 +48,51 @@ public sealed class EagerMixedRelationIntegrationTests
             probe, recorder);
     }
 
+    [SkippableFact]
+    public async Task BufferedSelectAllEagerMatchesStreamedForm()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.BufferedSelectAllEagerMatchesStreamedFormAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
+    [SkippableFact]
+    public async Task SelectOneByKeyEagerWithIncludeLoadsOnlyNamedRelation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.SelectOneByKeyEagerWithIncludeLoadsOnlyNamedRelationAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
+    [SkippableFact]
+    public async Task SelectAllEagerWithIncludeLoadsOnlyNamedRelation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.SelectAllEagerWithIncludeLoadsOnlyNamedRelationAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
     private async Task<(SqlServerTestHarness Harness, BatchExecutionProbe Probe, RecordingCommandInterceptor Recorder)> CreateHarnessAsync()
     {
         var probe = new BatchExecutionProbe();

@@ -131,6 +131,85 @@ internal static class EagerGridCommandAssertions
         AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
     }
 
+    // ---- #424: the buffered list form reads the same command and returns the same graph. ----
+
+    internal static async Task BufferedSelectAllEagerMatchesStreamedFormAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await SeedMixedAsync(authors, posts, tags, probe, recorder);
+
+        var streamed = await ToListAsync(posts.SelectAllWithAuthorAndTagsAsync());
+        var streamedCommand = Assert.Single(probe.FinalizedCommands).CommandText;
+        recorder.Clear();
+        probe.Reset();
+
+        var buffered = await posts.ListWithAuthorAndTagsAsync();
+
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 3, "EagerMixedPost", "EagerMixedAuthor", "EagerMixedTag");
+        Assert.Equal(streamedCommand, Assert.Single(probe.FinalizedCommands).CommandText);
+        Assert.Equal(DescribeGraph(streamed), DescribeGraph(buffered));
+    }
+
+    // ---- #496: [InquiryInclude] loads only the named relations, in a smaller command. ----
+
+    internal static async Task SelectOneByKeyEagerWithIncludeLoadsOnlyNamedRelationAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await SeedMixedAsync(authors, posts, tags, probe, recorder);
+
+        var loaded = await posts.GetWithAuthorAsync(10);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("Ada", loaded.Author!.Name);
+        Assert.Empty(loaded.Tags);
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "EagerMixedPost", "EagerMixedAuthor");
+        AssertDoesNotSelectFrom(probe.FinalizedCommands[0].CommandText, "EagerMixedTag");
+    }
+
+    internal static async Task SelectAllEagerWithIncludeLoadsOnlyNamedRelationAsync(
+        EagerMixedAuthorStore authors,
+        EagerMixedPostStore posts,
+        EagerMixedTagStore tags,
+        BatchExecutionProbe probe,
+        RecordingCommandInterceptor recorder)
+    {
+        await SeedMixedAsync(authors, posts, tags, probe, recorder);
+
+        var all = await ToListAsync(posts.SelectAllWithTagsAsync());
+
+        Assert.Equal(2, all.Count);
+        Assert.All(all, post => Assert.Null(post.Author));
+        Assert.Equal(
+            ["alpha", "beta"],
+            all.Single(p => p.Id == 10).Tags.Select(t => t.Label).OrderBy(s => s, StringComparer.Ordinal));
+        Assert.Empty(all.Single(p => p.Id == 11).Tags);
+        AssertSingleGridCommand(probe, recorder, expectedResultSets: 2, "EagerMixedPost", "EagerMixedTag");
+        AssertDoesNotSelectFrom(probe.FinalizedCommands[0].CommandText, "EagerMixedAuthor");
+    }
+
+    private static string[] DescribeGraph(IEnumerable<EagerMixedPost> posts)
+        => posts
+            .OrderBy(p => p.Id)
+            .Select(p => $"{p.Id}:{p.Title}:{p.Author?.Id}:{p.Author?.Name}:" +
+                string.Join(",", p.Tags.OrderBy(t => t.Id).Select(t => $"{t.Id}={t.Label}")))
+            .ToArray();
+
+    private static void AssertDoesNotSelectFrom(string commandText, string table)
+    {
+        var pattern = @"FROM\s+[""\[`]?" + Regex.Escape(table) + @"\b";
+        Assert.False(
+            Regex.IsMatch(commandText, pattern, RegexOptions.IgnoreCase),
+            $"Expected no SELECT ... FROM {table} in the grid command, but got:{Environment.NewLine}{commandText}");
+    }
+
     private static async Task SeedMixedAsync(
         EagerMixedAuthorStore authors,
         EagerMixedPostStore posts,

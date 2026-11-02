@@ -24,7 +24,7 @@ entity columns is acceptable. Do not move filtering into memory merely to bypass
 | InquirySelectAllByPredicate + InquiryWhere | Entity only; buffered list or stream | Comparisons, groups, optional criteria | Both | Ordered offset, buffered; optional total | No |
 | InquirySelectOneByKey | Nullable entity | Primary key | Not configurable | None | No |
 | InquiryKeysetPage | InquiryPage of the entity and cursor | Cursor seek, not arbitrary InquiryWhere filters | Key-field order and one direction; no DISTINCT option | Keyset only | No |
-| InquirySelectAllEager / InquirySelectOneByKeyEager | Entity stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships |
+| InquirySelectAllEager / InquirySelectOneByKeyEager | Entity; buffered list or stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships, or those named by InquiryInclude |
 
 For offset paging, parameters end with int offset, int limit, then CancellationToken. Supply a stable
 OrderBy including a unique tie-breaker. InquiryPagedResult adds a total; DISTINCT with that result

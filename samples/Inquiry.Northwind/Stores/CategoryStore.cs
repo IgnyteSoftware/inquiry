@@ -15,6 +15,9 @@ public partial class CategoryStore : InquiryStore<Category>
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<Category> SelectAllWithProductsAsync(CancellationToken cancellationToken = default);
 
+    [InquirySelectAllEager]
+    public partial Task<IReadOnlyList<Category>> ListWithProductsAsync(CancellationToken cancellationToken = default);
+
     [InquirySelectOneByKeyEager]
     public partial Task<Category?> SelectByKeyWithProductsAsync(int? categoryID, CancellationToken cancellationToken = default);
 

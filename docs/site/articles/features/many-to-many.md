@@ -44,7 +44,7 @@ public partial class OrderStore : InquiryStore<Order>
 }
 ```
 
-`[InquirySelectOneByKeyEager]` / `[InquirySelectAllEager]` populate **every** relation on the entity, including the many-to-many ones.
+`[InquirySelectOneByKeyEager]` / `[InquirySelectAllEager]` populate **every** relation on the entity, including the many-to-many ones. To load only some of them, name them with [`[InquiryInclude]`](eager-loading.md#load-only-some-relations).
 
 ## How it loads
 

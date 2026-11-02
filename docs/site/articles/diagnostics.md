@@ -1329,3 +1329,15 @@ Failing shape: `[InquiryAdHoc] class Row { public int Id { get; set; } public in
 Smallest correction: Rename one of the properties, or give a projection property a distinct `[InquiryColumn]` name. See [ad-hoc DTOs](features/ad-hoc-dtos.md#column-mapping).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ107
+
+InquiryInclude names an invalid relation. Default: error, enabled.
+
+Trigger: An `[InquiryInclude]` name is not an `[InquiryRelation]` or `[InquiryManyToMany]` property on the store's entity, the named relation's type is not an `[InquiryTable]` entity, the method names the same relation twice, or the attribute is on a method that is not `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]`. The message names the property.
+
+Failing shape: `[InquirySelectOneByKeyEager] [InquiryInclude(nameof(Order.CustomerID))]`, where `CustomerID` is the foreign-key column and `Customer` is the relation.
+
+Smallest correction: Name the navigation property, such as `nameof(Order.Customer)`, once per method, and only on an eager method. Remove the attribute to load every relation. See [eager loading](features/eager-loading.md#load-only-some-relations).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

@@ -39,6 +39,45 @@ public sealed class EagerMixedRelationIntegrationTests
             probe, recorder);
     }
 
+    [Fact]
+    public async Task BufferedSelectAllEagerMatchesStreamedForm()
+    {
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.BufferedSelectAllEagerMatchesStreamedFormAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
+    [Fact]
+    public async Task SelectOneByKeyEagerWithIncludeLoadsOnlyNamedRelation()
+    {
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.SelectOneByKeyEagerWithIncludeLoadsOnlyNamedRelationAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
+    [Fact]
+    public async Task SelectAllEagerWithIncludeLoadsOnlyNamedRelation()
+    {
+        var (harness, probe, recorder) = await CreateHarnessAsync();
+        await using var _ = harness;
+
+        await EagerGridCommandAssertions.SelectAllEagerWithIncludeLoadsOnlyNamedRelationAsync(
+            harness.GetRequiredService<EagerMixedAuthorStore>(),
+            harness.GetRequiredService<EagerMixedPostStore>(),
+            harness.GetRequiredService<EagerMixedTagStore>(),
+            probe, recorder);
+    }
+
     private static async Task<(SqliteTestHarness Harness, BatchExecutionProbe Probe, RecordingCommandInterceptor Recorder)> CreateHarnessAsync()
     {
         var probe = new BatchExecutionProbe();

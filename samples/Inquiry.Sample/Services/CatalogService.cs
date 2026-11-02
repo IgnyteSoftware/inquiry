@@ -5,7 +5,7 @@ namespace Inquiry.Sample.Services;
 
 /// <summary>
 /// Catalog operations spanning <see cref="Category"/> and <see cref="Product"/>.
-/// Uses Inquiry's eager-loading attributes via <see cref="CategoryStore.SelectAllWithProductsAsync"/>.
+/// Uses Inquiry's eager-loading attributes via <see cref="CategoryStore.ListWithProductsAsync"/>.
 /// </summary>
 public sealed class CatalogService
 {
@@ -18,15 +18,8 @@ public sealed class CatalogService
         _products = products;
     }
 
-    public async Task<List<Category>> GetCategoriesWithProductsAsync(CancellationToken cancellationToken = default)
-    {
-        var list = new List<Category>();
-        await foreach (var c in _categories.SelectAllWithProductsAsync(cancellationToken).ConfigureAwait(false))
-        {
-            list.Add(c);
-        }
-        return list;
-    }
+    public Task<IReadOnlyList<Category>> GetCategoriesWithProductsAsync(CancellationToken cancellationToken = default)
+        => _categories.ListWithProductsAsync(cancellationToken);
 
     public Task<Category?> CreateCategoryAsync(Category category, CancellationToken cancellationToken = default)
         => _categories.InsertReturningAsync(category, cancellationToken);

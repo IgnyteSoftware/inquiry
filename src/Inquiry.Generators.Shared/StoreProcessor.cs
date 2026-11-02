@@ -288,7 +288,7 @@ internal static class StoreProcessor
         }
         else
         {
-            returnsList = operation is StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch &&
+            returnsList = operation is StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch or StoreOperation.SelectAllEager &&
                 IsTaskOfReadOnlyList(method.ReturnType, entityType);
         }
         var procedureReturn = ProcedureReturnKind.None;
@@ -462,6 +462,7 @@ internal static class StoreProcessor
             KeysetDescending = keysetDescending,
             IncludeDeleted = includeDeleted,
             IgnoredFilterNames = new EquatableArray<string>(ReadIgnoredFilterNames(method)),
+            IncludedRelations = new EquatableArray<string>(ReadIncludedRelations(method)),
             Distinct = distinct,
             HardDelete = hardDelete,
             LockMode = lockMode,
@@ -903,6 +904,48 @@ internal static class StoreProcessor
     }
 
     /// <summary>
+    /// Reads every <c>[InquiryInclude("name")]</c> on the method in declaration order. A null name is
+    /// kept as an empty string so INQ107 reports it instead of the method silently loading everything.
+    /// </summary>
+    private static ImmutableArray<string> ReadIncludedRelations(IMethodSymbol method)
+    {
+        var builder = ImmutableArray.CreateBuilder<string>();
+        foreach (var candidate in method.GetAttributes())
+        {
+            if (candidate.AttributeClass?.Name != "InquiryIncludeAttribute" || !GeneratorHelpers.IsStoreAttribute(candidate))
+            {
+                continue;
+            }
+
+            builder.Add(candidate.ConstructorArguments.Length > 0 && candidate.ConstructorArguments[0].Value is string name
+                ? name
+                : string.Empty);
+        }
+
+        return builder.ToImmutable();
+    }
+
+    /// <summary>
+    /// Returns the entity as an eager method sees it: only the relations named by its
+    /// <c>[InquiryInclude]</c> attributes, or every relation when it has none. Validation (INQ107)
+    /// guarantees each name matches one relation, so the entity's declaration order is kept.
+    /// </summary>
+    internal static EntityData WithLoadedRelations(EntityData entity, StoreMethodData method)
+    {
+        if (method.IncludedRelations.Count == 0)
+        {
+            return entity;
+        }
+
+        var included = method.IncludedRelations.AsImmutableArray();
+        return entity with
+        {
+            Relations = new EquatableArray<RelationData>(
+                entity.Relations.AsImmutableArray().Where(relation => included.Contains(relation.PropertyName)).ToImmutableArray()),
+        };
+    }
+
+    /// <summary>
     /// Reads every <c>[InquiryWhere]</c> on the method in declaration order. <c>GetAttributes()</c>
     /// preserves source order for a single symbol, so the criteria bind positionally to the method's
     /// parameters exactly as written. The <c>Compare</c> enum value arrives as its underlying int and
@@ -1150,7 +1193,8 @@ internal static class StoreProcessor
             StoreOperation.KeysetPage =>
                 IsTaskOfInquiryPage(returnType, entityType),
             StoreOperation.SelectAllEager =>
-                GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType),
+                GeneratorHelpers.IsGenericType(returnType, "System.Collections.Generic.IAsyncEnumerable<T>", entityType) ||
+                IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectTopByOrder =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Insert or StoreOperation.Upsert when returnsEntity =>
@@ -2165,9 +2209,20 @@ internal static class StoreProcessor
             m.Method.Operation == StoreOperation.SelectAllEager && m.Method.IncludeDeleted);
         if (relationChildEntities.Count > 0 && hasEagerMethod)
         {
+            // Only relations that a valid eager method loads get consts. A relation that no method
+            // selects with [InquiryInclude] may be malformed, because its method-level checks never ran.
+            var loadedRelations = new HashSet<string>(valid
+                .Where(static m => m.Method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
+                .SelectMany(m => WithLoadedRelations(entity, m.Method).Relations.AsImmutableArray())
+                .Select(static relation => relation.PropertyName), StringComparer.Ordinal);
             var emittedRelations = new HashSet<string>();
             foreach (var relation in entity.Relations)
             {
+                if (!loadedRelations.Contains(relation.PropertyName))
+                {
+                    continue;
+                }
+
                 if (!relationChildEntities.TryGetValue(relation.PropertyName, out var childEntity))
                 {
                     continue;
@@ -2427,10 +2482,10 @@ internal static class StoreProcessor
                 {
                     HasConcurrencyToken = entity.ConcurrencyToken is not null,
                     GeneratedCommands = BuildGeneratedCommandDocumentation(
-                        method, fieldColumns, selectPlan, entity, sqlBuilder, generatedSql, baseSelectField),
+                        method, fieldColumns, selectPlan, WithLoadedRelations(entity, method), sqlBuilder, generatedSql, baseSelectField),
                 };
                 documentedMethods[method] = documentedMethod;
-                StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
+                StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, WithLoadedRelations(entity, method), relationChildEntities, relationJunctionEntities,
                     sqlBuilder, baseSelectField, entities: entities,
                     procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings2) ? tvpBindings2 : null);
             }
@@ -2704,7 +2759,7 @@ internal static class StoreProcessor
             or StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll
             or StoreOperation.DeleteAll or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate;
 
-    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, IReadOnlyDictionary<string, EntityData> relationChildEntities, IReadOnlyDictionary<string, EntityData> relationJunctionEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
+    private static bool TryValidateForEmit(SourceProductionContext context, StoreMethodData method, EntityData entity, Dictionary<string, EntityData> relationChildEntities, Dictionary<string, EntityData> relationJunctionEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
@@ -2728,6 +2783,56 @@ internal static class StoreProcessor
             return false;
         }
 
+        // [InquiryInclude] must name each loaded relation exactly once, and only an eager method loads
+        // relations. A typo that silently loaded everything, or nothing, would misrepresent the result
+        // graph, so each failure is an error (INQ107).
+        if (method.IncludedRelations.Count > 0)
+        {
+            if (method.Operation is not (StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.IncludeInvalid, method.Location?.ToLocation(),
+                    method.Name, method.IncludedRelations[0],
+                    "only [InquirySelectAllEager] and [InquirySelectOneByKeyEager] methods load relations"));
+                return false;
+            }
+
+            var includedNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var includedName in method.IncludedRelations)
+            {
+                if (!entity.Relations.AsImmutableArray().Any(relation => relation.PropertyName == includedName))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IncludeInvalid, method.Location?.ToLocation(),
+                        method.Name, includedName,
+                        $"entity '{entity.Name}' has no [InquiryRelation] or [InquiryManyToMany] property named '{includedName}'"));
+                    return false;
+                }
+
+                // The default load skips a relation to an unmapped type; an explicit request for one
+                // must fail instead of returning the navigation unpopulated.
+                if (!relationChildEntities.ContainsKey(includedName))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IncludeInvalid, method.Location?.ToLocation(),
+                        method.Name, includedName,
+                        "the relation's type is not an [InquiryTable] entity, so it cannot be loaded"));
+                    return false;
+                }
+
+                if (!includedNames.Add(includedName))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IncludeInvalid, method.Location?.ToLocation(),
+                        method.Name, includedName,
+                        "the method names that relation more than once"));
+                    return false;
+                }
+            }
+
+            entity = WithLoadedRelations(entity, method);
+        }
+
         // Eager loaders assemble multi-entity grids whose relation consts are shared per relation.
         // This release has no per-relation binding variants, so a runtime-parameterized filter
         // anywhere in the eager tree (root, relation child, or junction) would produce SQL with an
@@ -2736,9 +2841,23 @@ internal static class StoreProcessor
         // cross-tenant read the feature exists to prevent.
         if (method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager)
         {
+            var loadedEntities = new List<EntityData>();
+            foreach (var relation in entity.Relations)
+            {
+                if (relationChildEntities.TryGetValue(relation.PropertyName, out var loadedChild))
+                {
+                    loadedEntities.Add(loadedChild);
+                }
+
+                if (relationJunctionEntities.TryGetValue(relation.PropertyName, out var loadedJunction))
+                {
+                    loadedEntities.Add(loadedJunction);
+                }
+            }
+
             var parameterized =
                 entity.Columns.AsImmutableArray().FirstOrDefault(static c => c.IsGlobalFilter && c.GlobalFilterContextKey is not null)
-                ?? relationChildEntities.Values.Concat(relationJunctionEntities.Values)
+                ?? loadedEntities
                     .SelectMany(static e => e.Columns.AsImmutableArray())
                     .FirstOrDefault(static c => c.IsGlobalFilter && c.GlobalFilterContextKey is not null);
             if (parameterized is not null)

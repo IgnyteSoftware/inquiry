@@ -52,7 +52,7 @@ else
 
 @code {
     private bool _loading = true;
-    private List<Category> _categories = new();
+    private IReadOnlyList<Category> _categories = Array.Empty<Category>();
 
     protected override Task OnInitializedAsync() => RefreshAsync();
 
