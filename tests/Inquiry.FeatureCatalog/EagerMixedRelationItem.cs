@@ -88,4 +88,17 @@ public partial class EagerMixedPostStore : InquiryStore<EagerMixedPost>
 
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<EagerMixedPost> SelectAllWithAuthorAndTagsAsync(CancellationToken cancellationToken = default);
+
+    // #424: the buffered form of the method above.
+    [InquirySelectAllEager]
+    public partial Task<IReadOnlyList<EagerMixedPost>> ListWithAuthorAndTagsAsync(CancellationToken cancellationToken = default);
+
+    // #496: each method loads only the relation it names.
+    [InquirySelectOneByKeyEager]
+    [InquiryInclude(nameof(EagerMixedPost.Author))]
+    public partial Task<EagerMixedPost?> GetWithAuthorAsync(int id, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllEager]
+    [InquiryInclude(nameof(EagerMixedPost.Tags))]
+    public partial IAsyncEnumerable<EagerMixedPost> SelectAllWithTagsAsync(CancellationToken cancellationToken = default);
 }

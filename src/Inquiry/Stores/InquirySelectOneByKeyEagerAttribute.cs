@@ -2,7 +2,8 @@ namespace Inquiry.Stores;
 
 /// <summary>
 /// Marks an abstract store method as an eager single-entity lookup by key.
-/// All navigation properties decorated with <c>[InquiryRelation]</c> on the entity are populated.
+/// All navigation properties decorated with <c>[InquiryRelation]</c> on the entity are populated, unless
+/// <see cref="InquiryIncludeAttribute"/> names the ones to load.
 /// The method must accept the key type and return <c>Task&lt;TEntity?&gt;</c>.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]

@@ -187,7 +187,7 @@ else
     private bool _loading = true;
     private List<Customer> _customers = new();
     private List<Employee> _employees = new();
-    private List<Category> _catalog = new();
+    private IReadOnlyList<Category> _catalog = Array.Empty<Category>();
     private List<Supplier> _suppliers = new();
     private List<Shipper> _shippers = new();
     private List<Region> _regions = new();

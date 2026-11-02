@@ -100,6 +100,12 @@ internal sealed record StoreMethodData(
     public EquatableArray<string> IgnoredFilterNames { get; init; } = EquatableArray<string>.Empty;
 
     /// <summary>
+    /// The <c>[InquiryInclude]</c> relation names on an eager method, in declaration order. Empty means
+    /// the method loads every relation. Each name must match a relation on the entity once (INQ107).
+    /// </summary>
+    public EquatableArray<string> IncludedRelations { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>
     /// For a select operation, whether <c>Distinct = true</c> was set so the generated query
     /// emits <c>SELECT DISTINCT</c> instead of <c>SELECT</c>.
     /// </summary>

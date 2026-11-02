@@ -2611,7 +2611,10 @@ internal static class StoreOperationEmitter
 
     private static void EmitSelectAllEager(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, Dictionary<string, EntityData> relationJunctionEntities, string parentSelectField)
     {
-        var parametersWithAttr = GetParameterDeclaration(method.Parameters, enumeratorCancellation: true);
+        // A buffered Task<IReadOnlyList<T>> method runs the same reads, collects the stitched parents and
+        // returns them. The grid is disposed before the task completes, so no reader outlives the call.
+        var buffered = method.ReturnsList;
+        var parametersWithAttr = GetParameterDeclaration(method.Parameters, enumeratorCancellation: !buffered);
         var parentStructMat = entity.StructMaterializerFullName;
         AppendHeader(source, method, parametersWithAttr, isAsync: true);
 
@@ -2928,11 +2931,20 @@ internal static class StoreOperationEmitter
 
             // ReadStreamAsync returns IAsyncEnumerable<T>, so ConfigureAwait is the extension method and
             // must be called as a static — generated stores emit no usings.
+            if (buffered)
+            {
+                source.AppendLine($"        var _result = new global::System.Collections.Generic.List<{entityType}>();");
+            }
+
             source.AppendLine($"        await foreach (var _entity in {ConfigureAwaitEnumerable}(_grid.ReadStreamAsync<{entityType}, {parentStructMat}>(default, {cancellation}), false))");
             source.AppendLine("        {");
             AppendStitch();
-            source.AppendLine("            yield return _entity;");
+            source.AppendLine(buffered ? "            _result.Add(_entity);" : "            yield return _entity;");
             source.AppendLine("        }");
+            if (buffered)
+            {
+                source.AppendLine("        return _result;");
+            }
         }
         else
         {
@@ -2942,7 +2954,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"        await foreach (var _e in {ConfigureAwaitEnumerable}(Inquiry.QueryAsync<{entityType}, byte, {parentStructMat}>({EmptyGeneratedCommand(parentSelectField)}, default, {cancellation}), false))");
             source.AppendLine("            _entities.Add(_e);");
             source.AppendLine("        if (_entities.Count == 0)");
-            source.AppendLine("            yield break;");
+            source.AppendLine(buffered ? "            return _entities;" : "            yield break;");
             source.AppendLine();
 
             AppendChildGrouping();
@@ -2951,8 +2963,16 @@ internal static class StoreOperationEmitter
             source.AppendLine("        foreach (var _entity in _entities)");
             source.AppendLine("        {");
             AppendStitch();
-            source.AppendLine("            yield return _entity;");
+            if (!buffered)
+            {
+                source.AppendLine("            yield return _entity;");
+            }
+
             source.AppendLine("        }");
+            if (buffered)
+            {
+                source.AppendLine("        return _entities;");
+            }
         }
         source.AppendLine("    }");
     }

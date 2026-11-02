@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `[InquiryInclude(nameof(...))]` limits an `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]` method to the relations it names. Apply it once per relation. The method's command then carries only the parent `SELECT` and the named relations' `SELECT`s, and adding another relation to the entity does not change it. Methods without the attribute still load every relation. A name that is not a relation on the entity, a name given twice, or the attribute on a method that is not an eager method reports the new build error `INQ107`, which names the property.
+- `[InquirySelectAllEager]` methods can return `Task<IReadOnlyList<TEntity>>`. The list form sends the same single command as the `IAsyncEnumerable<TEntity>` form, with the same filters and the same graph, and closes the reader before the task completes. The streaming form is unchanged. The sample `CatalogService` now uses the list form.
+
 ### Changed
 
 - **Breaking:** Results of handwritten SQL and stored procedures now map to properties by column name, not by SELECT-list position. Before, reordering two columns of the same type compiled and put each value in the wrong property. Names compare without regard to case, and extra columns are ignored. A missing column, or two columns that match one property, throws `InvalidOperationException` before the first row is returned. The message names the type, the property and the available columns. A database `NULL` in a non-nullable property, a column of an incompatible type, or an exception from a value converter, throws `InvalidOperationException` that names the property and the column, with the original exception as `InnerException`. Generated store queries keep their fixed column lists and are unchanged. To upgrade:

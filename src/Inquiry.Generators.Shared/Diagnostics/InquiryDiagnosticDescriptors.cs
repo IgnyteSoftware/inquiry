@@ -1058,4 +1058,10 @@ internal static class InquiryDiagnosticDescriptors
         "'{0}' properties '{1}' and '{2}' both match result column '{3}'. Inquiry matches result columns by name without regard to case, so each property needs a distinct column name. Rename one of the properties or change its column name.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq106");
+
+    public static readonly DiagnosticDescriptor IncludeInvalid = new(
+        "INQ107", "InquiryInclude names an invalid relation",
+        "Store method '{0}' is marked [InquiryInclude(\"{1}\")], but {2}.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq107");
 }
