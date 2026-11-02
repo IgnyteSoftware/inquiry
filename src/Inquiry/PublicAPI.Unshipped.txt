@@ -108,6 +108,7 @@ Inquiry.Converters.InquiryJsonConverter<T>
 Inquiry.Converters.InquiryJsonConverter<T>.FromProvider(string! provider) -> T
 Inquiry.Converters.InquiryJsonConverter<T>.InquiryJsonConverter() -> void
 Inquiry.Converters.InquiryJsonConverter<T>.ToProvider(T model) -> string!
+Inquiry.Converters.InquiryJsonContextConverter<TContext, T>
 Inquiry.DependencyInjection.IInquiryServiceRegistration
 Inquiry.DependencyInjection.IInquiryServiceRegistration.AddServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Inquiry.DependencyInjection.InquiryHealthChecksBuilderExtensions
@@ -213,7 +214,12 @@ Inquiry.Entities.InquiryIndexAttribute.Name.get -> string?
 Inquiry.Entities.InquiryIndexAttribute.Name.set -> void
 Inquiry.Entities.InquiryIndexAttribute.Properties.get -> string![]!
 Inquiry.Entities.InquiryJsonAttribute
+Inquiry.Entities.InquiryJsonAttribute.Context.get -> System.Type?
+Inquiry.Entities.InquiryJsonAttribute.Context.set -> void
 Inquiry.Entities.InquiryJsonAttribute.InquiryJsonAttribute() -> void
+Inquiry.Entities.InquiryJsonContextAttribute
+Inquiry.Entities.InquiryJsonContextAttribute.ContextType.get -> System.Type!
+Inquiry.Entities.InquiryJsonContextAttribute.InquiryJsonContextAttribute(System.Type! contextType) -> void
 Inquiry.Entities.InquiryKeyAttribute
 Inquiry.Entities.InquiryKeyAttribute.InquiryKeyAttribute() -> void
 Inquiry.Entities.InquiryKeyAttribute.InquiryKeyAttribute(string! name) -> void
@@ -663,3 +669,5 @@ Inquiry.Materialization.InquiryColumnMap.ReadOrder.get -> int[]!
 Inquiry.Materialization.InquiryResultShape
 Inquiry.Materialization.InquiryResultShape.InquiryResultShape(System.Type! resultType, string![]! propertyNames, string![]! columnNames) -> void
 Inquiry.Materialization.InquiryResultShape.Map(System.Data.Common.DbDataReader! reader) -> Inquiry.Materialization.InquiryColumnMap!
+static Inquiry.Converters.InquiryJsonContextConverter<TContext, T>.FromProvider(string! provider, TContext! context) -> T
+static Inquiry.Converters.InquiryJsonContextConverter<TContext, T>.ToProvider(T model, TContext! context) -> string!

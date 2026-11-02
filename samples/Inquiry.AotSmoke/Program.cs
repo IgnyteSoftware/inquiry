@@ -44,7 +44,28 @@ var updated = await store.UpdateAsync(widget);
 var all = await store.SelectAllAsync();
 var deleted = await store.DeleteByKeyAsync(widget.Key);
 
-if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || !deleted)
+// JSON columns serialize through source-generated JsonSerializerContext metadata, not reflection.
+await inquiry.ExecuteAsync(new InquiryCommand(
+    "CREATE TABLE \"TGadget\" (\"Key\" TEXT NOT NULL PRIMARY KEY, \"Spec\" TEXT NULL, \"Tags\" TEXT NOT NULL)"));
+var gadgets = scope.ServiceProvider.GetRequiredService<GadgetStore>();
+var full = new Gadget
+{
+    Spec = new WidgetSpec { Color = "red", Sizes = [1, 2, 3] },
+    Tags = new Dictionary<string, string> { ["finish"] = "matte" },
+};
+var empty = new Gadget { Spec = null };
+var jsonInserted = await gadgets.InsertAsync(full) + await gadgets.InsertAsync(empty);
+var fullLoaded = await gadgets.SelectByKeyAsync(full.Key);
+var emptyLoaded = await gadgets.SelectByKeyAsync(empty.Key);
+await using var specQuery = keeper.CreateCommand();
+specQuery.CommandText = "SELECT COUNT(*) FROM \"TGadget\" WHERE \"Spec\" LIKE '%\"color\":\"red\"%'";
+var camelCaseRows = (long)(await specQuery.ExecuteScalarAsync())!;
+var jsonOk = jsonInserted == 2 && camelCaseRows == 1 &&
+    fullLoaded?.Spec is { Color: "red", Sizes: [1, 2, 3] } &&
+    fullLoaded.Tags.Count == 1 && fullLoaded.Tags["finish"] == "matte" &&
+    emptyLoaded is { Spec: null, Tags.Count: 0 };
+
+if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || !deleted || !jsonOk)
 {
     await Console.Error.WriteLineAsync("AOT-SMOKE-FAILED");
     return 1;

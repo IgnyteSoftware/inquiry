@@ -1064,4 +1064,16 @@ internal static class InquiryDiagnosticDescriptors
         "Store method '{0}' is marked [InquiryInclude(\"{1}\")], but {2}.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq107");
+
+    public static readonly DiagnosticDescriptor JsonContextInvalid = new(
+        "INQ108", "JSON serializer context type is invalid",
+        "JSON serializer context '{0}' for property '{1}.{2}' must be a non-abstract, non-generic class that derives from System.Text.Json.Serialization.JsonSerializerContext, is accessible to generated code, and has a static Default property. Declare it as 'internal partial class AppJsonContext : JsonSerializerContext' so the System.Text.Json generator adds Default.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq108");
+
+    public static readonly DiagnosticDescriptor JsonContextTypeMissing = new(
+        "INQ110", "JSON column type is missing from the serializer context",
+        "Property '{0}.{1}' stores '{2}' as JSON through serializer context '{3}', but the context does not generate metadata for that type. Add [JsonSerializable(typeof({2}))] to '{3}', and do not limit its GenerationMode to Serialization. Inquiry does not fall back to reflection.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq110");
 }
