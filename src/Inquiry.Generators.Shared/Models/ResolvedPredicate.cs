@@ -79,4 +79,7 @@ internal sealed class ResolvedPredicatePlan
     public bool HasIn { get; }
     public IReadOnlyList<SqlSetAssignment> SetAssignments { get; init; } = System.Array.Empty<SqlSetAssignment>();
     public IReadOnlyList<SetBinding> SetBindings { get; init; } = System.Array.Empty<SetBinding>();
+
+    /// <summary>The method-parameter index of each plain SET column, in SET-column order.</summary>
+    public IReadOnlyList<int> SetParameterIndexes { get; init; } = System.Array.Empty<int>();
 }

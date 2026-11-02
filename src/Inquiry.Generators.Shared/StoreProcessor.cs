@@ -1001,6 +1001,8 @@ internal static class StoreProcessor
                 GeneratorHelpers.GetNamedBool(candidate, "Optional"))
             {
                 JsonPath = GeneratorHelpers.GetNamedString(candidate, "JsonPath"),
+                Parameter = GeneratorHelpers.GetNamedString(candidate, "Parameter"),
+                UpperParameter = GeneratorHelpers.GetNamedString(candidate, "UpperParameter"),
             });
         }
     }
@@ -3067,6 +3069,7 @@ internal static class StoreProcessor
             }
 
             var setColumns = new List<ColumnData>();
+            var setParameterIndexes = new List<int>();
             IReadOnlyList<SqlSetAssignment> setAssignments = Array.Empty<SqlSetAssignment>();
             IReadOnlyList<SetBinding> setBindings = Array.Empty<SetBinding>();
             var expressionParameterCount = 0;
@@ -3082,22 +3085,70 @@ internal static class StoreProcessor
                 }
                 else
                 {
-                    var predicateParameterCount = 0;
-                    foreach (var predicate in method.Predicates)
+                    if (UsesNamedPredicateBinding(method))
                     {
-                        predicateParameterCount += SqlPredicate.ParameterArity(predicate.Op);
-                    }
+                        // Named criteria claim their parameters; every other value parameter is an update value.
+                        // A bad name would turn its filter parameter into an update value, so check names first.
+                        var namedParameters = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (var predicate in method.Predicates)
+                        {
+                            if (NamedCriterionShapeError(method, predicate) is { } error)
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.NamedPredicateBindingInvalid,
+                                    method.Location?.ToLocation(), method.Name, error));
+                                return false;
+                            }
 
-                    var setCount = method.Parameters.Count - 1 - predicateParameterCount;
-                    if (setCount <= 0)
+                            if (predicate.Parameter is not null)
+                            {
+                                namedParameters.Add(predicate.Parameter);
+                            }
+
+                            if (predicate.UpperParameter is not null)
+                            {
+                                namedParameters.Add(predicate.UpperParameter);
+                            }
+                        }
+
+                        for (var i = 0; i < method.Parameters.Count - 1; i++)
+                        {
+                            if (!namedParameters.Contains(method.Parameters[i].Name))
+                            {
+                                setParameterIndexes.Add(i);
+                            }
+                        }
+
+                        if (setParameterIndexes.Count == 0)
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
+                                "Every parameter is bound by an [InquiryWhere] criterion. Add at least one update value parameter."));
+                            return false;
+                        }
+                    }
+                    else
                     {
-                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
-                            "No update parameters remain after the [InquiryWhere] parameters. Add at least one update value before them."));
-                        return false;
+                        var predicateParameterCount = 0;
+                        foreach (var predicate in method.Predicates)
+                        {
+                            predicateParameterCount += SqlPredicate.ParameterArity(predicate.Op);
+                        }
+
+                        var setCount = method.Parameters.Count - 1 - predicateParameterCount;
+                        if (setCount <= 0)
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name,
+                                "No update parameters remain after the [InquiryWhere] parameters. Add at least one update value before them."));
+                            return false;
+                        }
+
+                        for (var i = 0; i < setCount; i++)
+                        {
+                            setParameterIndexes.Add(i);
+                        }
                     }
 
                     var assignedColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    for (var i = 0; i < setCount; i++)
+                    foreach (var i in setParameterIndexes)
                     {
                         var parameter = method.Parameters[i];
                         var column = FindUniqueColumn(entity, parameter.Name, out var ambiguous);
@@ -3148,7 +3199,10 @@ internal static class StoreProcessor
                 out predicatePlan,
                 setColumns,
                 leadingParameterCount: method.SetExpressions.Count > 0 ? expressionParameterCount : null,
-                reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1)).ToArray()))
+                reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1)).ToArray(),
+                setParameterIndexes: method.SetExpressions.Count > 0
+                    ? setBindings.Select(static binding => binding.MethodParameterIndex).ToArray()
+                    : setParameterIndexes))
             {
                 return false;
             }
@@ -3157,6 +3211,7 @@ internal static class StoreProcessor
             {
                 SetAssignments = setAssignments,
                 SetBindings = setBindings,
+                SetParameterIndexes = setParameterIndexes,
             };
             return true;
         }
@@ -3623,7 +3678,8 @@ internal static class StoreProcessor
         }
 
         leadingParameterCount = highestParameterIndex + 1;
-        for (var i = 0; i < leadingParameterCount; i++)
+        // Named criteria bind every value by name, so SET parameters may appear in any position.
+        for (var i = 0; i < leadingParameterCount && !UsesNamedPredicateBinding(method); i++)
         {
             if (!resolvedBindings.Values.Any(binding => binding.MethodParameterIndex == i))
             {
@@ -3652,7 +3708,8 @@ internal static class StoreProcessor
         List<ColumnData>? setColumns = null,
         int trailingParameterCount = 0,
         int? leadingParameterCount = null,
-        IReadOnlyCollection<string>? reservedParameterNames = null)
+        IReadOnlyCollection<string>? reservedParameterNames = null,
+        IReadOnlyCollection<int>? setParameterIndexes = null)
     {
         plan = null;
         var nonCancellationCount = method.Parameters.Count - 1 - trailingParameterCount;
@@ -3662,6 +3719,9 @@ internal static class StoreProcessor
         var paramIndex = 0;
         var hasIn = false;
         var groupDepth = 0;
+        var named = UsesNamedPredicateBinding(method);
+        var boundIndexes = new HashSet<int>();
+        var positionalValueTypes = new List<(string Field, string Type)>();
 
         // For a set-based UPDATE the leading parameters supply the SET values (bound as
         // "@{PropertyName}"), so predicate binding starts after them and the SET property names are
@@ -3707,14 +3767,33 @@ internal static class StoreProcessor
             }
 
             var arity = SqlPredicate.ParameterArity(predicate.Op);
-            if (paramIndex + arity > nonCancellationCount)
+            int first;
+            int second;
+            if (named)
             {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
-                return false;
+                if (!TryResolveNamedParameters(predicate, arity, out first, out second))
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                if (paramIndex + arity > nonCancellationCount)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
+                    return false;
+                }
+
+                first = paramIndex;
+                second = paramIndex + 1;
+                if (arity > 0)
+                {
+                    positionalValueTypes.Add((predicate.Field, method.Parameters[first].ComparisonDisplay));
+                }
             }
 
             if (predicate.IsOptional &&
-                (arity != 1 || predicate.Op is SqlCompareOp.In or SqlCompareOp.NotIn || !method.Parameters[paramIndex].IsNullable))
+                (arity != 1 || predicate.Op is SqlCompareOp.In or SqlCompareOp.NotIn || !method.Parameters[first].IsNullable))
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.OptionalPredicateInvalid, method.Location?.ToLocation(), method.Name, predicate.Field));
                 return false;
@@ -3752,8 +3831,8 @@ internal static class StoreProcessor
                 case SqlCompareOp.Between:
                 case SqlCompareOp.NotBetween:
                     {
-                        if (!ParameterMatchesColumn(method.Parameters[paramIndex], column) ||
-                            !ParameterMatchesColumn(method.Parameters[paramIndex + 1], column))
+                        if (!ParameterMatchesColumn(method.Parameters[first], column) ||
+                            !ParameterMatchesColumn(method.Parameters[second], column))
                         {
                             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
                             return false;
@@ -3766,8 +3845,8 @@ internal static class StoreProcessor
                         // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
                         // reconciles the sigil on Oracle.
                         predicates.Add(ToSqlPredicate(predicate, column, lo, hi));
-                        bindings.Add(new PredicateBinding("@" + lo, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
-                        bindings.Add(new PredicateBinding("@" + hi, paramIndex + 1, column, isCollection: false, usesProviderType: usesProviderType));
+                        bindings.Add(new PredicateBinding("@" + lo, first, column, isCollection: false, usesProviderType: usesProviderType));
+                        bindings.Add(new PredicateBinding("@" + hi, second, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 2;
                         break;
                     }
@@ -3777,7 +3856,7 @@ internal static class StoreProcessor
                     {
                         // IN/NOT IN match the collection element against the column's non-nullable type: a set
                         // of values to test membership against is never itself nullable.
-                        var parameter = method.Parameters[paramIndex];
+                        var parameter = method.Parameters[first];
                         var element = parameter.ElementNonNullableComparisonDisplay;
                         if (element is null || element != column.Type.NonNullableDisplayName)
                         {
@@ -3794,7 +3873,7 @@ internal static class StoreProcessor
                         // exactly — ':name' on Oracle, '@name' elsewhere. FinalizeCommand only renames
                         // parameters, not the text, so it cannot bridge a mismatch here. NOT IN always uses the
                         // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
-                        bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), paramIndex, column,
+                        bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), first, column,
                             isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
                             elementIsNullable: parameter.ElementIsNullable));
                         paramIndex += 1;
@@ -3806,7 +3885,7 @@ internal static class StoreProcessor
                 case SqlCompareOp.NotLike:
                     {
                         if (column.Type.NonNullableDisplayName != "string" ||
-                            !ParameterMatchesColumn(method.Parameters[paramIndex], column))
+                            !ParameterMatchesColumn(method.Parameters[first], column))
                         {
                             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
                             return false;
@@ -3814,7 +3893,7 @@ internal static class StoreProcessor
 
                         var name = UniqueName(usedNames, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
+                        bindings.Add(new PredicateBinding("@" + name, first, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
                         break;
                     }
@@ -3822,8 +3901,8 @@ internal static class StoreProcessor
                 default:
                     {
                         if (!(predicate.IsOptional
-                            ? ParameterMatchesColumnIgnoringNullability(method.Parameters[paramIndex], column)
-                            : ParameterMatchesColumn(method.Parameters[paramIndex], column)))
+                            ? ParameterMatchesColumnIgnoringNullability(method.Parameters[first], column)
+                            : ParameterMatchesColumn(method.Parameters[first], column)))
                         {
                             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PredicateParameterMismatch, method.Location?.ToLocation(), method.Name));
                             return false;
@@ -3831,7 +3910,7 @@ internal static class StoreProcessor
 
                         var name = UniqueName(usedNames, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
-                        bindings.Add(new PredicateBinding("@" + name, paramIndex, column, isCollection: false, usesProviderType: usesProviderType));
+                        bindings.Add(new PredicateBinding("@" + name, first, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
                         break;
                     }
@@ -3840,7 +3919,7 @@ internal static class StoreProcessor
             groupDepth -= predicate.CloseGroups;
         }
 
-        if (paramIndex != nonCancellationCount || groupDepth != 0)
+        if ((!named && paramIndex != nonCancellationCount) || groupDepth != 0)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 groupDepth == 0 ? InquiryDiagnosticDescriptors.PredicateParameterMismatch : InquiryDiagnosticDescriptors.PredicateStructureInvalid,
@@ -3848,8 +3927,77 @@ internal static class StoreProcessor
             return false;
         }
 
+        if (named)
+        {
+            for (var i = 0; i < nonCancellationCount; i++)
+            {
+                if (!boundIndexes.Contains(i) && setParameterIndexes?.Contains(i) != true)
+                {
+                    return FailNamed($"parameter '{method.Parameters[i].Name}' is not bound by any criterion.");
+                }
+            }
+        }
+        else
+        {
+            ReportPositionalSameType();
+        }
+
         plan = new ResolvedPredicatePlan(predicates, bindings, hasIn);
         return true;
+
+        bool TryResolveNamedParameters(PredicateData predicate, int arity, out int lower, out int upper)
+        {
+            lower = -1;
+            upper = -1;
+            if (NamedCriterionShapeError(method, predicate) is { } error)
+            {
+                return FailNamed(error);
+            }
+
+            return arity == 0 ||
+                (TryFindParameter(predicate.Parameter!, predicate.Field, out lower) &&
+                (arity == 1 || TryFindParameter(predicate.UpperParameter!, predicate.Field, out upper)));
+        }
+
+        bool TryFindParameter(string name, string field, out int index)
+        {
+            index = IndexOfParameter(method, name);
+            if (index >= nonCancellationCount)
+            {
+                return FailNamed($"the criterion on '{field}' names '{name}', a paging or cancellation parameter. Those parameters stay trailing and positional.");
+            }
+
+            if (setParameterIndexes?.Contains(index) == true)
+            {
+                return FailNamed($"the criterion on '{field}' names '{name}', which already supplies an update value.");
+            }
+
+            return boundIndexes.Add(index) ||
+                FailNamed($"parameter '{name}' is bound by more than one criterion.");
+        }
+
+        bool FailNamed(string reason)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.NamedPredicateBindingInvalid,
+                method.Location?.ToLocation(), method.Name, reason));
+            return false;
+        }
+
+        void ReportPositionalSameType()
+        {
+            for (var i = 0; i < positionalValueTypes.Count; i++)
+            {
+                for (var j = i + 1; j < positionalValueTypes.Count; j++)
+                {
+                    if (positionalValueTypes[i].Type == positionalValueTypes[j].Type)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.PositionalPredicateParametersShareType,
+                            method.Location?.ToLocation(), method.Name, positionalValueTypes[i].Field, positionalValueTypes[j].Field, positionalValueTypes[i].Type));
+                        return;
+                    }
+                }
+            }
+        }
 
         static SqlPredicate ToSqlPredicate(PredicateData source, ColumnData column, string? parameterName, string? parameterNameHi)
             => new(column, source.Op, parameterName, parameterNameHi, source.IsOr, source.JsonPath,
@@ -3858,6 +4006,58 @@ internal static class StoreProcessor
 
     private static bool ParameterMatchesColumn(ParameterData parameter, ColumnData column)
         => parameter.ComparisonDisplay == column.Type.DisplayName;
+
+    private static bool UsesNamedPredicateBinding(StoreMethodData method)
+        => method.Predicates.AsImmutableArray().Any(static predicate => predicate.Parameter is not null || predicate.UpperParameter is not null);
+
+    private static int IndexOfParameter(StoreMethodData method, string name)
+    {
+        for (var i = 0; i < method.Parameters.Count; i++)
+        {
+            if (string.Equals(method.Parameters[i].Name, name, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Returns the INQ109 reason for a named criterion whose names do not fit its operator or the method,
+    /// or null. A set-based update runs this before it infers update values from the unnamed parameters.
+    /// </summary>
+    private static string? NamedCriterionShapeError(StoreMethodData method, PredicateData predicate)
+    {
+        var arity = SqlPredicate.ParameterArity(predicate.Op);
+        if (arity == 0)
+        {
+            return predicate.Parameter is null && predicate.UpperParameter is null
+                ? null
+                : $"the criterion on '{predicate.Field}' uses {predicate.Op}, which takes no parameter. Remove Parameter and UpperParameter.";
+        }
+
+        if (predicate.Parameter is null)
+        {
+            return $"the criterion on '{predicate.Field}' names no parameter. When one criterion sets Parameter, every criterion that takes a value must set it.";
+        }
+
+        if (arity == 2 && predicate.UpperParameter is null)
+        {
+            return $"the criterion on '{predicate.Field}' uses {predicate.Op}, which needs UpperParameter for the upper bound.";
+        }
+
+        if (arity == 1 && predicate.UpperParameter is not null)
+        {
+            return $"the criterion on '{predicate.Field}' sets UpperParameter, which only Between and NotBetween accept.";
+        }
+
+        var names = arity == 1 ? new[] { predicate.Parameter } : new[] { predicate.Parameter, predicate.UpperParameter! };
+        var unknown = names.FirstOrDefault(name => IndexOfParameter(method, name) < 0);
+        return unknown is null
+            ? null
+            : $"the criterion on '{predicate.Field}' names parameter '{unknown}', which the method does not declare.";
+    }
 
     private static bool ParameterMatchesColumnIgnoringNullability(ParameterData parameter, ColumnData column)
         => parameter.NonNullableComparisonDisplay == column.Type.NonNullableDisplayName;

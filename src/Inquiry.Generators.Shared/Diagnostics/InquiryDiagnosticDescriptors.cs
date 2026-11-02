@@ -58,6 +58,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ095         Write-enforced filter           (an operation that cannot honour [InquiryGlobalFilter(EnforceOnWrites = true)] — upsert) [IN USE]
     //   INQ096         Mutation target                 (targetless delete, conflicting all/predicate, or unsupported returning mode) [IN USE]
     //   INQ103–INQ105  Relationship keys               (INQ103 auto-junction option on an explicit junction, INQ104 key storage mismatch, INQ105 junction FK target contradicts its position) [IN USE]
+    //   INQ109, INQ112  Named predicate binding         (INQ109 invalid [InquiryWhere(Parameter=…)] binding, INQ112 positional criteria share a parameter type) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1076,4 +1077,18 @@ internal static class InquiryDiagnosticDescriptors
         "Property '{0}.{1}' stores '{2}' as JSON through serializer context '{3}', but the context does not generate metadata for that type. Add [JsonSerializable(typeof({2}))] to '{3}', and do not limit its GenerationMode to Serialization. Inquiry does not fall back to reflection.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq110");
+
+    public static readonly DiagnosticDescriptor NamedPredicateBindingInvalid = new(
+        "INQ109", "InquiryWhere named parameter binding is invalid",
+        "Store method '{0}' has an invalid named InquiryWhere binding: {1}",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq109");
+
+    // INQ112 is a warning because the positional SQL is still correct. #476 ships it before the 1.0
+    // freeze; a new warning after 1.0 would break builds that treat warnings as errors.
+    public static readonly DiagnosticDescriptor PositionalPredicateParametersShareType = new(
+        "INQ112", "Positional InquiryWhere criteria bind parameters of the same type",
+        "Store method '{0}' binds criteria on '{1}' and '{2}' by position to parameters of type '{3}'. Swapping those parameters still compiles and swaps the filters. Set Parameter = nameof(...) on each value criterion to bind by name.",
+        "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq112");
 }

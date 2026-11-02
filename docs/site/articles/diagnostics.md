@@ -1354,6 +1354,18 @@ Smallest correction: Name a source-generated context, such as `internal partial 
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
 
+## INQ109
+
+InquiryWhere named parameter binding is invalid. Default: error, enabled.
+
+Trigger: A method binds its `[InquiryWhere]` criteria by name, and the binding breaks a rule. One criterion sets `Parameter` and another value criterion does not. A name is not a parameter of the method. A value parameter is not bound by any criterion, or is bound twice. `IsNull` or `IsNotNull` sets a parameter. `Between` has no `UpperParameter`, or another operator sets one. A criterion names an offset paging or cancellation parameter, or a parameter that an `[InquirySet]` expression uses. The message gives the reason.
+
+Failing shape: `[InquiryWhere("Category", Parameter = nameof(category))] [InquiryWhere("Score")]` on `FindAsync(string category, int score, ...)`.
+
+Smallest correction: Name a parameter on every criterion that takes a value, once each, and remove names from null checks. See [bind criteria by name](features/query-composition.md#bind-criteria-by-name).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
 ## INQ110
 
 JSON column type is missing from the serializer context. Default: error, enabled.
@@ -1363,5 +1375,17 @@ Trigger: An `[InquiryJson]` property uses a serializer context that has no `[Jso
 Failing shape: The context declares `[JsonSerializable(typeof(List<CustomerPreferences>))]`, but the property type is `CustomerPreferences`.
 
 Smallest correction: Add `[JsonSerializable(typeof(CustomerPreferences))]` to the context, and keep the default or `Metadata` generation mode. See [JSON columns](features/json-columns.md#trimming-and-nativeaot).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ112
+
+Positional InquiryWhere criteria bind parameters of the same type. Default: warning, enabled.
+
+Trigger: Two or more criteria of one method bind by position to parameters of the same type. Swapping those parameters in the declaration still compiles and swaps the filters. A `Between` criterion counts once.
+
+Failing shape: `[InquiryWhere("Category")] [InquiryWhere("Name")]` on `FindAsync(string category, string name, ...)`.
+
+Smallest correction: Set `Parameter = nameof(...)` on each value criterion. The SQL does not change. See [migrate a positional method](features/query-composition.md#migrate-a-positional-method).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

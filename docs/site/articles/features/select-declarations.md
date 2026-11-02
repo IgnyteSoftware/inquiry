@@ -84,7 +84,8 @@ public partial Task<IReadOnlyList<Product>> SearchAsync(
 Binding remains positional. The first criterion consumes categoryId, the next minimumPrice, and the
 last namePattern. nameof protects mapped field names, not parameter binding. Between consumes two
 parameters, IN consumes a collection, and IS NULL consumes none. Do not reorder criteria independently
-of their parameters. Explicit parameter binding is separate work, not a feature of this convention.
+of their parameters. To bind each criterion to a parameter by name instead, set `Parameter = nameof(...)`;
+see [bind criteria by name](query-composition.md#bind-criteria-by-name).
 
 ## All, unassigned, or one category
 
