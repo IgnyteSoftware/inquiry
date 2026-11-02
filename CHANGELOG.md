@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-preview.13] - 2026-11-02
+
 ### Added
 
 - `[InquiryInclude(nameof(...))]` limits an `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]` method to the relations it names. Apply it once per relation. The method's command then carries only the parent `SELECT` and the named relations' `SELECT`s, and adding another relation to the entity does not change it. Methods without the attribute still load every relation. A name that is not a relation on the entity, a relation whose type is not an `[InquiryTable]` entity, a name given twice, or the attribute on a method that is not an eager method reports the new build error `INQ107`, which names the property.
@@ -190,7 +192,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.13...HEAD
+[1.0.0-preview.13]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...v1.0.0-preview.13
 [1.0.0-preview.12]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...v1.0.0-preview.12
 [1.0.0-preview.11]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...v1.0.0-preview.11
 [1.0.0-preview.10]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.9...v1.0.0-preview.10
