@@ -1341,3 +1341,27 @@ Failing shape: `[InquirySelectOneByKeyEager] [InquiryInclude(nameof(Order.Custom
 Smallest correction: Name the navigation property, such as `nameof(Order.Customer)`, once per method, and only on an eager method. Remove the attribute to load every relation. See [eager loading](features/eager-loading.md#load-only-some-relations).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ108
+
+JSON serializer context type is invalid. Default: error, enabled.
+
+Trigger: `[InquiryJson(Context = typeof(X))]` or `[assembly: InquiryJsonContext(typeof(X))]` names a type that is not a non-abstract, non-generic class deriving from `System.Text.Json.Serialization.JsonSerializerContext`, or that generated code cannot access. Generated code reads the context's static `Default` property, so a context without one also reports it. A `partial` context in your project passes, because the System.Text.Json generator adds `Default`. `Context = null` also reports it.
+
+Failing shape: `[InquiryJson(Context = typeof(CustomerPreferences))]`, which names the value type instead of the context.
+
+Smallest correction: Name a source-generated context, such as `internal partial class AppJsonContext : JsonSerializerContext`. See [JSON columns](features/json-columns.md#trimming-and-nativeaot).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ110
+
+JSON column type is missing from the serializer context. Default: error, enabled.
+
+Trigger: An `[InquiryJson]` property uses a serializer context that has no `[JsonSerializable(typeof(T))]` for the property type `T`, or that limits `T` to `JsonSourceGenerationMode.Serialization`. Inquiry needs the metadata to read the value back, and it does not fall back to reflection. For a nullable value type `S?`, `T` is `S`.
+
+Failing shape: The context declares `[JsonSerializable(typeof(List<CustomerPreferences>))]`, but the property type is `CustomerPreferences`.
+
+Smallest correction: Add `[JsonSerializable(typeof(CustomerPreferences))]` to the context, and keep the default or `Metadata` generation mode. See [JSON columns](features/json-columns.md#trimming-and-nativeaot).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

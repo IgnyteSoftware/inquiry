@@ -68,7 +68,8 @@ public sealed partial class AnalyzerReleaseCatalogTests
             .ToArray();
         Assert.DoesNotContain(active, static id => _reservedIds.Contains(id, StringComparer.Ordinal));
 
-        var expectedActive = Enumerable.Range(1, 107)
+        // INQ109 belongs to a change on another open branch.
+        var expectedActive = Enumerable.Range(1, 108).Append(110)
             .Select(static value => $"INQ{value:000}")
             .Except(_reservedIds, StringComparer.Ordinal)
             .OrderBy(static id => id, StringComparer.Ordinal)

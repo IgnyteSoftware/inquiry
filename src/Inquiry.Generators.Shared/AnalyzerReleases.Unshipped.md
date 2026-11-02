@@ -107,3 +107,5 @@ INQ104 | Inquiry | Error | Relationship key columns store values differently
 INQ105 | Inquiry | Error | InquiryManyToMany junction foreign key contradicts its declared target
 INQ106 | Inquiry | Error | Result type maps two properties to the same column name
 INQ107 | Inquiry | Error | InquiryInclude names an invalid relation
+INQ108 | Inquiry | Error | JSON serializer context type is invalid
+INQ110 | Inquiry | Error | JSON column type is missing from the serializer context

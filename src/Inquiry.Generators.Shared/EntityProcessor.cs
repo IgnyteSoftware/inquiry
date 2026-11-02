@@ -5,6 +5,7 @@ using Inquiry.Generators.Diagnostics;
 using Inquiry.Generators.Infrastructure;
 using Inquiry.Generators.Models;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
@@ -1096,13 +1097,160 @@ internal static class EntityProcessor
             };
         }
 
-        if (GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute") is not null)
+        var jsonAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryJsonAttribute");
+        if (jsonAttribute is not null)
         {
+            // A per-property Context overrides the assembly default, including an explicit null.
+            var (hasContext, contextType) = jsonAttribute.NamedArguments.Any(static argument => argument.Key == "Context")
+                ? (true, GeneratorHelpers.GetNamedType(jsonAttribute, "Context"))
+                : GetAssemblyJsonContext(compilation);
+            if (hasContext)
+            {
+                var contextLocation = GetNamedArgumentSourceLocation(jsonAttribute, "Context") ?? property.Locations.FirstOrDefault();
+                return ResolveJsonContextConverter(property, contextType, contextLocation, typeData, entitySymbol, compilation, diagnostics);
+            }
+
             return new ConverterData(
                 "global::Inquiry.Converters.InquiryJsonConverter<" + typeData.NonNullableDisplayName + ">",
                 typeData.NonNullableDisplayName,
                 "string",
                 SpecialType.System_String);
+        }
+
+        return null;
+    }
+
+    private static (bool Found, INamedTypeSymbol? ContextType) GetAssemblyJsonContext(Compilation compilation)
+    {
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() == KnownSymbols.EntityAttributeNamespace + ".InquiryJsonContextAttribute")
+            {
+                return (true, attribute.ConstructorArguments.Length == 1 ? attribute.ConstructorArguments[0].Value as INamedTypeSymbol : null);
+            }
+        }
+
+        return (false, null);
+    }
+
+    /// <summary>
+    /// Selects <c>InquiryJsonContextConverter&lt;TContext, T&gt;</c> for an <c>[InquiryJson]</c> property
+    /// whose serializer context is set. The Inquiry generator cannot see the System.Text.Json generator's
+    /// output, so it checks the context's <c>[JsonSerializable]</c> declarations instead.
+    /// </summary>
+    private static ConverterData? ResolveJsonContextConverter(
+        IPropertySymbol property,
+        INamedTypeSymbol? contextType,
+        Location? contextLocation,
+        TypeData typeData,
+        INamedTypeSymbol entitySymbol,
+        Compilation compilation,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        var contextBase = compilation.GetTypeByMetadataName("System.Text.Json.Serialization.JsonSerializerContext");
+        if (contextType is null || contextBase is null || contextType.TypeKind != TypeKind.Class ||
+            contextType.IsAbstract || contextType.IsGenericType || !DerivesFrom(contextType, contextBase) ||
+            !compilation.IsSymbolAccessibleWithin(contextType, entitySymbol.ContainingAssembly) ||
+            !HasDefaultInstance(contextType, entitySymbol, compilation))
+        {
+            diagnostics.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.JsonContextInvalid,
+                contextLocation,
+                contextType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) ?? "null",
+                entitySymbol.Name,
+                property.Name));
+            return null;
+        }
+
+        var modelType = UnwrapNullable(property.Type);
+        if (!HasJsonMetadata(contextType, modelType))
+        {
+            diagnostics.Add(DiagnosticData.Create(
+                InquiryDiagnosticDescriptors.JsonContextTypeMissing,
+                property.Locations.FirstOrDefault(),
+                entitySymbol.Name,
+                property.Name,
+                modelType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                contextType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+            return null;
+        }
+
+        var contextDisplay = contextType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        return new ConverterData(
+            "global::Inquiry.Converters.InquiryJsonContextConverter<" + contextDisplay + ", " + typeData.NonNullableDisplayName + ">",
+            typeData.NonNullableDisplayName,
+            "string",
+            SpecialType.System_String)
+        {
+            JsonContextDisplay = contextDisplay,
+        };
+    }
+
+    // Generated code reads TContext.Default. The System.Text.Json generator adds it to a partial source
+    // context, but this generator cannot see that output, so a partial declaration is accepted instead.
+    private static bool HasDefaultInstance(INamedTypeSymbol contextType, INamedTypeSymbol entitySymbol, Compilation compilation)
+        => contextType.GetMembers("Default").OfType<IPropertySymbol>().Any(property =>
+               property.IsStatic && SymbolEqualityComparer.Default.Equals(property.Type, contextType) &&
+               compilation.IsSymbolAccessibleWithin(property, entitySymbol.ContainingAssembly)) ||
+           contextType.DeclaringSyntaxReferences.Any(static reference =>
+               reference.GetSyntax() is ClassDeclarationSyntax declaration &&
+               declaration.Modifiers.Any(static modifier => modifier.IsKind(SyntaxKind.PartialKeyword)));
+
+    private static bool DerivesFrom(INamedTypeSymbol type, INamedTypeSymbol baseType)
+    {
+        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, baseType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Serialization-only mode (JsonSourceGenerationMode.Serialization = 2) emits no metadata that
+    // deserialization can use, so reads would fail at run time.
+    private static bool HasJsonMetadata(INamedTypeSymbol contextType, ITypeSymbol modelType)
+    {
+        const int serializationOnly = 2;
+        var contextMode = 0;
+        foreach (var attribute in contextType.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSourceGenerationOptionsAttribute")
+            {
+                contextMode = GetNamedInt(attribute, "GenerationMode") ?? 0;
+            }
+        }
+
+        foreach (var attribute in contextType.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != "System.Text.Json.Serialization.JsonSerializableAttribute" ||
+                attribute.ConstructorArguments.Length != 1 ||
+                attribute.ConstructorArguments[0].Value is not ITypeSymbol declared ||
+                !SymbolEqualityComparer.Default.Equals(declared, modelType))
+            {
+                continue;
+            }
+
+            var mode = GetNamedInt(attribute, "GenerationMode") ?? 0;
+            if ((mode == 0 ? contextMode : mode) != serializationOnly)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int? GetNamedInt(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Value is int value)
+            {
+                return value;
+            }
         }
 
         return null;

@@ -19,4 +19,10 @@ internal sealed record ConverterData(
 
     /// <summary>Whether the selected converter contract is implemented explicitly.</summary>
     public bool RequiresInterfaceDispatch { get; init; }
+
+    /// <summary>
+    /// The fully qualified JSON serializer context for an <c>[InquiryJson]</c> column that uses one. The
+    /// static converter receives the context's generated <c>Default</c> instance on each call.
+    /// </summary>
+    public string? JsonContextDisplay { get; init; }
 }

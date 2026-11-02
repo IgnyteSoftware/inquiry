@@ -12,6 +12,8 @@
   href: architecture.md
 - name: Runtime interface guarantees
   href: runtime-contract.md
+- name: NativeAOT compatibility
+  href: aot-compatibility.md
 - name: Security
   href: security.md
 - name: Features
