@@ -1649,7 +1649,7 @@ internal static class StoreOperationEmitter
         var state = new GeneratedCommandState(method.Parameters);
 
         var returnsRows = method.ProcedureReturn is ProcedureReturnKind.AsyncEnumerableOfEntity
-            or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfMultipleResultSets;
+            or ProcedureReturnKind.TaskOfEntity or ProcedureReturnKind.TaskOfEntityList or ProcedureReturnKind.TaskOfMultipleResultSets;
         var resultSetCount = isMultiResult ? method.ProcedureResultSetTypeFqns.Count : 1;
         var refCursorCall = returnsRows
             ? sqlBuilder.BuildProcedureReaderCall(method.ProcedureName!, procParams.Select(static p => p.Name).ToList(), resultSetCount)
@@ -1759,6 +1759,9 @@ internal static class StoreOperationEmitter
                     break;
                 case ProcedureReturnKind.TaskOfEntity:
                     source.AppendLine($"        return await Inquiry.QuerySingleOrDefaultAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
+                    break;
+                case ProcedureReturnKind.TaskOfEntityList:
+                    source.AppendLine($"        return await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}).ConfigureAwait(false);");
                     break;
                 case ProcedureReturnKind.TaskOfInt:
                     source.AppendLine($"        return await Inquiry.ExecuteAsync(_cmd, {cancellation}).ConfigureAwait(false);");
@@ -3094,6 +3097,7 @@ internal static class StoreOperationEmitter
                     : "The selected OUTPUT or INOUT value, converted to the declared type; SQL NULL becomes default(T).",
                 ProcedureReturnKind.TaskOfInt => "The provider's affected-row count, which may be -1; not RETURN status, OUTPUT, or a SELECT result.",
                 ProcedureReturnKind.TaskOfEntity => "The sole result entity, or null when empty. Multiple rows are rejected.",
+                ProcedureReturnKind.TaskOfEntityList => "Buffered procedure result rows; an empty result becomes an empty list.",
                 ProcedureReturnKind.TaskOfMultipleResultSets => "Buffered result sets in tuple order; an empty set becomes an empty list.",
                 _ => "A deferred stream of procedure result rows.",
             },

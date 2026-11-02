@@ -21,6 +21,9 @@ internal enum ProcedureReturnKind
     /// sets from a stored procedure via <c>QueryMultipleAsync</c> and <c>InquiryGridReader</c>.
     /// </summary>
     TaskOfMultipleResultSets,
+
+    /// <summary><c>Task&lt;IReadOnlyList&lt;TEntity&gt;&gt;</c>: one result set, buffered like an ordinary select.</summary>
+    TaskOfEntityList,
 }
 
 /// <summary>

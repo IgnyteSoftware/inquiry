@@ -8,7 +8,10 @@ Call a stored procedure from a partial store method by attaching `[InquiryStored
 public partial class CustomerStore : InquiryStore<Customer>
 {
     [InquiryStoredProcedure("usp_GetCustomersByCountry")]
-    public partial IAsyncEnumerable<Customer> GetByCountryAsync(string country, CancellationToken ct = default);
+    public partial Task<IReadOnlyList<Customer>> GetByCountryAsync(string country, CancellationToken ct = default);
+
+    [InquiryStoredProcedure("usp_GetCustomersByRegion")]
+    public partial IAsyncEnumerable<Customer> StreamByRegionAsync(string region, CancellationToken ct = default);
 
     [InquiryStoredProcedure("usp_GetCustomerByID")]
     public partial Task<Customer?> GetByIDAsync(string id, CancellationToken ct = default);
@@ -22,6 +25,7 @@ public partial class CustomerStore : InquiryStore<Customer>
 
 | Return type | Pipeline call |
 |---|---|
+| `Task<IReadOnlyList<TEntity>>` | Buffered rows; empty list when the procedure returns none |
 | `IAsyncEnumerable<TEntity>` | Streaming rows |
 | `Task<TEntity?>` | Zero or one row; null when empty, exception on multiple rows |
 | `Task<int>` without a read-back option | Provider records-affected result; may be -1 |
@@ -29,9 +33,9 @@ public partial class CustomerStore : InquiryStore<Customer>
 | `Task<TScalar>` + `[InquiryParameter(IsInputOutput = true)]` | INOUT read-back (see below) |
 | `Task<(IReadOnlyList<A>, IReadOnlyList<B>, …)>` | Multiple typed result sets (see below) |
 
-A single buffered `Task<IReadOnlyList<TEntity>>` is not a supported procedure shape today. It reports
-`INQ005`. Stream the rows with `IAsyncEnumerable<TEntity>`, or use the tuple form for two or more
-result sets.
+`Task<IReadOnlyList<TEntity>>` reads every row of the procedure's result before the task completes,
+like an ordinary buffered select. The buffered list works with the Oracle cursor wrapper and with SQL
+Server TVP parameters. Use `IAsyncEnumerable<TEntity>` to process large results one row at a time.
 
 SELECT results, affected rows, RETURN status, and OUTPUT values are different channels. For example,
 SQL Server's NOCOUNT behavior can make the affected-row result -1. Neither a positive count nor a
@@ -158,9 +162,10 @@ Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Serve
   and the message lists the procedure's result columns. The same rules apply to a procedure called
   through `IInquiry` into an `[InquiryAdHoc]` DTO, which matches property names.
 - **One channel per method.** A method returns rows, an affected-row count, or one scalar read-back
-  (OUTPUT, RETURN, or INOUT). Rows cannot combine with a read-back (`INQ051`).
-- **No buffered single list.** `Task<IReadOnlyList<TEntity>>` reports `INQ005`. A tuple needs at
-  least two result sets.
+  (OUTPUT, RETURN, or INOUT). Rows cannot combine with a read-back. For example, a
+  `Task<IReadOnlyList<TEntity>>` method with `OutputParameter`, `ReturnsValue` or an INOUT parameter
+  reports `INQ051`.
+- **Tuples.** A tuple needs at least two result sets. Use `Task<IReadOnlyList<TEntity>>` for one.
 - **Parameter names.** Database parameter names come from the C# names. No attribute overrides
   them. The Oracle result-set wrapper passes arguments by position.
 - **TVPs.** Table-valued parameters work on SQL Server only (`INQ086` elsewhere).
@@ -172,5 +177,4 @@ Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Serve
   A changed result schema shows up when rows are read.
 
 The [1.0 decision record](../../develop/api-contract-decisions.md#423-typed-procedure-results-and-parameters)
-describes the planned additions: buffered lists, DTO rows, combined results, and parameter-name
-overrides.
+describes the planned additions: DTO rows, combined results, and parameter-name overrides.
