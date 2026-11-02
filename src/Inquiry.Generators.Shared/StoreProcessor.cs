@@ -2809,6 +2809,17 @@ internal static class StoreProcessor
                     return false;
                 }
 
+                // The default load skips a relation to an unmapped type; an explicit request for one
+                // must fail instead of returning the navigation unpopulated.
+                if (!relationChildEntities.ContainsKey(includedName))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.IncludeInvalid, method.Location?.ToLocation(),
+                        method.Name, includedName,
+                        "the relation's type is not an [InquiryTable] entity, so it cannot be loaded"));
+                    return false;
+                }
+
                 if (!includedNames.Add(includedName))
                 {
                     context.ReportDiagnostic(Diagnostic.Create(

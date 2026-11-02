@@ -155,10 +155,21 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquirySelectAllEager]", "[InquiryInclude(nameof(Post.AuthorId))]", "AuthorId")]
     [InlineData("[InquirySelectAllEager]", "[InquiryInclude(nameof(Post.Tags))] [InquiryInclude(nameof(Post.Tags))]", "Tags")]
     [InlineData("[InquirySelectAll]", "[InquiryInclude(nameof(Post.Tags))]", "Tags")]
+    [InlineData("[InquirySelectAllEager]", "[InquiryInclude(nameof(Post.Draft))]", "Draft")]
     public void Include_InvalidSelectionReportsINQ107NamingTheProperty(string operation, string include, string named)
     {
         var returnType = operation == "[InquirySelectAll]" ? "Task<IReadOnlyList<Post>>" : "IAsyncEnumerable<Post>";
-        var result = RunGenerator(IncludePostSource(string.Empty, $"""
+        // Draft is a relation to a type without [InquiryTable], which the default load skips.
+        const string unmappedRelation = """
+                [InquiryRelation(nameof(UnmappedDraft.PostId))]
+                public IReadOnlyList<UnmappedDraft> Draft { get; set; } = new List<UnmappedDraft>();
+            }
+
+            public sealed class UnmappedDraft
+            {
+                public int PostId { get; set; }
+            """;
+        var result = RunGenerator(IncludePostSource(unmappedRelation, $"""
                 {operation}
                 {include}
                 public partial {returnType} BadAsync(CancellationToken ct = default);

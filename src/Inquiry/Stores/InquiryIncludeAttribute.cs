@@ -7,8 +7,8 @@ namespace Inquiry.Stores;
 /// </summary>
 /// <remarks>
 /// Loading is one level deep. Each name must match a relation navigation on the store's entity exactly,
-/// and may appear only once; otherwise the build fails with INQ107. Use <c>nameof</c> so a rename
-/// stays in step. Navigations that are not named stay at their initialized value.
+/// its type must be an <c>[InquiryTable]</c> entity, and it may appear only once; otherwise the build
+/// fails with INQ107. Use <c>nameof</c> so a rename stays in step. Navigations that are not named stay at their initialized value.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 public sealed class InquiryIncludeAttribute : Attribute

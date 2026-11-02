@@ -74,9 +74,9 @@ public partial class OrderStore : InquiryStore<Order>
 }
 ```
 
-The command for a selective method carries the parent `SELECT` and one `SELECT` for each named relation. Relations that the method does not name are not queried. Their properties keep the value the entity's constructor gives them, such as `null` or an empty list. If you add a relation to the entity later, the SQL, result graph and command count of a selective method stay the same. Methods without `[InquiryInclude]` load the new relation too.
+The command for a selective method carries the parent `SELECT` and the `SELECT`s for each named relation: one for a reference or collection, and, in `[InquirySelectAllEager]`, two for a many-to-many relation (the related rows and the junction keys). Relations that the method does not name are not queried. Their properties keep the value the entity's constructor gives them, such as `null` or an empty list. If you add a relation to the entity later, the SQL, result graph and command count of a selective method stay the same. Methods without `[InquiryInclude]` load the new relation too.
 
-The order of the attributes does not matter. Relations are read in the order the entity declares them. The build fails with **`INQ107`** when a name is not a relation on the entity, when the method names a relation twice, or when the attribute is on a method that is not an eager method.
+The order of the attributes does not matter. Relations are read in the order the entity declares them. The build fails with **`INQ107`** when a name is not a relation on the entity, when the relation's type is not an `[InquiryTable]` entity, when the method names a relation twice, or when the attribute is on a method that is not an eager method.
 
 Selection is one level deep. Nested paths such as `Order.OrderDetails[].Product` are not supported.
 

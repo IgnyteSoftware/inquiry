@@ -1334,7 +1334,7 @@ Smallest correction: Rename one of the properties, or give a projection property
 
 InquiryInclude names an invalid relation. Default: error, enabled.
 
-Trigger: An `[InquiryInclude]` name is not an `[InquiryRelation]` or `[InquiryManyToMany]` property on the store's entity, the method names the same relation twice, or the attribute is on a method that is not `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]`. The message names the property.
+Trigger: An `[InquiryInclude]` name is not an `[InquiryRelation]` or `[InquiryManyToMany]` property on the store's entity, the named relation's type is not an `[InquiryTable]` entity, the method names the same relation twice, or the attribute is on a method that is not `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]`. The message names the property.
 
 Failing shape: `[InquirySelectOneByKeyEager] [InquiryInclude(nameof(Order.CustomerID))]`, where `CustomerID` is the foreign-key column and `Customer` is the relation.
 

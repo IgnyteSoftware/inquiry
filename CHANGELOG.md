@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `[InquiryInclude(nameof(...))]` limits an `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]` method to the relations it names. Apply it once per relation. The method's command then carries only the parent `SELECT` and the named relations' `SELECT`s, and adding another relation to the entity does not change it. Methods without the attribute still load every relation. A name that is not a relation on the entity, a name given twice, or the attribute on a method that is not an eager method reports the new build error `INQ107`, which names the property.
+- `[InquiryInclude(nameof(...))]` limits an `[InquirySelectAllEager]` or `[InquirySelectOneByKeyEager]` method to the relations it names. Apply it once per relation. The method's command then carries only the parent `SELECT` and the named relations' `SELECT`s, and adding another relation to the entity does not change it. Methods without the attribute still load every relation. A name that is not a relation on the entity, a relation whose type is not an `[InquiryTable]` entity, a name given twice, or the attribute on a method that is not an eager method reports the new build error `INQ107`, which names the property.
 - `[InquirySelectAllEager]` methods can return `Task<IReadOnlyList<TEntity>>`. The list form sends the same single command as the `IAsyncEnumerable<TEntity>` form, with the same filters and the same graph, and closes the reader before the task completes. The streaming form is unchanged. The sample `CatalogService` now uses the list form.
 
 ### Changed
