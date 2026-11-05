@@ -92,7 +92,7 @@ Use separate principals for deployment and for the application.
 
 `REFERENCES` alone is not enough. When the application principal has no `EXECUTE` permission on the type, SQL Server rejects the call with error 229, "The EXECUTE permission was denied on the object". The sample creates an application login with `SELECT` and `INSERT` on the table. Its first call fails with error 229. After `GRANT EXECUTE, REFERENCES ON TYPE::…`, the same call succeeds. The sample deploys as a server administrator, so it does not prove the minimum deployment permissions.
 
-A principal without `VIEW DEFINITION` gets `metadata-invisible` from the validation query instead of a false `missing`.
+When a type is not visible to the principal and it has no `VIEW DEFINITION` on the schema or database, the validation query reports `metadata-invisible` instead of claiming the type is missing. Run validation as the deployment principal.
 
 ## Failure recovery
 
