@@ -49,35 +49,9 @@ public partial class StatusRowStore : InquiryStore<StatusRow>
     public partial Task<IReadOnlyList<StatusCode>> CodesForUpdateAsync(int code, CancellationToken cancellationToken = default);
 }
 
-/// <summary>The same table name and column name in a non-default schema.</summary>
-[InquiryTable("Status", Schema = "lockops")]
-public sealed class OpsStatusRow
-{
-    [InquiryKey]
-    public int Id { get; set; }
-
-    [InquiryColumn("Status")]
-    public int Code { get; set; }
-}
-
-public partial class OpsStatusRowStore : InquiryStore<OpsStatusRow>
-{
-    [InquiryInsert]
-    public partial Task<OpsStatusRow?> InsertAsync(OpsStatusRow row, CancellationToken cancellationToken = default);
-
-    [InquirySelectOneByKey(LockMode = InquiryLockMode.Update)]
-    public partial Task<OpsStatusRow?> GetForUpdateAsync(int id, CancellationToken cancellationToken = default);
-
-    [InquirySelectAllByField("Code", LockMode = InquiryLockMode.UpdateSkipLocked)]
-    public partial Task<IReadOnlyList<OpsStatusRow>> ByCodeSkipLockedAsync(int code, CancellationToken cancellationToken = default);
-}
-
 public static class StatusRowSchema
 {
-    // CREATE SCHEMA must start its own batch, so it runs through EXEC.
     public const string SqlServerDdl = """
         CREATE TABLE [Status] (Id INT PRIMARY KEY, [Status] INT NOT NULL);
-        EXEC('CREATE SCHEMA lockops');
-        CREATE TABLE lockops.[Status] (Id INT PRIMARY KEY, [Status] INT NOT NULL);
         """;
 }

@@ -555,6 +555,61 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void LockMode_SqlServerLockedMethodsKeepTheirFiltersAndDoNotLeakTheHint()
+    {
+        var result = RunGenerator("""
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Doc")]
+            public sealed class Doc
+            {
+                [InquiryKey]
+                public int Id { get; set; }
+
+                [InquiryColumn("IsPublished"), InquiryGlobalFilter(Name = "PublishGate")]
+                public bool IsPublished { get; set; }
+
+                [InquiryColumn("IsDeleted"), InquirySoftDelete]
+                public bool IsDeleted { get; set; }
+            }
+
+            public partial class DocStore : Inquiry.Stores.InquiryStore<Demo.Doc>
+            {
+                [InquirySelectAll]
+                public partial Task<IReadOnlyList<Doc>> AllAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAll(IncludeDeleted = true)]
+                public partial Task<IReadOnlyList<Doc>> AllIncludingDeletedAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAll(LockMode = InquiryLockMode.Update)]
+                public partial Task<IReadOnlyList<Doc>> LockedAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAll(IncludeDeleted = true, LockMode = InquiryLockMode.Update)]
+                public partial Task<IReadOnlyList<Doc>> LockedIncludingDeletedAsync(CancellationToken cancellationToken = default);
+
+                [InquirySelectAll(LockMode = InquiryLockMode.Share)]
+                [InquiryIgnoreFilter("PublishGate")]
+                public partial Task<IReadOnlyList<Doc>> LockedUnpublishedAsync(CancellationToken cancellationToken = default);
+            }
+            """, dialect: "SqlServer");
+        AssertNoErrors(result);
+        var text = GetGeneratedStore(result, "DocStore");
+
+        Assert.Equal("SELECT [Id], [IsPublished], [IsDeleted] FROM [Doc] WHERE [IsDeleted] = 0 AND [IsPublished] = 1", GeneratedSql(text, "_sqlSelectAll"));
+        Assert.Equal("SELECT [Id], [IsPublished], [IsDeleted] FROM [Doc] WHERE [IsPublished] = 1", GeneratedSql(text, "_sqlSelectAll_AllIncludingDeletedAsync"));
+        Assert.Equal("SELECT [Id], [IsPublished], [IsDeleted] FROM [Doc] WITH (UPDLOCK, ROWLOCK) WHERE [IsDeleted] = 0 AND [IsPublished] = 1", GeneratedSql(text, "_sqlSelectAll_LockedAsync"));
+        Assert.Equal("SELECT [Id], [IsPublished], [IsDeleted] FROM [Doc] WITH (UPDLOCK, ROWLOCK) WHERE [IsPublished] = 1", GeneratedSql(text, "_sqlSelectAll_LockedIncludingDeletedAsync"));
+        Assert.Equal("SELECT [Id], [IsPublished], [IsDeleted] FROM [Doc] WITH (HOLDLOCK, ROWLOCK) WHERE [IsDeleted] = 0", GeneratedSql(text, "_sqlSelectAll_LockedUnpublishedAsync"));
+    }
+
+    [Fact]
     public void LockMode_SqlServerApplyLockClause_RejectsSqlWithoutTheStructuralHint()
     {
         var builderType = typeof(global::Inquiry.SqlServer.Analyzer.InquirySqlServerGenerator).Assembly
