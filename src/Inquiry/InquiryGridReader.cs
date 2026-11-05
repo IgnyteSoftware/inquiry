@@ -36,6 +36,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private bool _hasResultSet;
     private bool _disposed;
     private bool _faulted;
+    private Exception? _readFailure;
     private bool _streaming;
 
     internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease,
@@ -482,11 +483,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         try
         { _lease?.Dispose(); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+
+        // Generated stores dispose the grid with await using, so a cleanup failure would otherwise
+        // replace the read failure. Keep the read failure first, as the single-command paths do.
+        if (_readFailure is not null)
+        {
+            InquiryCleanup.ThrowIfCleanupFailed(_readFailure, exceptions);
+            return;
+        }
+
         InquiryCleanup.ThrowIfAny(exceptions);
     }
 
     private async ValueTask FailAsync(Exception exception, CancellationToken cancellationToken)
     {
+        _readFailure ??= exception;
+
         // Telemetry and callback failures must not hide the read failure or skip the failed callbacks.
         List<Exception>? secondary = null;
         try
@@ -502,8 +514,10 @@ public sealed class InquiryGridReader : IAsyncDisposable
         if (secondary is not null)
         {
             secondary.Insert(0, exception);
-            throw new AggregateException(
+            var aggregate = new AggregateException(
                 "An Inquiry grid read failed and its failure telemetry or command interceptor also failed.", secondary);
+            _readFailure = aggregate;
+            throw aggregate;
         }
     }
 
