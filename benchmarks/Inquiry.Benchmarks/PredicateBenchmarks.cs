@@ -9,6 +9,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -119,9 +120,9 @@ public class PredicateBenchmarks
     public async Task<int> Search_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .Where(p => p.UnitPrice >= MinPrice && Sql.Like(p.ProductName, NamePattern))
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .Where(p => p.UnitPrice >= MinPrice && Sql.Like(p.ProductName, NamePattern)));
         return list.Count;
     }
 
@@ -203,9 +204,9 @@ public class PredicateBenchmarks
     public async Task<int> InList_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .Where(p => _categoryIds.Contains(p.CategoryID!.Value))
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .Where(p => _categoryIds.Contains(p.CategoryID!.Value)));
         return list.Count;
     }
 

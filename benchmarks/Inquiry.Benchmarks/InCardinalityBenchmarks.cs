@@ -8,6 +8,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -120,9 +121,9 @@ public class InCardinalityBenchmarks
     public async Task<int> InList_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .Where(p => _ids.Contains(p.CategoryID!.Value))
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .Where(p => _ids.Contains(p.CategoryID!.Value)));
         return list.Count;
     }
 

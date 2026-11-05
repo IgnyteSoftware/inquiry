@@ -97,7 +97,9 @@ operations:
 
 EF Core, Dapper, and ADO.NET have no first-class upsert; the benchmark uses a hand-written
 `INSERT … ON CONFLICT DO UPDATE` for each so the comparison is on wire SQL, not on
-re-implementing the feature in client code.
+re-implementing the feature in client code. linq2db uses its own `InsertOrUpdateAsync`, which sends the
+same single `INSERT … ON CONFLICT DO UPDATE` statement. Its `InsertOrReplaceAsync` rejects the IDENTITY
+keys of `Product` and `Shipper`.
 
 Every Update leg, in these classes and in each provider's `ShipperBenchmarks`, alternates between
 two payloads that change every column it sets. With constant values, EF Core change tracking finds

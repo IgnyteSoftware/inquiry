@@ -11,6 +11,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -87,7 +88,7 @@ public class ColdStartBenchmarks
     public async Task<L2Shipper?> ColdPointRead_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Shipper>().FirstOrDefaultAsync(s => s.ShipperID == 1);
+        return await L2Async.FirstOrDefaultAsync(dc.GetTable<L2Shipper>(), s => s.ShipperID == 1);
     }
 
     [BenchmarkCategory("ColdPointRead"), Benchmark]

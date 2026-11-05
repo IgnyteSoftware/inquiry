@@ -9,6 +9,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -125,11 +126,11 @@ public class PaginationBenchmarks
     public async Task<int> OffsetPage_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .OrderBy(p => p.ProductID)
-            .Skip(_offset)
-            .Take(PageSize)
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .OrderBy(p => p.ProductID)
+                .Skip(_offset)
+                .Take(PageSize));
         return list.Count;
     }
 
@@ -196,11 +197,11 @@ public class PaginationBenchmarks
     public async Task<int> KeysetPage_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .Where(p => p.ProductID > _after)
-            .OrderBy(p => p.ProductID)
-            .Take(PageSize + 1)
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .Where(p => p.ProductID > _after)
+                .OrderBy(p => p.ProductID)
+                .Take(PageSize + 1));
         return list.Count;
     }
 

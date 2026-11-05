@@ -10,6 +10,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -111,7 +112,7 @@ public class ProductCrudBenchmarks
     public async Task<int> SelectAll_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>().ToListAsync(CancellationToken.None);
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Product>(), CancellationToken.None);
         return list.Count;
     }
 
@@ -167,7 +168,7 @@ public class ProductCrudBenchmarks
     public async Task<L2Product?> SelectByKey_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().FirstOrDefaultAsync(p => p.ProductID == TargetProductId, CancellationToken.None);
+        return await L2Async.FirstOrDefaultAsync(dc.GetTable<L2Product>(), p => p.ProductID == TargetProductId, CancellationToken.None);
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
@@ -233,7 +234,7 @@ public class ProductCrudBenchmarks
     public async Task<int> SelectByField_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>().Where(p => p.CategoryID == TargetCategoryId).ToListAsync(CancellationToken.None);
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Product>().Where(p => p.CategoryID == TargetCategoryId), CancellationToken.None);
         return list.Count;
     }
 
@@ -535,16 +536,34 @@ public class ProductCrudBenchmarks
     [BenchmarkCategory("Upsert"), Benchmark]
     public async Task<int> Upsert_LinqToDb()
     {
+        // InsertOrReplace rejects identity keys, so use InsertOrUpdate (one INSERT ... ON CONFLICT statement).
+        // The values are locals so linq2db sends them as parameters, like the other legs.
+        var id = TargetProductId;
+        var name = "Upserted Product";
+        var category = TargetCategoryId;
+        var price = 29.99m;
+        short stock = 3;
+        var discontinued = false;
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.InsertOrReplaceAsync(new L2Product
-        {
-            ProductID = TargetProductId,
-            ProductName = "Upserted Product",
-            CategoryID = TargetCategoryId,
-            UnitPrice = 29.99m,
-            UnitsInStock = 3,
-            Discontinued = false,
-        }, token: CancellationToken.None);
+        return await dc.GetTable<L2Product>().InsertOrUpdateAsync(
+            () => new L2Product
+            {
+                ProductID = id,
+                ProductName = name,
+                CategoryID = category,
+                UnitPrice = price,
+                UnitsInStock = stock,
+                Discontinued = discontinued,
+            },
+            row => new L2Product
+            {
+                ProductName = name,
+                CategoryID = category,
+                UnitPrice = price,
+                UnitsInStock = stock,
+                Discontinued = discontinued,
+            },
+            CancellationToken.None);
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

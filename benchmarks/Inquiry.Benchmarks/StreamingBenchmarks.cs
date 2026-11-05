@@ -9,6 +9,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -91,7 +92,7 @@ public class StreamingBenchmarks
     public async Task<int> BufferedRead_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>().ToListAsync();
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Product>());
         return list.Count;
     }
 
@@ -146,7 +147,7 @@ public class StreamingBenchmarks
     {
         await using var dc = new DataConnection(_linqToDbOptions);
         var count = 0;
-        await foreach (var _ in dc.GetTable<L2Product>().AsAsyncEnumerable())
+        await foreach (var _ in L2Async.AsAsyncEnumerable(dc.GetTable<L2Product>()))
         {
             count++;
         }
