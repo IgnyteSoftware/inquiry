@@ -311,12 +311,8 @@ public sealed class InquiryGridReader : IAsyncDisposable
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return list;
         }
-        catch (OperationCanceledException exception)
-            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
         {
-            // Generated paged results read through here (#403). Keep the caller's token, as the
-            // single-command list path does.
-            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
             await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
             throw normalized;
         }
@@ -345,10 +341,8 @@ public sealed class InquiryGridReader : IAsyncDisposable
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return result!;
         }
-        catch (OperationCanceledException exception)
-            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
         {
-            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
             await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
             throw normalized;
         }
@@ -358,6 +352,20 @@ public sealed class InquiryGridReader : IAsyncDisposable
             throw;
         }
     }
+
+    // Generated paged results read their page and COUNT here (#403). Before, the COUNT ran through the
+    // scalar path, so cancellation must surface the same way: as a cancellation with the caller's token,
+    // whether the provider reports its own token or a native error. Like the batch boundary, this checks
+    // the token when the exception is caught, so it adds no work per row.
+    private static OperationCanceledException? NormalizeCancellation(Exception exception, CancellationToken cancellationToken)
+        => exception switch
+        {
+            OperationCanceledException canceled when InquiryCancellation.RequiresCallerToken(canceled, cancellationToken)
+                => InquiryCancellation.AssociateWithCallerToken(canceled, cancellationToken),
+            not OperationCanceledException when cancellationToken.IsCancellationRequested
+                => InquiryCancellation.NormalizeNativeError(exception, cancellationToken),
+            _ => null,
+        };
 
     private void EnsureResultSet()
     {

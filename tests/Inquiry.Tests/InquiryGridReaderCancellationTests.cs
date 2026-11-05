@@ -6,8 +6,9 @@ namespace Inquiry.Tests;
 
 /// <summary>
 /// Generated paged results read their page and total through <see cref="InquiryGridReader"/> (#403). A
-/// provider can report cancellation with its own token. The list and scalar reads must rethrow it with the
-/// caller's token, as the single-command list path does.
+/// provider can report cancellation with its own token, or with a native error such as SqlClient's
+/// "operation cancelled by user". The list and scalar reads must rethrow either one as a cancellation with
+/// the caller's token, as the single-command list and scalar paths do.
 /// </summary>
 public sealed class InquiryGridReaderCancellationTests
 {
@@ -39,8 +40,26 @@ public sealed class InquiryGridReaderCancellationTests
         Assert.Equal(caller.Token, exception.CancellationToken);
     }
 
-    // The provider sees the caller cancel, then throws with a token of its own.
-    private static async Task<InquiryGridReader> CreateGridAsync(CancellationTokenSource caller, bool failOnRead, bool failOnNextResult)
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task NativeErrorAfterCancellationIsRethrownAsCallerCancellation(bool scalar, bool failOnNextResult)
+    {
+        using var caller = new CancellationTokenSource();
+        var native = new InvalidOperationException("Operation cancelled by user.");
+        await using var grid = await CreateGridAsync(caller, failOnRead: !failOnNextResult, failOnNextResult, native);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => scalar ? grid.ReadScalarAsync<long>(caller.Token) : grid.ReadListAsync<Box, BoxMaterializer>(default, caller.Token));
+
+        Assert.Equal(caller.Token, exception.CancellationToken);
+        Assert.Same(native, exception.InnerException);
+    }
+
+    // The provider sees the caller cancel, then throws with a token of its own, or a native error.
+    private static async Task<InquiryGridReader> CreateGridAsync(CancellationTokenSource caller, bool failOnRead, bool failOnNextResult, Exception? failure = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(CancellationToken.None);
@@ -48,7 +67,7 @@ public sealed class InquiryGridReaderCancellationTests
         command.CommandText = "SELECT 1; SELECT 2;";
         var inner = await command.ExecuteReaderAsync(CancellationToken.None);
         await caller.CancelAsync();
-        var reader = new ForeignCancellationReader(inner, failOnRead, failOnNextResult);
+        var reader = new FailingReader(inner, failOnRead, failOnNextResult, failure);
         return new InquiryGridReader(reader, command, ownedConnection: connection, lease: null);
     }
 
@@ -62,7 +81,7 @@ public sealed class InquiryGridReaderCancellationTests
         public Box Materialize(DbDataReader reader) => new() { Value = reader.GetInt32(0) };
     }
 
-    private sealed class ForeignCancellationReader(DbDataReader inner, bool failOnRead, bool failOnNextResult) : DbDataReader
+    private sealed class FailingReader(DbDataReader inner, bool failOnRead, bool failOnNextResult, Exception? failure) : DbDataReader
     {
         private static readonly CancellationToken _foreignToken = new(canceled: true);
 
@@ -99,10 +118,12 @@ public sealed class InquiryGridReaderCancellationTests
         public override System.Collections.IEnumerator GetEnumerator() => ((System.Collections.IEnumerable)inner).GetEnumerator();
 
         public override Task<bool> ReadAsync(CancellationToken cancellationToken)
-            => failOnRead ? throw new OperationCanceledException(_foreignToken) : inner.ReadAsync(CancellationToken.None);
+            => failOnRead ? throw Failure() : inner.ReadAsync(CancellationToken.None);
 
         public override Task<bool> NextResultAsync(CancellationToken cancellationToken)
-            => failOnNextResult ? throw new OperationCanceledException(_foreignToken) : inner.NextResultAsync(CancellationToken.None);
+            => failOnNextResult ? throw Failure() : inner.NextResultAsync(CancellationToken.None);
+
+        private Exception Failure() => failure ?? new OperationCanceledException(_foreignToken);
 
         public override async ValueTask DisposeAsync()
         {
