@@ -61,12 +61,10 @@ public class CrossDialectReadBenchmarks
 
     private async Task SetupAsync()
     {
-        // Force-load the Northwind assembly before AddInquiry() so its generated IInquiryServiceRegistration
-        // (which registers the entity materializers used by the ad-hoc query path) is found by reflection.
-        _ = typeof(Shipper).Assembly;
-
         string ddl;
-        IServiceCollection services = new ServiceCollection().AddInquiry();
+        // AddInquiry() without assemblies scans nothing. Northwind's generated registration supplies the
+        // Shipper materializer that the ad-hoc query path resolves.
+        IServiceCollection services = new ServiceCollection().AddInquiry(typeof(Shipper).Assembly);
         var efBuilder = new DbContextOptionsBuilder<CrossDialectShipperContext>();
 
         switch (Dialect)
