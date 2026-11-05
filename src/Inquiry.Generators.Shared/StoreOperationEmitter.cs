@@ -1141,16 +1141,19 @@ internal static class StoreOperationEmitter
             source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
         }
 
+        if (method.ReturnsPagedResult)
+        {
+            AppendGridCommandText(source, sqlBuilder, new List<string> { sqlField, "_sqlCount_" + method.MemberName });
+            sqlField = "_sql";
+        }
+
         EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, filterBinder, includePaging: paged);
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
 
         var capacity = paged ? $", capacityHint: {method.Parameters[method.Parameters.Count - 2].Name}" : string.Empty;
         if (method.ReturnsPagedResult)
         {
-            source.AppendLine($"        var _items = await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{capacity}).ConfigureAwait(false);");
-            EmitPredicateBoundCommand(source, sqlBuilder, method, plan, "_sqlCount_" + method.MemberName, filterBinder, commandVariable: "_countCmd");
-            source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
-            source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
+            AppendPagedResultGridReads(source, state, entityType, structMat, cancellation);
         }
         else if (method.ReturnsList)
         {
@@ -1193,11 +1196,10 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string? filterBinder = null,
-        bool includePaging = false,
-        string commandVariable = "_cmd")
+        bool includePaging = false)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
-        source.AppendLine($"        var {commandVariable} = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+        source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
         source.AppendLine($"            {sqlField},");
         source.AppendLine($"            {state.Value},");
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
@@ -1369,8 +1371,15 @@ internal static class StoreOperationEmitter
             source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
         }
 
+        var sqlField = plan.SqlFieldName;
+        if (method.ReturnsPagedResult)
+        {
+            AppendGridCommandText(source, sqlBuilder, new List<string> { sqlField, "_sqlCount_" + method.MemberName });
+            sqlField = "_sql";
+        }
+
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
-        source.AppendLine($"            {plan.SqlFieldName},");
+        source.AppendLine($"            {sqlField},");
         source.AppendLine($"            {state.Value},");
         source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("            {");
@@ -1409,45 +1418,22 @@ internal static class StoreOperationEmitter
 
         if (method.ReturnsPagedResult)
         {
-            source.AppendLine($"        var _items = await Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg}).ConfigureAwait(false);");
-
-            if (fieldColumns.Count == 0)
-            {
-                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand("_sqlCount_" + method.MemberName, filterBinder)}, {cancellation}).ConfigureAwait(false);");
-            }
-            else
-            {
-                source.AppendLine($"        var _countCmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
-                source.AppendLine($"            _sqlCount_{method.MemberName},");
-                source.AppendLine($"            {state.Value},");
-                source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
-                source.AppendLine("            {");
-                AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
-                var cpi = 0;
-                for (var i = 0; i < fieldColumns.Count; i++)
-                {
-                    var arg = method.Parameters[i].Name;
-                    source.AppendLine($"                var _p{cpi} = _c.CreateParameter();");
-                    source.AppendLine($"                _p{cpi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(fieldColumns[i].PropertyName))}\";");
-                    AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{cpi}", "                ", predicate: true);
-                    source.AppendLine($"                _p{cpi}.Value = {BuildParameterValueExpression(fieldColumns[i], arg, sqlBuilder)};");
-                    source.AppendLine($"                _c.Parameters.Add(_p{cpi});");
-                    cpi++;
-                }
-                if (filterBinder is not null)
-                {
-                    source.AppendLine($"                {filterBinder}(_c);");
-                }
-                source.AppendLine("            });");
-                source.AppendLine($"        var _total = await Inquiry.ExecuteScalarAsync<long, {state.Type}>(_countCmd, {cancellation}).ConfigureAwait(false);");
-            }
-
-            source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
+            AppendPagedResultGridReads(source, state, entityType, structMat, cancellation);
         }
         else
         {
             source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg});");
         }
+    }
+
+    // A paged result sends the page SELECT and the COUNT as one multi-result command (#403), so both
+    // statements use one connection and one round trip. The page is read first, then the total.
+    private static void AppendPagedResultGridReads(StringBuilder source, GeneratedCommandState state, string entityType, string structMat, string cancellation)
+    {
+        source.AppendLine($"        await using var _grid = await Inquiry.QueryMultipleAsync<{state.Type}>(_cmd, {cancellation}).ConfigureAwait(false);");
+        source.AppendLine($"        var _items = await _grid.ReadListAsync<{entityType}, {structMat}>(default, {cancellation}).ConfigureAwait(false);");
+        source.AppendLine($"        var _total = await _grid.ReadScalarAsync<long>({cancellation}).ConfigureAwait(false);");
+        source.AppendLine($"        return new global::Inquiry.Paging.InquiryPagedResult<{entityType}>(_items, _total);");
     }
 
     /// <summary>

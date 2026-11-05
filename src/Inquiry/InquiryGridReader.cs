@@ -36,6 +36,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
     private bool _hasResultSet;
     private bool _disposed;
     private bool _faulted;
+    private Exception? _readFailure;
     private bool _streaming;
 
     internal InquiryGridReader(DbDataReader reader, DbCommand command, DbConnection? ownedConnection, IDisposable? lease,
@@ -311,6 +312,11 @@ public sealed class InquiryGridReader : IAsyncDisposable
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return list;
         }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             await FailAsync(exception, cancellationToken).ConfigureAwait(false);
@@ -336,12 +342,31 @@ public sealed class InquiryGridReader : IAsyncDisposable
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return result!;
         }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
+
+    // Generated paged results read their page and COUNT here (#403). Before, the COUNT ran through the
+    // scalar path, so cancellation must surface the same way: as a cancellation with the caller's token,
+    // whether the provider reports its own token or a native error. Like the batch boundary, this checks
+    // the token when the exception is caught, so it adds no work per row.
+    private static OperationCanceledException? NormalizeCancellation(Exception exception, CancellationToken cancellationToken)
+        => exception switch
+        {
+            OperationCanceledException canceled when InquiryCancellation.RequiresCallerToken(canceled, cancellationToken)
+                => InquiryCancellation.AssociateWithCallerToken(canceled, cancellationToken),
+            not OperationCanceledException when cancellationToken.IsCancellationRequested
+                => InquiryCancellation.NormalizeNativeError(exception, cancellationToken),
+            _ => null,
+        };
 
     private void EnsureResultSet()
     {
@@ -458,11 +483,22 @@ public sealed class InquiryGridReader : IAsyncDisposable
         try
         { _lease?.Dispose(); }
         catch (Exception exception) { exceptions = InquiryCleanup.Add(exceptions, exception); }
+
+        // Generated stores dispose the grid with await using, so a cleanup failure would otherwise
+        // replace the read failure. Keep the read failure first, as the single-command paths do.
+        if (_readFailure is not null)
+        {
+            InquiryCleanup.ThrowIfCleanupFailed(_readFailure, exceptions);
+            return;
+        }
+
         InquiryCleanup.ThrowIfAny(exceptions);
     }
 
     private async ValueTask FailAsync(Exception exception, CancellationToken cancellationToken)
     {
+        _readFailure ??= exception;
+
         // Telemetry and callback failures must not hide the read failure or skip the failed callbacks.
         List<Exception>? secondary = null;
         try
@@ -478,8 +514,10 @@ public sealed class InquiryGridReader : IAsyncDisposable
         if (secondary is not null)
         {
             secondary.Insert(0, exception);
-            throw new AggregateException(
+            var aggregate = new AggregateException(
                 "An Inquiry grid read failed and its failure telemetry or command interceptor also failed.", secondary);
+            _readFailure = aggregate;
+            throw aggregate;
         }
     }
 

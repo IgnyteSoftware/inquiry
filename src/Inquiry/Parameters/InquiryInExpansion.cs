@@ -106,7 +106,7 @@ public static class InquiryInExpansion
 
         if (values is null)
         {
-            command.CommandText = ReplaceFirst(command.CommandText, sentinel, emptyReplacement);
+            command.CommandText = ReplaceAll(command.CommandText, sentinel, emptyReplacement);
             return;
         }
 
@@ -219,7 +219,7 @@ public static class InquiryInExpansion
 
         if (count == 0)
         {
-            command.CommandText = ReplaceFirst(command.CommandText, sentinel, emptyReplacement);
+            command.CommandText = ReplaceAll(command.CommandText, sentinel, emptyReplacement);
             return;
         }
 
@@ -244,7 +244,7 @@ public static class InquiryInExpansion
         }
 
         placeholders.Append(')');
-        command.CommandText = ReplaceFirst(command.CommandText, sentinel, placeholders.ToString());
+        command.CommandText = ReplaceAll(command.CommandText, sentinel, placeholders.ToString());
     }
 
     // Smallest power of two >= n (n >= 1). Bounded by the parameter cap at the call site, so no overflow.
@@ -259,11 +259,8 @@ public static class InquiryInExpansion
         return power;
     }
 
-    private static string ReplaceFirst(string text, string search, string replacement)
-    {
-        var index = text.IndexOf(search, System.StringComparison.Ordinal);
-        return index < 0
-            ? text
-            : string.Concat(text.AsSpan(0, index), replacement, text.AsSpan(index + search.Length));
-    }
+    // A generated paged result repeats the predicate in its COUNT statement (#403), so the sentinel
+    // can occur more than once. Every occurrence gets the same list and the same parameters.
+    private static string ReplaceAll(string text, string search, string replacement)
+        => text.Replace(search, replacement, System.StringComparison.Ordinal);
 }

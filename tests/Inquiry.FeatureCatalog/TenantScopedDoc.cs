@@ -43,4 +43,7 @@ public partial class TenantScopedDocStore : InquiryStore<TenantScopedDoc>
 
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectAll(OrderBy = "Id ASC")]
+    public partial Task<Inquiry.Paging.InquiryPagedResult<TenantScopedDoc>> PageAsync(int offset, int limit, CancellationToken cancellationToken = default);
 }

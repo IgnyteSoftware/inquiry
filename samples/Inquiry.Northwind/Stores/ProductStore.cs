@@ -81,6 +81,10 @@ public partial class ProductStore : InquiryStore<Product>
     [InquiryWhere("Discontinued")]
     public partial Task<InquiryPagedResult<Product>> PageByDiscontinuedAsync(bool discontinued, int offset, int limit, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate(OrderBy = "ProductID ASC", Paged = true)]
+    [InquiryWhere("CategoryID", Compare.NotIn)]
+    public partial Task<InquiryPagedResult<Product>> PageNotInCategoriesAsync(IReadOnlyList<int> categoryID, int offset, int limit, CancellationToken cancellationToken = default);
+
     [InquiryInsert]
     public partial Task<int> InsertAsync(Product product, CancellationToken cancellationToken = default);
 

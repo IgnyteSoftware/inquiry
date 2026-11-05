@@ -259,4 +259,50 @@ public class InquiryInExpansionTests
 
         Assert.Contains("parameter limit", ex.Message, System.StringComparison.OrdinalIgnoreCase);
     }
+
+    // A paged result sends the page SELECT and the COUNT in one command (#403), so the same sentinel
+    // appears twice. Every occurrence must expand to the same list, bound once.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RepeatedSentinel_ExpandsEveryOccurrenceWithOneParameterSet(bool negated)
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c) LIMIT 1; SELECT COUNT(*) FROM t WHERE c IN (@c)" };
+        var values = new List<int> { 3, 4, 5 };
+
+        if (negated)
+        {
+            InquiryInExpansion.ExpandNotIn(command, "@c", values);
+        }
+        else
+        {
+            InquiryInExpansion.Expand(command, "@c", values);
+        }
+
+        Assert.Equal("SELECT * FROM t WHERE c IN (@c0, @c1, @c2, @c3) LIMIT 1; SELECT COUNT(*) FROM t WHERE c IN (@c0, @c1, @c2, @c3)", command.CommandText);
+        Assert.Equal(4, command.Parameters.Count);
+    }
+
+    [Theory]
+    [InlineData(false, false, "(NULL)")]
+    [InlineData(false, true, "(NULL)")]
+    [InlineData(true, false, "(NULL) OR 1=1")]
+    [InlineData(true, true, "(NULL) OR 1=1")]
+    public void RepeatedSentinel_NullOrEmptyCollectionRewritesEveryOccurrence(bool negated, bool useNull, string replacement)
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t WHERE c IN (@c) LIMIT 1; SELECT COUNT(*) FROM t WHERE c IN (@c)" };
+        var values = useNull ? null : new List<int>();
+
+        if (negated)
+        {
+            InquiryInExpansion.ExpandNotIn(command, "@c", values);
+        }
+        else
+        {
+            InquiryInExpansion.Expand(command, "@c", values);
+        }
+
+        Assert.Equal($"SELECT * FROM t WHERE c IN {replacement} LIMIT 1; SELECT COUNT(*) FROM t WHERE c IN {replacement}", command.CommandText);
+        Assert.Equal(0, command.Parameters.Count);
+    }
 }

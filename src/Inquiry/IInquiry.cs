@@ -172,7 +172,9 @@ public interface IInquiry
     /// <summary>
     /// Executes a command that returns multiple result sets and returns a grid reader to materialize them
     /// in order (one round trip). Generated eager-load stores use this to fetch a parent and its
-    /// key-filterable child collections in a single round trip. Dispose the returned reader.
+    /// key-filterable child collections in a single round trip, and generated
+    /// <see cref="Inquiry.Paging.InquiryPagedResult{TEntity}"/> methods use it to fetch a page and its
+    /// total. Dispose the returned reader.
     /// </summary>
     /// <remarks>The default throws; <see cref="DefaultInquiry"/> implements it over the pipeline, so
     /// existing <see cref="IInquiry"/> implementations (e.g. test mocks) stay source-compatible.</remarks>

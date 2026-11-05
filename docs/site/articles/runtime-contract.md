@@ -93,7 +93,7 @@ public raw-row API would need its own decision.
 | FormattableString overloads | Convert to InquiryCommand and dispatch to the command overload. | Executes through the configured pipeline. |
 | Generated-command overloads | Convert to InquiryCommand and forward to the corresponding member. | Uses specialized generated execution paths. |
 | Generator-proven single row | Falls back to the validating single-or-default query. | Uses the generator's cardinality proof without a second-row probe. |
-| QueryMultipleAsync | Throws NotSupportedException. | Owns a grid reader over provider result sets. |
+| QueryMultipleAsync | Throws NotSupportedException. Generated eager loads and InquiryPagedResult methods call it, so they throw too. | Owns a grid reader over provider result sets. |
 | ExecuteScalarAsync / ExecuteProcedureScalarAsync | Command defaults throw NotSupportedException. | Converts scalar results or reads the selected output parameter. |
 | BulkInsertAsync | Throws NotSupportedException, or InvalidOperationException for non-null native options. | Resolves provider bulk support; generated fallback behavior depends on the dialect. |
 | List batch / generated bounded batch | Dispatches items or chunks without taking transaction ownership. | Provides atomic non-ambient batch execution and enlists in an ambient transaction. |

@@ -114,6 +114,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("private const string _sql_PageAsync", text);
         Assert.Contains("WHERE \\\"Category\\\" = @Category ORDER BY \\\"Score\\\" DESC", text);
         Assert.Contains("private const string _sqlCount_PageAsync = \"SELECT COUNT(*) FROM \\\"TItem\\\" WHERE \\\"Category\\\" = @Category\";", text);
+        Assert.Contains("var _sql = _sql_PageAsync + \";\" + _sqlCount_PageAsync;", text);
+        Assert.Contains("var _total = await _grid.ReadScalarAsync<long>(cancellationToken).ConfigureAwait(false);", text);
         Assert.Contains("new global::Inquiry.Paging.InquiryPagedResult<global::Demo.Item>(_items, _total)", text);
     }
 

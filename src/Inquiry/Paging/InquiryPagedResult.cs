@@ -2,15 +2,23 @@ namespace Inquiry.Paging;
 
 /// <summary>
 /// One page of an offset-paginated query paired with the total row count: the materialized
-/// <see cref="Items"/> and the <see cref="TotalCount"/> from a separate <c>COUNT</c> query that
-/// shares the same WHERE clause. Both queries are generated from the same source-of-truth so
-/// their filters cannot diverge.
+/// <see cref="Items"/> and the <see cref="TotalCount"/> from a <c>COUNT</c> statement that uses
+/// the same WHERE clause, including soft-delete and global filters. Both statements are generated
+/// from the same declaration, so their filters cannot diverge.
 /// </summary>
 /// <remarks>
-/// The SELECT and COUNT execute as two sequential queries on the same connection without an
-/// explicit transaction, so <see cref="TotalCount"/> may differ from the actual number of rows
-/// if concurrent writes occur between the two queries. This matches the consistency model of
-/// manually written paired queries.
+/// <para>
+/// A generated method sends the page <c>SELECT</c> and the <c>COUNT</c> as one command that returns
+/// two result sets, and reads them in order. The method makes one round trip and uses one
+/// connection: a connection from the pool, or the connection of the active Inquiry transaction.
+/// The <c>COUNT</c> still runs on every call and counts every matching row.
+/// </para>
+/// <para>
+/// The two statements are not atomic. Outside a snapshot or serializable transaction, a concurrent
+/// write can commit between them, so <see cref="TotalCount"/> can disagree with <see cref="Items"/>.
+/// To get a consistent pair, call the method inside a transaction at one of those isolation levels.
+/// Inquiry does not start one for you.
+/// </para>
 /// </remarks>
 /// <typeparam name="TEntity">The mapped entity type.</typeparam>
 public readonly struct InquiryPagedResult<TEntity>

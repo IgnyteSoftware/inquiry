@@ -27,7 +27,8 @@ entity columns is acceptable. Do not move filtering into memory merely to bypass
 | InquirySelectAllEager / InquirySelectOneByKeyEager | Entity; buffered list or stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships, or those named by InquiryInclude |
 
 For offset paging, parameters end with int offset, int limit, then CancellationToken. Supply a stable
-OrderBy including a unique tie-breaker. InquiryPagedResult adds a total; DISTINCT with that result
+OrderBy including a unique tie-breaker. InquiryPagedResult adds a total; the page and the COUNT
+are sent as one command (see [Page with a total](pagination.md#page-with-a-total)). DISTINCT with that result
 shape is rejected. A list-returning offset query may use DISTINCT, subject to the provider's SQL rules.
 
 Keyset ordering fields must be non-nullable in the database and include a unique tie-breaker.
