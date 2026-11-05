@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Description>Runs the schema evolution sample: DbUp deploys V1 and V2 of a catalog to a SQL Server container.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-sqlserver" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <ProjectReference Include="..\V1\Inquiry.SchemaEvolution.V1.csproj" />
+    <ProjectReference Include="..\V2\Inquiry.SchemaEvolution.V2.csproj" />
+    <Compile Include="..\*.cs" />
+    <EmbeddedResource Include="..\Scripts\*.sql" LogicalName="Scripts.%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
