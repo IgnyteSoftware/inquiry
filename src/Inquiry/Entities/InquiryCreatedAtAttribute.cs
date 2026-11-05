@@ -10,8 +10,9 @@ namespace Inquiry.Entities;
 /// </summary>
 /// <remarks>
 /// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns. Timestamps are
-/// generated client-side in UTC; for database-clock stamping use
-/// <c>[InquiryColumn(DefaultExpression = …)]</c> instead.
+/// generated client-side in UTC. For database-clock stamping, use an ordinary column with
+/// <c>[InquiryColumn(DefaultExpression = …, UseDatabaseDefault = true)]</c> instead.
+/// <c>DefaultExpression</c> alone does not remove the column from INSERT.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryCreatedAtAttribute : InquiryColumnAttribute

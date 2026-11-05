@@ -248,6 +248,8 @@ extracts the files marked with `<!-- recipe: name/File -->` comments from the pu
 [getting-started](../articles/getting-started.md) program must print exactly its documented output.
 The [partial-updates](../articles/features/partial-updates.md) recipe runs under
 `tests/Inquiry.PackageSmoke/PartialUpdatesRecipe.cs`, which checks every result that page documents.
+The [entity-mapping](../articles/entity-mapping.md) program must also print exactly its documented
+output, including the generated DDL and the SQL of each statement it runs.
 The run fails if a marked file is missing or extra.
 
 The [migrations recipe](../articles/features/migrations.md) publishes the files of

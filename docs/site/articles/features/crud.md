@@ -382,6 +382,7 @@ modified. Design for this if your code branches on the returning upsert's null/n
 
 ## See also
 
+- [Entity mapping](../entity-mapping.md) — which columns inserts, updates, and upserts write, omit, and read back.
 - [Pagination](pagination.md) — `OrderBy`, `Paged = true`, and keyset paging.
 - [Soft delete](soft-delete.md) — automatic `WHERE IsDeleted = 0` composition.
 - [Batch operations](batch-operations.md) — multi-row inserts, updates, and deletes.

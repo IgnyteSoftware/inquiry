@@ -183,6 +183,8 @@ release. Set every `Ignyte.Inquiry*` reference to the same version to fix these 
 
 ## Next steps
 
+- [Entity mapping](entity-mapping.md) explains names, keys, foreign keys, and which values the
+  database supplies.
 - [CRUD](features/crud.md) covers reads, inserts, updates, and returning forms.
 - [Transactions](features/transactions.md) shows atomic operations across stores and ad-hoc SQL.
 - [SQLite](providers/sqlite.md) describes provider behavior.

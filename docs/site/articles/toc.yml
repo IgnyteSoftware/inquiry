@@ -1,5 +1,7 @@
 - name: Getting started
   href: getting-started.md
+- name: Entity mapping
+  href: entity-mapping.md
 - name: Registering data libraries
   href: library-registration.md
 - name: Errors and partial outcomes
