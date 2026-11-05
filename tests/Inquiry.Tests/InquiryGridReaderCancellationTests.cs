@@ -59,23 +59,59 @@ public sealed class InquiryGridReaderCancellationTests
         Assert.Same(native, exception.InnerException);
     }
 
-    [Fact]
-    public async Task ReadFailureStaysFirstWhenDisposalAlsoFails()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ReadFailureStaysFirstWhenDisposalAlsoFails(bool scalar, bool failOnNextResult)
     {
         using var caller = new CancellationTokenSource();
         var readFailure = new InvalidOperationException("Read failed.");
         var disposeFailure = new InvalidOperationException("Dispose failed.");
 
-        // The shape generated paged methods emit: the grid is disposed by await using after the read throws.
-        async Task ReadAsync()
-        {
-            await using var grid = await CreateGridAsync(caller, failOnRead: true, failOnNextResult: false, readFailure, disposeFailure, cancel: false);
-            await grid.ReadScalarAsync<long>(caller.Token);
-        }
-
-        var exception = await Assert.ThrowsAsync<AggregateException>(ReadAsync);
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => ReadThenDisposeAsync(caller, scalar, failOnNextResult, readFailure, disposeFailure, cancel: false));
 
         Assert.Equal(new Exception[] { readFailure, disposeFailure }, exception.InnerExceptions);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task CancellationStaysFirstWithTheCallerTokenWhenDisposalAlsoFails(bool scalar, bool failOnNextResult, bool nativeError)
+    {
+        using var caller = new CancellationTokenSource();
+        Exception? failure = nativeError ? new InvalidOperationException("Operation cancelled by user.") : null;
+        var disposeFailure = new InvalidOperationException("Dispose failed.");
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => ReadThenDisposeAsync(caller, scalar, failOnNextResult, failure, disposeFailure, cancel: true));
+
+        Assert.Equal(2, exception.InnerExceptions.Count);
+        var canceled = Assert.IsAssignableFrom<OperationCanceledException>(exception.InnerExceptions[0]);
+        Assert.Equal(caller.Token, canceled.CancellationToken);
+        Assert.Same(disposeFailure, exception.InnerExceptions[1]);
+    }
+
+    // The shape generated paged methods emit: the grid is disposed by await using after the read throws.
+    private static async Task ReadThenDisposeAsync(CancellationTokenSource caller, bool scalar, bool failOnNextResult, Exception? failure, Exception disposeFailure, bool cancel)
+    {
+        await using var grid = await CreateGridAsync(caller, failOnRead: !failOnNextResult, failOnNextResult, failure, disposeFailure, cancel);
+        if (scalar)
+        {
+            await grid.ReadScalarAsync<long>(caller.Token);
+        }
+        else
+        {
+            await grid.ReadListAsync<Box, BoxMaterializer>(default, caller.Token);
+        }
     }
 
     // The provider sees the caller cancel, then throws with a token of its own, or a native error.
