@@ -36,6 +36,13 @@
     <Compile Include="..\Shared\BulkCopierConnectionOwnershipAssertions.cs" Link="Shared\BulkCopierConnectionOwnershipAssertions.cs" />
     <ProjectReference Include="..\..\benchmarks\Inquiry.Benchmarks.DLG\Inquiry.Benchmarks.DLG.csproj" />
     <Compile Include="..\..\benchmarks\Inquiry.Benchmarks.SqlServer\Dlg\DlgSetup.cs" LinkBase="Dlg" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\*.cs" LinkBase="FeatureCatalog\LockingRegression" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\Paged\*.cs" LinkBase="FeatureCatalog\LockingRegression\Paged" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\Distinct\*.cs" LinkBase="FeatureCatalog\LockingRegression\Distinct" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\SqlServer\*.cs" LinkBase="FeatureCatalog\LockingRegression\SqlServer" />
+    <Compile Include="..\Shared\RowLockRegressionScenarios.cs" Link="Shared\RowLockRegressionScenarios.cs" />
+    <Compile Include="..\Shared\RowLockRegressionPagedScenarios.cs" Link="Shared\RowLockRegressionPagedScenarios.cs" />
+    <Compile Include="..\Shared\RowLockRegressionDistinctScenarios.cs" Link="Shared\RowLockRegressionDistinctScenarios.cs" />
   </ItemGroup>
 
   <ItemGroup>

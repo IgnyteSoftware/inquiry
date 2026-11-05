@@ -532,9 +532,9 @@ Operation is not supported by the target dialect. Default: error, enabled.
 
 Trigger: The selected dialect cannot emit this operation.
 
-Failing shape: A returning mutation form rejected for the active dialect.
+Failing shape: A returning mutation form rejected for the active dialect. A `LockMode` the dialect cannot run: any lock on SQLite, `Share` on Oracle, `Distinct = true` with a lock on PostgreSQL or Oracle, or offset paging (`Paged = true` or an `InquiryPagedResult<T>` return) with a lock on Oracle.
 
-Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. Lowering severity project-wide deliberately emits throwing stubs, not working SQL. It is the only diagnostic whose severity changes the generated code; see [Severity and suppression](#severity-and-suppression).
+Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. For a lock, remove `Distinct` or the paging, or remove the lock. Lowering severity project-wide deliberately emits throwing stubs, not working SQL. It is the only diagnostic whose severity changes the generated code; see [Severity and suppression](#severity-and-suppression).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L668).
 
