@@ -20,7 +20,7 @@ replace every failure with a universal exception.
 | Cancellation | `OperationCanceledException` (including `TaskCanceledException`) when cancellation is observed. A provider failure after caller cancellation can be wrapped with its original exception as the inner exception, even when its cause was not cancellation. Without caller cancellation, a provider timeout retains its provider identity. |
 | Disposed transaction/grid or invalid transaction/grid state | `ObjectDisposedException` or `InvalidOperationException` according to the state guard. |
 | Unsupported generated operation | Normally an `INQ039` build error. Deliberately configuring that diagnostic as warning/none project-wide emits a stub that throws `NotSupportedException` synchronously. Only methods that report `INQ039` get a stub. |
-| Rejected store declaration | Any other Inquiry error, such as an invalid entity or a rejected method, fails the build. Suppressing or lowering it does not produce a stub or a working method: the rejected method has no generated implementation and reports CS8795. See [severity and suppression](diagnostics.md#severity-and-suppression). |
+| Rejected store declaration | Any other Inquiry error that rejects a store method or a whole store, such as an invalid entity or an unsupported method signature, fails the build. Suppressing or lowering it does not produce a stub or a working method: the rejected method has no generated implementation and reports CS8795. See [severity and suppression](diagnostics.md#severity-and-suppression). |
 
 ## When failures appear
 

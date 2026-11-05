@@ -358,6 +358,27 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(CompileErrors(result), static d => d.Id == "CS7036");
     }
 
+    [Fact]
+    public void TokenStoreWhoseMethodsAreHandWrittenDoesNotGainAConstructor()
+    {
+        // Every method already has a hand-written body, so a generated constructor would let the
+        // suppressed configuration build. The store keeps no generated source, as before.
+        var source = DatabaseGeneratedTokenStore.Replace(
+            "public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);",
+            "public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken = default);\n    public partial Task<bool> UpdateAsync(Doc doc, CancellationToken cancellationToken) => Task.FromResult(true);",
+            StringComparison.Ordinal);
+        var result = RunGenerator(
+            source,
+            additionalDiagnosticOptions: new Dictionary<string, ReportDiagnostic>
+            {
+                ["INQ068"] = ReportDiagnostic.Suppress,
+                ["INQ113"] = ReportDiagnostic.Suppress,
+            });
+
+        Assert.Null(GeneratedFile(result, "DocStore.InquiryStore.g.cs"));
+        Assert.Contains(CompileErrors(result), static d => d.Id == "CS7036");
+    }
+
     public static TheoryData<string, string, LanguageVersion> UnsupportedSignatureCases() => new()
     {
         { "[InquiryCount]\n    public static partial Task<long> CountAsync(CancellationToken cancellationToken = default);", "the method is static", LanguageVersion.CSharp10 },

@@ -54,7 +54,7 @@ internal static class StoreProcessor
         }
 
         var methods = ImmutableArray.CreateBuilder<StoreMethodData>();
-        var hasRejectedMethodNeedingBody = false;
+        var hasMethodNeedingBody = false;
         if (emittable)
         {
             foreach (var method in storeSymbol.GetMembers().OfType<IMethodSymbol>().Where(static m => m.MethodKind == MethodKind.Ordinary))
@@ -67,17 +67,15 @@ internal static class StoreProcessor
                     continue;
                 }
 
+                // A non-void partial definition without a body always fails with CS8795, so a generated
+                // constructor next to it cannot make the build succeed. A store with no such method gets no
+                // constructor when its methods are rejected, so CS7036 keeps the build failing.
+                hasMethodNeedingBody |= method.IsPartialDefinition && method.PartialImplementationPart is null && !method.ReturnsVoid;
+
                 var model = ExtractMethod(method, operation, operationAttribute!, entityType, diagnostics);
                 if (model is not null)
                 {
                     methods.Add(model);
-                }
-                else if (method.IsPartialDefinition && method.PartialImplementationPart is null && !method.ReturnsVoid)
-                {
-                    // A non-void partial definition without a body always fails with CS8795, so a generated
-                    // constructor cannot make the build succeed. Other rejected methods can compile without a
-                    // body, so their store gets no constructor and CS7036 keeps the build failing.
-                    hasRejectedMethodNeedingBody = true;
                 }
             }
         }
@@ -116,7 +114,7 @@ internal static class StoreProcessor
             Methods: new EquatableArray<StoreMethodData>(methods.ToImmutable()),
             Location: LocationData.From(location),
             Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()),
-            HasRejectedMethodNeedingBody: hasRejectedMethodNeedingBody);
+            HasMethodNeedingBody: hasMethodNeedingBody);
     }
 
     /// <summary>
@@ -1667,7 +1665,7 @@ internal static class StoreProcessor
             // A store with no generator-implemented methods at all is legitimate — a partial store that
             // only hand-writes methods over the inherited Inquiry property, with its own constructor.
             // Emitting anything there would collide with that constructor.
-            if (store.Methods.Count == 0 && !store.HasRejectedMethodNeedingBody)
+            if (store.Methods.Count == 0 && !store.HasMethodNeedingBody)
             {
                 return null;
             }
@@ -1687,7 +1685,7 @@ internal static class StoreProcessor
                 InquiryDiagnosticDescriptors.StoreConcurrencyShapeNotSupported, store.Location?.ToLocation(), store.Name,
                 (methodNames.Length == 1 ? "method " : "methods ") + string.Join(", ", methodNames.Select(static name => $"'{name}'")),
                 $"the '{sqlBuilder.DialectName}' dialect does not support database-generated concurrency token '{entity.Name}.{token.PropertyName}'. Use an application-managed token, or compile against a dialect that supports database-generated tokens"));
-            return EmitConstructorOnlyStore(context, store);
+            return store.HasMethodNeedingBody ? EmitConstructorOnlyStore(context, store) : null;
         }
 
         if (entity.ConcurrencyToken is { } upsertToken && store.Methods.AsImmutableArray().Any(static m => m.Operation == StoreOperation.Upsert))
@@ -1700,7 +1698,7 @@ internal static class StoreProcessor
                     $"upsert is not supported for entity '{entity.Name}' because it declares concurrency token '{upsertToken.PropertyName}'. Use separate insert and update methods"));
             }
 
-            return EmitConstructorOnlyStore(context, store);
+            return store.HasMethodNeedingBody ? EmitConstructorOnlyStore(context, store) : null;
         }
 
         var entityColumns = ToColumnList(entity.Columns);

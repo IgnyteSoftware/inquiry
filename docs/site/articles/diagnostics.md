@@ -17,9 +17,9 @@ such as Ignyte.Inquiry.Sqlite. Do not wait for an INQ diagnostic from an analyze
 
 ## Severity and suppression
 
-Fix errors rather than suppressing them. Suppressing or lowering an Inquiry error never produces
-runnable generated code. A rejected method gets no generated implementation, so the build still fails
-with CS8795 at its declaration. The generator still emits the store constructor, so CS7036 does not
+Fix errors rather than suppressing them. When an Inquiry error rejects a store method or a whole
+store, suppressing or lowering it never produces runnable generated code for that method. A rejected
+method gets no generated implementation, so the build still fails with CS8795 at its declaration. The generator still emits the store constructor, so CS7036 does not
 appear. This holds when every method of a store is rejected and when the store's entity is invalid
 (INQ008). One case differs: when no rejected method needs a generated body, for example a method that
 is not `partial` (INQ010), the store gets no generated source and the missing constructor (CS7036)

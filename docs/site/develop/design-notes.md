@@ -162,7 +162,11 @@ INQ039 is already lowered.
 - Two configurations that build today stop building. Both need a changelog entry:
   - A rejecting error is suppressed on an all-rejected or invalid-entity store.
   - A provider facet error, such as INQ076, is suppressed and INQ039 is lowered.
-- No configuration that fails today starts to build.
+- No configuration that fails today starts to build, with one exception. A store method that keeps
+  its Inquiry attribute and also has a hand-written implementing declaration fails today, because the
+  generator adds a second implementation (CS0757). When that method is rejected and its error is
+  suppressed, the generator adds no member and the hand-written body compiles. Only user-written code
+  runs; no generated code becomes runnable.
 - Existing diagnostic IDs and default severities do not change. The follow-up work adds two errors:
   INQ111 for a store method signature the generator cannot reproduce (#267), and INQ113 for an
   unsupported concurrency-token store shape (#270), which replaces INQ006 for token upserts.

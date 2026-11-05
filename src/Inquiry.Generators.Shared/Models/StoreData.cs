@@ -19,4 +19,4 @@ internal sealed record StoreData(
     EquatableArray<StoreMethodData> Methods,
     LocationData? Location,
     EquatableArray<DiagnosticData> Diagnostics,
-    bool HasRejectedMethodNeedingBody = false);
+    bool HasMethodNeedingBody = false);
