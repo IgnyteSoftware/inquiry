@@ -24,15 +24,18 @@ public sealed class CrudUpdateLegTests
             var legs = UpdateLegs(benchmarkType);
             Assert.NotEmpty(legs);
 
-            // Run the legs in turn, several rounds, so each leg follows both itself and the other legs.
+            // Call each leg twice in a row, over several rounds, so each leg follows both itself and the other legs.
             for (var round = 0; round < 3; round++)
             {
                 foreach (var leg in legs)
                 {
-                    var result = await InvokeAsync(benchmark, leg);
-                    Assert.True(
-                        result is 1 or true,
-                        $"{benchmarkType.Name}.{leg.Name} round {round} returned {result ?? "null"}, expected one updated row.");
+                    for (var call = 0; call < 2; call++)
+                    {
+                        var result = await InvokeAsync(benchmark, leg);
+                        Assert.True(
+                            result is 1 or true,
+                            $"{benchmarkType.Name}.{leg.Name} round {round} call {call} returned {result ?? "null"}, expected one updated row.");
+                    }
                 }
             }
         }

@@ -25,7 +25,8 @@ public sealed class ShipperUpdateLegTests
             {
                 for (var round = 0; round < 3; round++)
                 {
-                    foreach (var leg in legs)
+                    // Each leg runs twice in a row, so it follows both itself and the other legs.
+                    foreach (var leg in legs.SelectMany(static leg => new[] { leg, leg }))
                     {
                         var before = await ReadTargetAsync(benchmark);
                         var task = (Task)leg.Invoke(benchmark, null)!;
