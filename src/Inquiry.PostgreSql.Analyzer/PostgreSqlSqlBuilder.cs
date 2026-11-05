@@ -244,4 +244,13 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
     // is cast to jsonb so the operator applies whether it is stored as text or json/jsonb.
     protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
         => "(" + quotedColumn + ")::jsonb #>> '" + JsonPathToPostgresTextPath(jsonPath) + "'";
+
+    // PostgreSQL rejects every locking clause on a DISTINCT select (SQLSTATE 0A000).
+    public override void EnsureLockShapeSupported(int lockMode, bool distinct, bool offsetPaged)
+    {
+        if (lockMode != 0 && distinct)
+        {
+            throw new System.NotSupportedException("PostgreSQL does not support row locking with DISTINCT.");
+        }
+    }
 }

@@ -90,7 +90,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => "[" + identifier.Replace("]", "]]") + "]";
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);
+        => "SELECT " + context.SelectColumns + " FROM " + FromTable(context) + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);
 
     /// <summary>SQL Server uses <c>GETUTCDATE()</c> for the soft-delete (and restore) timestamp clock.</summary>
     public override string CurrentTimestampExpression => "GETUTCDATE()";
@@ -436,6 +436,17 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     protected override string RenderJsonPathExtract(string quotedColumn, string jsonPath)
         => "JSON_VALUE(" + quotedColumn + ", '" + jsonPath + "')";
 
+    // The table hint is written with the FROM table (see FromTable), so a column that shares the
+    // table's name cannot receive it.
+    protected override string FromTable(SqlBuildContext context) => context.LockMode switch
+    {
+        1 => context.Table + " WITH (UPDLOCK, ROWLOCK)",
+        2 => context.Table + " WITH (UPDLOCK, ROWLOCK, NOWAIT)",
+        3 => context.Table + " WITH (UPDLOCK, ROWLOCK, READPAST)",
+        4 => context.Table + " WITH (HOLDLOCK, ROWLOCK)",
+        _ => context.Table,
+    };
+
     public override string ApplyLockClause(string selectSql, SqlBuildContext context, int lockMode)
     {
         if (lockMode == 0)
@@ -443,19 +454,13 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             return selectSql;
         }
 
-        var hint = lockMode switch
+        // The hint is already in place when the SELECT was built from a locked context. This check
+        // only confirms that, so a SELECT built any other way fails instead of running unlocked.
+        if (context.LockMode != lockMode || selectSql.IndexOf(" FROM " + FromTable(context), System.StringComparison.Ordinal) < 0)
         {
-            1 => " WITH (UPDLOCK, ROWLOCK)",
-            2 => " WITH (UPDLOCK, ROWLOCK, NOWAIT)",
-            3 => " WITH (UPDLOCK, ROWLOCK, READPAST)",
-            4 => " WITH (HOLDLOCK, ROWLOCK)",
-            _ => "",
-        };
-        var idx = selectSql.IndexOf(context.Table, System.StringComparison.Ordinal);
-        if (idx >= 0)
-        {
-            return selectSql.Insert(idx + context.Table.Length, hint);
+            throw new System.NotSupportedException("The SQL Server lock hint could not be placed after the FROM table of this SELECT.");
         }
+
         return selectSql;
     }
 }

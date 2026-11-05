@@ -32,6 +32,12 @@ public sealed class SqlBuildContext
     internal IReadOnlyList<ForeignKeyConstraintData>? NormalizedForeignKeys { get; init; }
     internal IReadOnlyList<IndexData>? NormalizedIndexes { get; init; }
     internal IReadOnlyList<CheckConstraintData>? NormalizedChecks { get; init; }
+
+    /// <summary>
+    /// The <c>InquiryLockMode</c> value (0 = None) of the select built from this context. Dialects that
+    /// lock with a table hint read it when they write the FROM table.
+    /// </summary>
+    internal int LockMode { get; init; }
     /// <param name="builder">The dialect SQL builder.</param>
     /// <param name="schema">The raw (unquoted) schema name, or null.</param>
     /// <param name="tableName">The raw (unquoted) table name.</param>

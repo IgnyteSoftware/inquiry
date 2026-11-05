@@ -36,6 +36,12 @@
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" Link="Shared\EagerGridCommandAssertions.cs" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
     <Compile Include="..\Shared\BulkCopierConnectionOwnershipAssertions.cs" Link="Shared\BulkCopierConnectionOwnershipAssertions.cs" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\*.cs" LinkBase="FeatureCatalog\LockingRegression" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\Paged\*.cs" LinkBase="FeatureCatalog\LockingRegression\Paged" />
+    <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\Distinct\*.cs" LinkBase="FeatureCatalog\LockingRegression\Distinct" />
+    <Compile Include="..\Shared\RowLockRegressionScenarios.cs" Link="Shared\RowLockRegressionScenarios.cs" />
+    <Compile Include="..\Shared\RowLockRegressionPagedScenarios.cs" Link="Shared\RowLockRegressionPagedScenarios.cs" />
+    <Compile Include="..\Shared\RowLockRegressionDistinctScenarios.cs" Link="Shared\RowLockRegressionDistinctScenarios.cs" />
   </ItemGroup>
 
   <ItemGroup>

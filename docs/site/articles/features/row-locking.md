@@ -204,17 +204,14 @@ Keep these limits in mind when you adapt it:
 
 ## Limitations
 
-The generator accepts the following combinations, but they do not lock as written. Avoid them:
-
-- **`Distinct = true`** with a lock mode fails at run time on PostgreSQL (SQLSTATE `0A000`) and Oracle
-  (ORA-01786).
-- **`Paged = true`** with a lock mode fails at run time on Oracle (ORA-02014). PostgreSQL and SQL
-  Server ran the paged query in the same probe.
-- **A projection return type** on an `[InquirySelectAll]` method without `OrderBy` or `Paged`, such as
-  `Task<IReadOnlyList<WorkItemSummary>>`, runs a SELECT without the lock clause, so no rows are locked.
-  This was seen in the generated SQL for PostgreSQL, SQL Server and Oracle.
-- **SQL Server, a column named like its table**: the table hint is inserted after the first occurrence
-  of the table name, so a `[Status]` column in a `[Status]` table produces invalid SQL.
+- **Lock modes the database rejects are build errors.** `INQ039` reports `Distinct = true` with a lock
+  mode on PostgreSQL (the database would fail with SQLSTATE `0A000`) and Oracle (ORA-01786), and offset
+  paging (`Paged = true`, or an `InquiryPagedResult<T>` return) with a lock mode on Oracle (ORA-02014).
+  Remove `Distinct` or the paging, or remove the lock. MySQL, MariaDB and SQL Server run both
+  combinations.
+- **The total of an `InquiryPagedResult<T>` is not locked.** The lock mode applies to the SELECT that
+  returns the page. The separate COUNT does not request row locks, so the total can change while you
+  hold the page's rows.
 
 ## Tested engines
 
