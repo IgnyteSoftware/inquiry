@@ -263,13 +263,21 @@ internal static class StoreOperationEmitter
 
             case StoreOperation.Count:
                 {
-                    // COUNT(*) returns a scalar long via the runtime scalar path. No parameters to bind,
-                    // so the Task is returned directly (no async state machine). A named-filter bypass is
-                    // the one per-method Count shape; the matching const is emitted by StoreProcessor
-                    // under the same IgnoredFilterNames condition.
-                    var countField = method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount";
+                    // COUNT(*) returns a scalar long via the runtime scalar path, and the Task is returned
+                    // directly (no async state machine). Criteria or a named-filter bypass give the method
+                    // its own const; StoreProcessor emits it under the same conditions.
+                    var countField = method.IgnoredFilterNames.Count > 0 || method.Predicates.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount";
                     AppendHeader(source, method, parameters, isAsync: false);
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
+                    if (predicatePlan is null || predicatePlan.Bindings.Count == 0)
+                    {
+                        source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, byte>({EmptyGeneratedCommand(countField, filterBinder)}, {cancellation});");
+                    }
+                    else
+                    {
+                        EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, countField, filterBinder);
+                        var countState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
+                        source.AppendLine($"        return Inquiry.ExecuteScalarAsync<long, {countState.Type}>(_cmd, {cancellation});");
+                    }
                     source.AppendLine("    }");
                     break;
                 }

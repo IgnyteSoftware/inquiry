@@ -1,9 +1,13 @@
 namespace Inquiry.Stores;
 
 /// <summary>
-/// Declares one WHERE criterion on a <see cref="InquirySelectAllByPredicateAttribute"/> method.
-/// Apply it multiple times; the criteria are combined in declaration order. By default they bind
-/// positionally to the method's non-<see cref="System.Threading.CancellationToken"/> parameters. Set
+/// Declares one WHERE criterion on a <see cref="InquirySelectAllByPredicateAttribute"/>,
+/// <see cref="InquiryCountAttribute"/>, <see cref="InquiryExistsAttribute"/>,
+/// <see cref="InquiryAggregateAttribute"/>, <see cref="InquiryUpdateAttribute"/>,
+/// <see cref="InquiryDeleteAttribute"/> or <see cref="InquiryHardDeleteAttribute"/> method. Other
+/// operations do not apply criteria and fail the build: INQ096 on a delete-all method, INQ115 on the
+/// rest. Apply it multiple times; the criteria are combined in declaration order. By default they
+/// bind positionally to the method's non-<see cref="System.Threading.CancellationToken"/> parameters. Set
 /// <see cref="Parameter"/> (and <see cref="UpperParameter"/> for a range) to bind by name instead.
 /// </summary>
 /// <remarks>

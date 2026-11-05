@@ -1,8 +1,8 @@
 # Aggregates
 
 Return a single value from your store: a row count, a `SUM`, `AVG`, `MIN` or `MAX` over one column,
-or a yes/no existence test. An aggregate can take `[InquiryWhere]` criteria, so you can total one
-category without loading its rows. A plain count cannot; see [Count shapes](#count-shapes).
+or a yes/no existence test. A count or an aggregate can take `[InquiryWhere]` criteria, so you can
+count or total one category without loading its rows; see [Counting matching rows](#counting-matching-rows).
 
 The example on this page is a complete program. It runs against SQLite and prints the output shown
 under [Run it](#run-it).
@@ -120,16 +120,16 @@ column, and a matching `T`, when you need exact results. On SQLite, a `decimal` 
 
 | You want | Declare | Returns |
 |---|---|---|
-| Rows in the table | `[InquiryCount]` | `Task<long>` |
+| Rows in the table, or rows that match criteria | `[InquiryCount]`, optionally with `[InquiryWhere]` | `Task<long>` |
 | Rows per value of one column | `[InquiryGroupCount("Column")]` | `Task<IReadOnlyList<GroupCount<TKey>>>` |
 | Whether any row matches criteria | `[InquiryExists]` plus `[InquiryWhere]` | `Task<bool>` |
 | A filtered total alongside a page of rows | `InquiryPagedResult<T>` on a predicate select | see [Choosing a select declaration](select-declarations.md#supported-capabilities) |
 
-`[InquiryCount]` must return `Task<long>` and take only a `CancellationToken`. It counts the whole
-table, minus rows hidden by [soft delete](soft-delete.md) or [global filters](global-filters.md).
-Do not add `[InquiryWhere]` to it. A criterion that takes a value fails with
-[INQ006](../diagnostics.md#inq006). A criterion that takes no value, such as `Compare.IsNull`, is
-currently ignored, and the method still counts the whole table.
+`[InquiryCount]` must return `Task<long>`. Without criteria it counts the whole table, minus rows
+hidden by [soft delete](soft-delete.md) or [global filters](global-filters.md). It applies
+`[InquiryWhere]` criteria, including criteria from a specification attribute, the same way a
+predicate select does; see [Counting matching rows](#counting-matching-rows). Criteria on an
+operation that does not apply them fail the build with [INQ115](../diagnostics.md#inq115).
 
 `[InquiryGroupCount]` returns one `GroupCount<TKey>` per distinct value, with `Key` and `Count`. SQL
 does not guarantee the order of the groups, so sort them in your code when order matters.
@@ -147,6 +147,29 @@ private const string _sqlAgg_HighestPriceInStockAsync = "SELECT MAX(\"UnitPrice\
 
 SQL parameter names come from the columns, not the method parameters, so `minimumStock` binds to
 `@UnitsInStock`. Each aggregate runs as a scalar query, and the return type drives the conversion.
+
+## Counting matching rows
+
+`[InquiryCount]` and `[InquiryAggregate]` apply `[InquiryWhere]` criteria the same way a predicate select does. A criterion that takes no value, such as `Compare.IsNull`, adds no parameter. A criterion that takes a value binds to the method's parameters in order, or by name with `Parameter`.
+
+```csharp
+[InquiryCount]
+[InquiryWhere("CategoryID", Compare.IsNull)]
+public partial Task<long> CountWithoutCategoryAsync(CancellationToken ct = default);
+
+[InquiryCount]
+[InquiryWhere("CategoryID")]
+public partial Task<long> CountInCategoryAsync(int? categoryID, CancellationToken ct = default);
+```
+
+```csharp
+private const string _sqlCountFor_CountWithoutCategoryAsync =
+    "SELECT COUNT(*) FROM \"Products\" WHERE \"CategoryID\" IS NULL";
+private const string _sqlCountFor_CountInCategoryAsync =
+    "SELECT COUNT(*) FROM \"Products\" WHERE \"CategoryID\" = @CategoryID";
+```
+
+Other read operations, such as `[InquirySelectAll]`, `[InquirySelectAllByField]`, `[InquirySelectOneByKey]`, `[InquiryGroupCount]` and `[InquiryKeysetPage]`, do not apply criteria. A criterion on one of them fails the build with [INQ115](../diagnostics.md#inq115) instead of being ignored. Use `[InquirySelectAllByPredicate]` to filter rows.
 
 ## Existence checks
 

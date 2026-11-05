@@ -1434,4 +1434,14 @@ Failing shape: `[InquiryStoredProcedure("usp_Purge")]` on a store in a SQLite pr
 
 Smallest correction: On an unsupported dialect, remove the method or run the SQL through `IInquiry`. On Oracle, declare an `OUT NUMBER` parameter and set `OutputParameter` instead of `ReturnsValue`, and give string or `byte[]` INOUT parameters `[InquiryParameter(IsInputOutput = true, Length = n)]`. See [provider support](features/stored-procedures.md#provider-support).
 
+## INQ115
+
+Operation does not support InquiryWhere criteria. Default: error, enabled.
+
+Trigger: A method declares `[InquiryWhere]` criteria, directly or through an `[InquirySpecification]` attribute, on an operation that does not apply them. This includes criteria that take no value, such as `Compare.IsNull`. Only `[InquirySelectAllByPredicate]`, `[InquiryCount]`, `[InquiryExists]`, `[InquiryAggregate]`, and `[InquiryUpdate]`, `[InquiryDelete]` or `[InquiryHardDelete]` with criteria apply them. `[InquiryDeleteAll]` with criteria reports [INQ096](#inq096) instead.
+
+Failing shape: `[InquirySelectAll] [InquiryWhere("Category", Compare.IsNull)]` on `UncategorizedAsync(CancellationToken ct)`.
+
+Smallest correction: Change the operation to one that applies criteria, such as `[InquirySelectAllByPredicate]` for rows or `[InquiryCount]` for a count. Remove the criteria only when the method should read every row. Suppressing INQ115 does not generate the method.
+
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
