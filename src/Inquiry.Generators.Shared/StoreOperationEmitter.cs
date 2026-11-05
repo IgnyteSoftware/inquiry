@@ -3765,7 +3765,7 @@ internal static class StoreOperationEmitter
         {
             var column = filters[i];
             source.AppendLine($"        var _fp{i} = _cmd.CreateParameter();");
-            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__gf_" + column.PropertyName))}\";");
+            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.GlobalFilterParameterName!))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_fp{i}", "        ", predicate: true);
             source.AppendLine($"        _fp{i}.Value = {BuildParameterValueExpression(column, AmbientFilterValue(column), sqlBuilder)};");
             source.AppendLine($"        {addStatement(i)}");
@@ -3808,7 +3808,7 @@ internal static class StoreOperationEmitter
             }
             source.AppendLine("        }");
             source.AppendLine($"        var _fp{i} = _cmd.CreateParameter();");
-            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName("__gf_" + column.PropertyName))}\";");
+            source.AppendLine($"        _fp{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(column.GlobalFilterParameterName!))}\";");
             AppendColumnParameterMetadata(source, column, sqlBuilder, $"_fp{i}", "        ", predicate: true);
             if (sqlBuilder.BuildArrayBindParameterMetadata($"_fp{i}", column) is { } providerMetadata)
             {

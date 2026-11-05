@@ -3808,9 +3808,11 @@ internal static class StoreProcessor
                     // Only a bare "@name" assignment stores the value as is. Inside an expression the value
                     // keeps its plain type, so a call such as to_jsonb(@name) still receives text.
                     var isBareAssignment = setExpression.Expression.Trim() == "@" + name;
-                    resolvedBindings[name] = new SetBinding("@" + name, parameterIndex, target,
+                    var sqlName = existingBinding?.SqlParameterName.Substring(1)
+                        ?? SetExpressionSqlName(name, entity, method, resolvedBindings.Values);
+                    resolvedBindings[name] = new SetBinding("@" + sqlName, parameterIndex, target,
                         isBareAssignment && (existingBinding?.UsesProviderType ?? true));
-                    expression.Append(sqlBuilder.ParameterName(name));
+                    expression.Append(sqlBuilder.ParameterName(sqlName));
                     validationExpression.Append('0');
                     next = end;
                     continue;
@@ -3909,6 +3911,19 @@ internal static class StoreProcessor
             }
         }
 
+        // Filter bind names, and SET names moved away from them, are reserved ignoring case (#288).
+        // usedNames stays ordinal so names that touch no filter name keep their current spelling.
+        var reservedIgnoringCase = new HashSet<string>(
+            entity.Columns.AsImmutableArray()
+                .Select(static column => column.GlobalFilterParameterName)
+                .OfType<string>(),
+            StringComparer.OrdinalIgnoreCase);
+        if (reservedParameterNames is not null)
+        {
+            reservedIgnoringCase.UnionWith(reservedParameterNames.Where(reservedName =>
+                !method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, reservedName, StringComparison.Ordinal))));
+        }
+
         foreach (var predicate in method.Predicates.AsImmutableArray())
         {
             if (predicate.OpenGroups < 0 || predicate.CloseGroups < 0)
@@ -4003,8 +4018,8 @@ internal static class StoreProcessor
                             return false;
                         }
 
-                        var lo = UniqueName(usedNames, paramBase + "_lo");
-                        var hi = UniqueName(usedNames, paramBase + "_hi");
+                        var lo = UniqueName(usedNames, reservedIgnoringCase, paramBase + "_lo");
+                        var hi = UniqueName(usedNames, reservedIgnoringCase, paramBase + "_hi");
                         // SqlPredicate carries the bare logical name; SqlBuilder.RenderPredicate applies the
                         // dialect sigil (':' on Oracle, '@' elsewhere) when emitting the SQL. The runtime
                         // PredicateBinding keeps '@' — the binder is dialect-agnostic and FinalizeCommand
@@ -4029,7 +4044,7 @@ internal static class StoreProcessor
                             return false;
                         }
 
-                        var name = UniqueName(usedNames, paramBase);
+                        var name = UniqueName(usedNames, reservedIgnoringCase, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
                         // Unlike scalar bindings (which keep the runtime binder's '@' form and let Oracle's
                         // FinalizeCommand reconcile the sigil), IN/NOT IN route through InquiryInExpansion, which
@@ -4056,7 +4071,7 @@ internal static class StoreProcessor
                             return false;
                         }
 
-                        var name = UniqueName(usedNames, paramBase);
+                        var name = UniqueName(usedNames, reservedIgnoringCase, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
                         bindings.Add(new PredicateBinding("@" + name, first, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
@@ -4073,7 +4088,7 @@ internal static class StoreProcessor
                             return false;
                         }
 
-                        var name = UniqueName(usedNames, paramBase);
+                        var name = UniqueName(usedNames, reservedIgnoringCase, paramBase);
                         predicates.Add(ToSqlPredicate(predicate, column, name, null));
                         bindings.Add(new PredicateBinding("@" + name, first, column, isCollection: false, usesProviderType: usesProviderType));
                         paramIndex += 1;
@@ -4227,21 +4242,80 @@ internal static class StoreProcessor
     private static bool ParameterMatchesColumnIgnoringNullability(ParameterData parameter, ColumnData column)
         => parameter.NonNullableComparisonDisplay == column.Type.NonNullableDisplayName;
 
-    private static string UniqueName(HashSet<string> used, string candidate)
+    /// <summary>
+    /// The SQL bind name for a SET-expression parameter. It is the parameter name unless that equals a
+    /// filter bind name ignoring case (#288); then a numbered name that no column, parameter, filter
+    /// or earlier SET binding uses.
+    /// </summary>
+    private static string SetExpressionSqlName(
+        string name,
+        EntityData entity,
+        StoreMethodData method,
+        IEnumerable<SetBinding> assigned)
     {
-        if (used.Add(candidate))
+        if (!IsFilterParameterName(name))
+        {
+            return name;
+        }
+
+        var suffix = 2;
+        string candidate;
+        do
+        {
+            candidate = name + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            suffix++;
+        }
+        while (IsFilterParameterName(candidate) ||
+            entity.Columns.AsImmutableArray().Any(column => SameName(column.PropertyName, candidate)) ||
+            method.Parameters.AsImmutableArray().Any(parameter => SameName(parameter.Name, candidate)) ||
+            assigned.Any(binding => SameName(binding.SqlParameterName.Substring(1), candidate)));
+
+        return candidate;
+
+        bool IsFilterParameterName(string value)
+            => entity.Columns.AsImmutableArray().Any(column => SameName(column.GlobalFilterParameterName, value));
+
+        static bool SameName(string? left, string right)
+            => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string UniqueName(HashSet<string> used, HashSet<string> reserved, string candidate)
+    {
+        // A name moved off a reserved name must not match any other name ignoring case, and later
+        // names must avoid it too. Names that never touch the reserved set follow the old rule.
+        var moved = reserved.Contains(candidate);
+        if (!moved && used.Add(candidate))
         {
             return candidate;
         }
 
         var suffix = 2;
         string next;
-        do
+        while (true)
         {
             next = candidate + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
             suffix++;
+            if (reserved.Contains(next))
+            {
+                moved = true;
+                continue;
+            }
+
+            if (moved && used.Any(name => string.Equals(name, next, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (used.Add(next))
+            {
+                break;
+            }
         }
-        while (!used.Add(next));
+
+        if (moved)
+        {
+            reserved.Add(next);
+        }
 
         return next;
     }
