@@ -742,8 +742,8 @@ public sealed partial class InquiryGeneratorTests
     public void ParameterizedFilterBinderCallIsPinnedOnEverySeam_Sqlite()
     {
         // One store spanning the distinct binder-emission seams; the exact occurrence counts are the
-        // point — deleting the filter call from any one seam (predicate command, paged main command,
-        // paged count, parameterless command, set-based update) changes a count and fails here, which
+        // point — deleting the filter call from any one seam (predicate command, paged command,
+        // parameterless command, set-based update) changes a count and fails here, which
         // the collection-level live tests cannot do because each seam masks the others.
         var result = RunGenerator(DocStoreSource("""
             [InquirySelectAllByPredicate]
@@ -767,10 +767,12 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetTenantDocStore(result);
 
-        // _c form: predicate select, exists, paged main command, update-where.
+        // _c form: predicate select, exists, paged command, update-where. The paged command carries
+        // both the page SELECT and the COUNT (#403), so one binder call covers both statements.
         Assert.Equal(4, CountOccurrences(text, "__BindGlobalFilters(_c);"));
-        // _cmd form: the parameterless Count command and the zero-field paged-result count.
-        Assert.Equal(2, CountOccurrences(text, "__BindGlobalFilters(_cmd); })"));
+        Assert.Contains("var _sql = _sql_PageAsync + \";\" + _sqlCount_PageAsync;", text);
+        // _cmd form: the parameterless Count command.
+        Assert.Equal(1, CountOccurrences(text, "__BindGlobalFilters(_cmd); })"));
         // Exactly one helper body, binding BOTH parameterized filters.
         Assert.Equal(1, CountOccurrences(text, "private static void __BindGlobalFilters(global::System.Data.Common.DbCommand _cmd)"));
         Assert.Contains("GetRequired<long>(\"TenantId\")", text);

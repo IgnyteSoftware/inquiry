@@ -79,6 +79,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p2.Value = (object?)high ?? global::System.DBNull.Value;", text);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \"@Id\", ids);", text);
         Assert.Contains("LIMIT @__limit OFFSET @__offset", text);
+        // The page and COUNT share one command, so the collection is bound once for both statements.
+        Assert.Contains("var _sql = _sql_PageAsync + \";\" + _sqlCount_PageAsync;", text);
+        Assert.Equal(1, CountOccurrences(text, "InquiryJsonArrayParameter.Bind(_c, \"@Id\", ids);"));
     }
 
     [Fact]

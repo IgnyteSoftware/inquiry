@@ -52,6 +52,7 @@ internal sealed class BatchExecutionProbe
     private readonly List<FinalizedBatchCommand> _finalizedCommands = new();
     private int _createBatchCount;
     private int _beginTransactionCount;
+    private int _connectionOpenCount;
 
     internal BatchExecutionProbe(
         Func<DbCommand, object?>? inspectFinalizedCommand = null,
@@ -63,6 +64,7 @@ internal sealed class BatchExecutionProbe
 
     internal int CreateBatchCount => Volatile.Read(ref _createBatchCount);
     internal int BeginTransactionCount => Volatile.Read(ref _beginTransactionCount);
+    internal int ConnectionOpenCount => Volatile.Read(ref _connectionOpenCount);
 
     internal IReadOnlyList<int> InitializedChunkSizes
     {
@@ -110,6 +112,7 @@ internal sealed class BatchExecutionProbe
 
     internal void RecordBatchCreated() => Interlocked.Increment(ref _createBatchCount);
     internal void RecordTransactionStarted() => Interlocked.Increment(ref _beginTransactionCount);
+    internal void RecordConnectionOpened() => Interlocked.Increment(ref _connectionOpenCount);
 
     internal void RecordBatchExecuted(int itemCount)
     {
@@ -155,6 +158,7 @@ internal sealed class BatchExecutionProbe
     {
         Interlocked.Exchange(ref _createBatchCount, 0);
         Interlocked.Exchange(ref _beginTransactionCount, 0);
+        Interlocked.Exchange(ref _connectionOpenCount, 0);
         lock (_gate)
         {
             _initializedChunkSizes.Clear();
@@ -227,6 +231,7 @@ internal sealed class ProbingInquiryConnectionFactory : IInquiryConnectionFactor
     public async ValueTask<DbConnection> OpenConnectionAsync(CancellationToken cancellationToken = default)
     {
         var connection = await _inner.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        _probe.RecordConnectionOpened();
         return new ProbingDbConnection(connection, _probe);
     }
 
