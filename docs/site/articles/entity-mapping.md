@@ -409,10 +409,12 @@ an auditing, soft-delete or concurrency-token column (`INQ057`). See
 
 ## Who owns the schema
 
-`InquiryGeneratedSchema.Ddl` creates tables. It does not change a table that already exists. On
-SQLite, `CREATE TABLE IF NOT EXISTS` skips an existing table, so a changed `DefaultExpression`,
-`Length` or `Computed` takes effect only in a new database. Change a deployed table with a
-migration; see [Migrations recipe](features/migrations.md).
+`InquiryGeneratedSchema.Ddl` is a run-once baseline for an empty database. It never migrates an
+existing table: a changed `DefaultExpression`, `Length` or `Computed` takes effect only in a new
+database. On SQLite, `CREATE TABLE IF NOT EXISTS` skips an existing table. On the other providers,
+cyclic foreign keys are added with unguarded `ALTER TABLE ... ADD CONSTRAINT` statements, which fail
+or change an existing table if the script runs again. Change a deployed table with a migration; see
+[Migrations recipe](features/migrations.md).
 
 Set `[InquiryTable(GenerateDdl = false)]` when another tool owns the table. Inquiry still generates
 its stores and materializers, but leaves it out of the DDL and the schema checks. See
