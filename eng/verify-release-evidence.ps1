@@ -43,6 +43,9 @@ $expectedChecks = @(
         "$tfm/sqlite/crud"
         "$tfm/companions"
     }
+    foreach ($probe in @('companion-newer-nu1107', 'core-older-nu1605', 'core-newer-nu1608-warning', 'core-newer-nu1608-warnings-as-errors', 'coordinated-restores')) {
+        "net8.0/version-mismatch/$probe"
+    }
     'net10.0/linux-x64/nativeaot-crud'
 )
 if (@(Compare-Object ($expectedChecks | Sort-Object) ($evidence.checks | Sort-Object)).Count -ne 0) {
