@@ -50,6 +50,8 @@
   href: many-to-many.md
 - name: Transactions
   href: transactions.md
+- name: Row locking
+  href: row-locking.md
 - name: Stored procedures
   href: stored-procedures.md
 - name: Schema DDL

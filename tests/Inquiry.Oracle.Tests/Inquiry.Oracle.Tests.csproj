@@ -25,6 +25,9 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
 
     <Compile Include="..\Inquiry.FeatureCatalog\*.cs" LinkBase="FeatureCatalog" />
+    <Compile Include="..\Inquiry.FeatureCatalog\Locking\*.cs" LinkBase="FeatureCatalog\Locking" />
+    <Compile Include="..\Inquiry.FeatureCatalog\Locking\Probes\*.cs" LinkBase="FeatureCatalog\Locking\Probes" />
+    <Compile Include="..\Shared\RowLockScenarios.cs" Link="Shared\RowLockScenarios.cs" />
     <Compile Include="..\Shared\BatchExecutionProbe.cs" LinkBase="Shared" />
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" LinkBase="Shared" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" LinkBase="Shared" />

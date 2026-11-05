@@ -201,6 +201,12 @@ This catches the bug at the API boundary instead of letting it corrupt the conne
 
 Across **different** async flows / different transactions, there's no contention — the `AsyncLocal` slot keeps them isolated, and each has its own connection.
 
+## Row locks
+
+To stop other transactions from changing rows you have read until your transaction ends, set
+`LockMode` on the select. [Row locking](row-locking.md) lists the clause each provider uses and what
+each mode does while another transaction holds the row.
+
 ## `TransactionScope` / System.Transactions
 
 Inquiry's transaction model is ADO.NET `DbTransaction`, not the ambient `Transaction.Current`. That's a deliberate position, and here is exactly what it means for brownfield code that already uses `TransactionScope`:
@@ -221,5 +227,6 @@ An explicit opt-in enlistment API (`Connection.EnlistTransaction` on open) has b
 
 ## See also
 
+- [Row locking](row-locking.md) — lock rows you read until the transaction ends.
 - [Concepts: how it works](../concepts.md) — the wider compile-time pipeline picture.
 - [Architecture deep-dive](../architecture.md) — the runtime pipeline internals.

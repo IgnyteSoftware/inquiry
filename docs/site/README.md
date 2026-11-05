@@ -42,6 +42,11 @@ A sample with several projects, such as `samples/Inquiry.SchemaEvolution`, is pu
 includes (`[!code-csharp[](../../../../samples/...)]`) instead, so the page shows the files that run.
 A moved or deleted file fails the `--warningsAsErrors` build.
 
+A `<!-- source: path -->` comment directly above a code fence publishes a repository file verbatim, for
+examples that need a live database. The provider integration tests compile and run that file, and
+`DocumentationSourceFenceTests` fails when the fence and the file differ. Edit the file, then copy it
+into the fence.
+
 ## What's in here
 
 - **`docfx.json`** — the build config. Lists the public packages whose XML doc comments become the API reference.
