@@ -105,7 +105,7 @@ dotnet add package Ignyte.Inquiry.Testing --prerelease     # optional test helpe
 dotnet add package Ignyte.Inquiry.Sqlite.Testing --prerelease # optional SQLite fixture
 ```
 
-Use one version for every `Ignyte.Inquiry*` package and update them together. Each package depends on the others at exactly its own version, so restore fails on a mixed set.
+Use one version for every `Ignyte.Inquiry*` package and update them together. Each package depends on the others at exactly its own version, so NuGet rejects a mixed set at restore. A direct reference to a newer `Ignyte.Inquiry` than the provider only warns (`NU1608`); see [restore errors](docs/site/articles/getting-started.md#troubleshooting-restore-errors-nu1107-nu1605-and-nu1608).
 
 ## Contributing and releasing
 

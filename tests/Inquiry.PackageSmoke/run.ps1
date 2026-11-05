@@ -122,7 +122,7 @@ function Invoke-RestoreProbe([string] $Name, [string[]] $Packages, [bool] $Warni
     $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if (($exitCode -ne 0) -ne $ShouldFail) { throw "Restore probe '$Name' exited with $exitCode." }
     if ($Pattern -and -not ($output -match $Pattern)) { throw "Restore probe '$Name' did not report /$Pattern/." }
-    if (-not $Pattern -and ($output -match 'NU1(107|605|608)')) { throw "Restore probe '$Name' reported a version conflict." }
+    if (-not $Pattern -and ($output -match '\bNU1\d{3}\b')) { throw "Restore probe '$Name' reported a NuGet diagnostic." }
     $checks.Add("net8.0/version-mismatch/$Name")
 }
 

@@ -184,7 +184,8 @@ INQ039 is already lowered.
 - **#271** covers each path in the table above in three cases: default severity, the rejecting error
   suppressed, and the rejecting error suppressed with INQ039 lowered.
 - **#273** needs no stub rule. It adds no diagnostic: every Inquiry package depends on the others at
-  exactly its own version, so NuGet rejects a mixed set at restore.
+  exactly its own version, so NuGet rejects a mixed set at restore. A direct reference to a newer
+  `Ignyte.Inquiry` than the provider only warns (`NU1608`).
 - The repair index (`diagnostics.md`) and [Errors and partial outcomes](../articles/error-contracts.md)
   get the final rules when #266 lands.
 
