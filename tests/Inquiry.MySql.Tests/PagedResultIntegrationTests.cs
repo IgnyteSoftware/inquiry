@@ -1,8 +1,8 @@
 using Inquiry.FeatureCatalog;
 using Inquiry.Interceptors;
+using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Northwind;
 using Inquiry.Northwind.Stores;
-using Inquiry.MySql.Tests.Fixtures;
 using Inquiry.Testing;
 using Inquiry.Tests.Shared;
 using Microsoft.Extensions.DependencyInjection;
