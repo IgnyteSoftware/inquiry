@@ -414,7 +414,7 @@ public abstract class SqlBuilder
     public abstract string QuoteIdentifier(string identifier);
 
     internal virtual string BuildSelectAllSql(SqlBuildContext context, bool distinct = false)
-        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + WhereSuffix(context.ActiveRowPredicate);
+        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + FromTable(context) + WhereSuffix(context.ActiveRowPredicate);
 
     internal string BuildSelectAllFilteredSql(
         SqlBuildContext childContext,
@@ -601,7 +601,7 @@ public abstract class SqlBuilder
         }
 
         var where = string.Join(" AND ", parts);
-        return (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
+        return (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + FromTable(context) + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
     }
 
     /// <summary>
@@ -677,7 +677,7 @@ public abstract class SqlBuilder
     /// <see cref="AppendWhere"/> so it stays consistent with key/field WHERE shaping.
     /// </summary>
     internal virtual string BuildSelectByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates, bool distinct = false)
-        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + context.Table
+        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + FromTable(context)
             + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
 
     // ---- Set-based predicate mutations ([InquiryUpdate] / [InquiryDelete]) ----
@@ -1507,7 +1507,8 @@ public abstract class SqlBuilder
     /// <summary>
     /// Applies a row-level lock clause to a completed SELECT statement. The base implementation
     /// appends the trailing lock suffix (<c>FOR UPDATE</c>, <c>FOR SHARE</c>, etc.); SQL Server
-    /// overrides to inject a table hint (<c>WITH (UPDLOCK, ROWLOCK)</c>) after the FROM table.
+    /// writes a table hint (<c>WITH (UPDLOCK, ROWLOCK)</c>) with the FROM table through
+    /// <see cref="FromTable"/> and overrides this method to confirm the hint is there.
     /// <paramref name="lockMode"/> maps to the <c>InquiryLockMode</c> enum values (0 = None).
     /// Throws <see cref="System.NotSupportedException"/> when the dialect does not support locking
     /// (SQLite) — the caller catches and degrades to INQ039.
@@ -1521,6 +1522,21 @@ public abstract class SqlBuilder
 
         return selectSql + BuildLockSuffix(lockMode);
     }
+
+    /// <summary>
+    /// Throws <see cref="System.NotSupportedException"/> when the dialect cannot lock a SELECT of this
+    /// shape. <paramref name="offsetPaged"/> is true for an OFFSET/LIMIT/FETCH pagination tail. The caller
+    /// reports the message as INQ039. The base implementation accepts every shape.
+    /// </summary>
+    public virtual void EnsureLockShapeSupported(int lockMode, bool distinct, bool offsetPaged)
+    {
+    }
+
+    /// <summary>
+    /// The table reference a lockable SELECT writes after <c>FROM</c>. SQL Server overrides it to add
+    /// the table hint for <see cref="SqlBuildContext.LockMode"/>.
+    /// </summary>
+    protected virtual string FromTable(SqlBuildContext context) => context.Table;
 
     /// <summary>
     /// Returns the trailing lock clause for the given <paramref name="lockMode"/>. The base

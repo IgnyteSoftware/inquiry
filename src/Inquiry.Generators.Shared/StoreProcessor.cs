@@ -1890,6 +1890,18 @@ internal static class StoreProcessor
         SqlBuildContext CtxFor(StoreMethodData m)
         {
             var suppressSoftDeleteForMethod = hasSoftDelete && m.IncludeDeleted;
+            // A locking select never shares a context: SQL Server writes its lock hint from the context.
+            if (m.LockMode != 0)
+            {
+                return new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+                    suppressSoftDelete: suppressSoftDeleteForMethod,
+                    hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint,
+                    ignoredGlobalFilterNames: m.IgnoredFilterNames.Count > 0 ? new HashSet<string>(m.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
+                {
+                    LockMode = m.LockMode,
+                };
+            }
+
             if (m.IgnoredFilterNames.Count == 0)
             {
                 return suppressSoftDeleteForMethod ? ctxIncludeDeleted : ctx;
@@ -2199,7 +2211,10 @@ internal static class StoreProcessor
                         suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                         softDeletePredicateColumn: entity.SoftDeleteColumn,
                         globalFilterPredicateColumns: entityGlobalFilters,
-                        ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null);
+                        ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
+                    {
+                        LockMode = method.LockMode,
+                    };
                 }
                 else
                 {
@@ -2241,7 +2256,8 @@ internal static class StoreProcessor
         {
             var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0
                 || method.IgnoredFilterNames.Count > 0;
-            if (!needsPerMethodSql || selectPlan is not null)
+            // A projection method runs its _sqlProj_ const, built below, so an entity const here is never used.
+            if (!needsPerMethodSql || selectPlan is not null || projectionMethods.ContainsKey(method.MemberName))
             {
                 continue;
             }
@@ -2457,10 +2473,19 @@ internal static class StoreProcessor
                 suppressSoftDelete: hasSoftDelete && method.IncludeDeleted,
                 softDeletePredicateColumn: entity.SoftDeleteColumn,
                 globalFilterPredicateColumns: entityGlobalFilters,
-                ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null);
+                ignoredGlobalFilterNames: method.IgnoredFilterNames.Count > 0 ? new HashSet<string>(method.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
+            {
+                LockMode = method.LockMode,
+            };
             var projSql = method.Operation == StoreOperation.SelectAllByField
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
+            if (method.LockMode != 0)
+            {
+                var lockError = TryApplyLockClause(ref projSql, sqlBuilder, projCtx, method);
+                if (lockError is not null)
+                { lockErrors[method.MemberName] = lockError; continue; }
+            }
             AppendSql("_sqlProj_" + method.MemberName, projSql);
         }
 
@@ -4726,6 +4751,7 @@ internal static class StoreProcessor
     {
         try
         {
+            sqlBuilder.EnsureLockShapeSupported(method.LockMode, method.Distinct, method.Pagination == Pagination.Offset);
             sql = sqlBuilder.ApplyLockClause(sql, context, method.LockMode);
             return null;
         }

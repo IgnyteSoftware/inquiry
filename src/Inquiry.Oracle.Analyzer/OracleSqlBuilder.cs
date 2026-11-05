@@ -602,4 +602,23 @@ internal sealed class OracleSqlBuilder : SqlBuilder
         4 => throw new System.NotSupportedException("Oracle does not support FOR SHARE locking."),
         _ => "",
     };
+
+    // Oracle rejects FOR UPDATE with DISTINCT (ORA-01786) and with a row-limiting clause (ORA-02014).
+    public override void EnsureLockShapeSupported(int lockMode, bool distinct, bool offsetPaged)
+    {
+        if (lockMode == 0)
+        {
+            return;
+        }
+
+        if (distinct)
+        {
+            throw new System.NotSupportedException("Oracle does not support row locking with DISTINCT.");
+        }
+
+        if (offsetPaged)
+        {
+            throw new System.NotSupportedException("Oracle does not support row locking with OFFSET/FETCH paging.");
+        }
+    }
 }
