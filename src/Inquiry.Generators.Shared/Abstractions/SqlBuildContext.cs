@@ -26,6 +26,19 @@ public sealed class SqlBuildContext
         return name;
     }
 
+    internal static string GlobalFilterParameterName(IEnumerable<IColumn> columns, IColumn filter, ISet<string> allocated)
+    {
+        var nameBuilder = new StringBuilder("__gf_").Append(filter.PropertyName);
+        var name = nameBuilder.ToString();
+        while (allocated.Contains(name) ||
+            columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            name = nameBuilder.Insert(0, '_').ToString();
+        }
+
+        return name;
+    }
+
     private readonly IReadOnlyList<string> _activeRowPredicateTerms;
 
     internal ISet<string>? SuppressedForeignKeyColumns { get; init; }
@@ -180,12 +193,12 @@ public sealed class SqlBuildContext
             {
                 // Runtime-parameterized mode: the predicate is still a compile-time const, but it
                 // compares to a parameter the generated binder fills from the ambient
-                // InquiryFilterContext at execute time. The "__gf_" prefix keeps the name clear of
-                // every user-declared parameter (those are property/parameter names). The binder
-                // side derives the same set via StoreOperationEmitter.ActiveParameterizedFilters —
-                // both are pure functions of (columns, ignoredGlobalFilterNames), which is the
-                // agreement that keeps a const's parameters and its binder in lockstep.
-                return gfQuoted + " = " + builder.ParameterName("__gf_" + gf.PropertyName);
+                // InquiryFilterContext at execute time. EntityProcessor allocates the name so no mapped
+                // property uses it, and per-method names avoid it (#288). The binder side derives the
+                // same set via StoreOperationEmitter.ActiveParameterizedFilters — both are pure
+                // functions of (columns, ignoredGlobalFilterNames), which is the agreement that keeps
+                // a const's parameters and its binder in lockstep.
+                return gfQuoted + " = " + builder.ParameterName(gf.GlobalFilterParameterName ?? "__gf_" + gf.PropertyName);
             }
 
             return gfQuoted + " = " + (gf.GlobalFilterKeepWhenTrue ? builder.BooleanTrueLiteral : builder.BooleanFalseLiteral);

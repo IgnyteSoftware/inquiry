@@ -82,6 +82,12 @@ public interface IColumn
     string? GlobalFilterContextKey { get; }
 
     /// <summary>
+    /// The logical bind name of a <see cref="GlobalFilterContextKey"/> filter, allocated once per entity
+    /// so it differs from every mapped property name; null for other columns.
+    /// </summary>
+    string? GlobalFilterParameterName { get; }
+
+    /// <summary>
     /// <c>InquiryGlobalFilter.EnforceOnWrites</c>: when true this filter's predicate is also composed
     /// onto key-based writes (see <c>SqlBuildContext.WriteEnforcedPredicate</c>). Ignored when
     /// <see cref="IsGlobalFilter"/> is false.

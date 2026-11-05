@@ -56,6 +56,12 @@ Generated reads bind `TenantId = @__gf_TenantId` at execution. The value flows a
 within the current async flow. An absent scope, missing key, null, or wrong value type throws
 `InquiryFilterValueMissingException` before a filtered command runs.
 
+The filter parameter is `__gf_` plus the property name. If another mapped property already has
+that name, ignoring case, the generator adds leading underscores until the name is free, for example
+`@___gf_TenantId`. A criterion, JSON-path value or `[InquirySet]` parameter whose name equals a
+filter parameter binds under a numbered name instead, such as `@__gf_TenantId2`. A method parameter
+keeps its C# name. Hover text and logged SQL show the generated names.
+
 These limits apply to the example:
 
 - Inserts and bulk inserts do not stamp or validate `TenantId`. A missing scope does not reject

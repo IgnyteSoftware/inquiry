@@ -43,6 +43,7 @@ internal static class EntityProcessor
 
         var columns = DiscoverColumns(entitySymbol, compilation, diagnostics);
         RemoveDuplicateColumns(columns, entitySymbol.Name, location, diagnostics);
+        AllocateGlobalFilterParameterNames(columns);
         var relations = DiscoverRelations(entitySymbol, diagnostics, cancellationToken);
         var indexes = DiscoverIndexes(entitySymbol, columns, diagnostics);
         var checks = DiscoverChecks(entitySymbol);
@@ -237,6 +238,27 @@ internal static class EntityProcessor
             diagnostics.Add(DiagnosticData.Create(
                 InquiryDiagnosticDescriptors.DuplicateColumn, location, entityName, columns[i].ColumnName));
             columns.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// Gives each ContextKey filter a bind name no mapped property or earlier filter uses (#288).
+    /// The name lives on the column because projection SQL sees only some columns, but must render
+    /// the same name the binder binds.
+    /// </summary>
+    private static void AllocateGlobalFilterParameterNames(List<ColumnData> columns)
+    {
+        var allocated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (!columns[i].IsGlobalFilter || columns[i].GlobalFilterContextKey is null)
+            {
+                continue;
+            }
+
+            var name = SqlBuildContext.GlobalFilterParameterName(columns, columns[i], allocated);
+            allocated.Add(name);
+            columns[i] = columns[i] with { GlobalFilterParameterName = name };
         }
     }
 

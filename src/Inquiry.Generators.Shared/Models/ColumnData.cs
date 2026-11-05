@@ -56,10 +56,16 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>
     /// InquiryGlobalFilter.ContextKey, or null for the constant-bool mode. Non-null switches the
-    /// composed predicate to <c>"col" = @__gf_&lt;property&gt;</c> with the value bound at execute
-    /// time from the ambient InquiryFilterContext under this key.
+    /// composed predicate to <c>"col" = @&lt;GlobalFilterParameterName&gt;</c> with the value bound at
+    /// execute time from the ambient InquiryFilterContext under this key.
     /// </summary>
     public string? GlobalFilterContextKey { get; init; }
+
+    /// <summary>
+    /// The bind name of a ContextKey filter: <c>__gf_&lt;property&gt;</c>, with leading underscores added
+    /// until no mapped property or earlier filter uses it. Set by EntityProcessor; null otherwise.
+    /// </summary>
+    public string? GlobalFilterParameterName { get; init; }
 
     /// <summary>
     /// InquiryGlobalFilter.EnforceOnWrites. When true the filter's term is AND-composed onto key-based
