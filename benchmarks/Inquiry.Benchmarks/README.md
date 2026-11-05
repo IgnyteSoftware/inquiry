@@ -149,8 +149,12 @@ sink reuses one provider `DbCommand`, applies the generated static binder, and n
 connection. Every boxed `InquiryCommand` overload throws, so the benchmark fails immediately if a
 generator change falls back to the allocating compatibility path. Each generated leg is compared
 with a direct static-binder floor that performs the same command reset, command-text assignment, and
-provider-parameter creation. `[MemoryDiagnoser]` reports managed allocation and
-`[DisassemblyDiagnoser]` writes JIT assembly reports for auditing closure, delegate, and tuple costs.
+provider-parameter creation. `[MemoryDiagnoser]` reports managed allocation.
+
+Both classes write JIT assembly reports, for auditing closure, delegate, and tuple costs, only when
+`INQUIRY_BENCH_DISASM=1` is set. The disassembler reads the running benchmark process through the
+runtime's DAC, and on Linux with .NET 8 that can crash the BenchmarkDotNet host with SIGSEGV and stop
+the suite (#516). Leave the variable unset for measurement and release-evidence runs.
 
 `GeneratedCommandPipelineBenchmarks` is intentionally a separate end-to-end measurement. Its
 parameterless, one-parameter, and eight-parameter methods execute real SQL against shared in-memory
@@ -168,7 +172,8 @@ with registered-but-inactive telemetry and a minimal active custom interceptor. 
 validates every SQL shape and verifies that the custom interceptor receives all three operations.
 
 ```powershell
-# Retained-command binder/JIT floor. Omit --job Dry for publishable measurements and disassembly.
+# Retained-command binder/JIT floor. Omit --job Dry for publishable measurements.
+# For disassembly, also omit --job Dry and first run: $env:INQUIRY_BENCH_DISASM = '1'
 dotnet run -c Release --framework net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks\Inquiry.Benchmarks.csproj -- --filter "*ParameterBindingBenchmarks*" --job Dry
 
 # Real generated-store -> DefaultInquiry -> built-in-pipeline execution and allocation smoke.

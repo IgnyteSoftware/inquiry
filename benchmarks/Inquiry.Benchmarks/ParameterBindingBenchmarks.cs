@@ -2,7 +2,6 @@ using System.Data;
 using System.Data.Common;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Diagnosers;
 using Inquiry.Commands;
 using Inquiry.Entities;
 using Inquiry.Materialization;
@@ -27,7 +26,7 @@ namespace Inquiry.Benchmarks;
 /// <see cref="ValueTuple{T1,T2,T3,T4,T5,T6,T7,TRest}"/>.
 /// </remarks>
 [MemoryDiagnoser]
-[DisassemblyDiagnoser(maxDepth: 4, printSource: true)]
+[Config(typeof(OptInDisassemblyConfig))]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes these fields in the [GlobalCleanup] method.")]
