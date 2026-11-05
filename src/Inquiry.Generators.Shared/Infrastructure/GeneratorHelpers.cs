@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Inquiry.Generators.Infrastructure;
 
@@ -150,12 +151,14 @@ internal static class GeneratorHelpers
 
     public static string Escape(string value)
     {
-        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        // FormatLiteral escapes the quote character only when it also adds the quotes.
+        var literal = SymbolDisplay.FormatLiteral(value, quote: true);
+        return literal.Substring(1, literal.Length - 2);
     }
 
     public static string Literal(string? value)
     {
-        return value is null ? "null" : "\"" + Escape(value) + "\"";
+        return value is null ? "null" : SymbolDisplay.FormatLiteral(value, quote: true);
     }
 
     public static string BooleanLiteral(bool value)
