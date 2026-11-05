@@ -92,10 +92,12 @@ Junctions, relation checks, stores, schema, and registration still share one
 output, so a model edit still re-runs them. #182 tracks moving stores to their
 own outputs.
 
-The table compares the same microbenchmark before and after this change, on the
-host described above. Each number is the ShortRun mean of three iterations. The
-latency samples are noisy, and the host was not quiet. Allocation is the
-steadier signal.
+The table compares the same microbenchmark before and after this change. Both
+runs used a different host from the #396 results above: Windows 11, 12th Gen
+Intel Core i9-12900K, SDK 10.0.403, and .NET 10.0.14. Do not compare these
+numbers with the #396 tables. Each number is the ShortRun mean of three
+iterations. The latency samples are noisy, and the host was not quiet.
+Allocation is the steadier signal.
 
 | Entities | Operation | Before ms | After ms | Before MB | After MB |
 | ---: | --- | ---: | ---: | ---: | ---: |
