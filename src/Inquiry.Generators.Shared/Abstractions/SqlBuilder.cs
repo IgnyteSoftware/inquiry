@@ -164,6 +164,18 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual ProcedureTvpResolution? ResolveProcedureTvp(ProcedureTvpContext context) => null;
 
+    /// <summary>Whether the generator emits <c>[InquiryStoredProcedure]</c> methods for this dialect.</summary>
+    public virtual bool SupportsStoredProcedures => false;
+
+    /// <summary>Whether a stored procedure's integer RETURN status can be read back (<c>ReturnsValue = true</c>).</summary>
+    public virtual bool SupportsProcedureReturnValue => false;
+
+    /// <summary>
+    /// Returns why the provider cannot bind a stored-procedure OUTPUT or INOUT read-back, or <c>null</c>
+    /// when it can. The reason completes the INQ114 message.
+    /// </summary>
+    internal virtual string? GetUnsupportedProcedureReadBackReason(ProcedureReadBackContext context) => null;
+
     public virtual CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
         => new(context.ValueExpression, context.ProviderTypeName, false);
 

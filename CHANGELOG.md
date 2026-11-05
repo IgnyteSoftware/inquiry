@@ -25,10 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A suppressed provider facet error, such as SQL Server's `INQ076`, while `INQ039` is lowered.
   To upgrade, fix the declaration the suppressed error reports. Only `INQ039` still opts a method into a `NotSupportedException` stub when it is lowered project-wide, and only for the methods that report `INQ039`.
 - A store whose methods are all rejected, including a store with a rejected concurrency-token shape, now keeps its generated constructor. The build reports the Inquiry error and CS8795 at each rejected method, without the extra CS7036 for a missing constructor. A generated `[InquiryGenerateInterface]` interface lists only the methods the generator implemented.
+- **Breaking:** `INQ114` is a new build error for `[InquiryStoredProcedure]` methods that Inquiry cannot run on the target database. Procedures are supported on SQL Server and Oracle only. Before, a procedure method on SQLite, PostgreSQL, MySQL or MariaDB compiled and failed when called. On Oracle, `ReturnsValue = true`, a string or `byte[]` `OutputParameter`, a string or `byte[]` INOUT parameter without a `Length`, and OUTPUT or INOUT values of other non-numeric types also compiled and then failed in ODP.NET. To upgrade, remove procedure methods from stores on the four other providers, or call the SQL through `IInquiry`. On Oracle, return a status through an `OUT NUMBER` parameter with `OutputParameter`, and set `[InquiryParameter(IsInputOutput = true, Length = n)]` on string and `byte[]` INOUT parameters. The procedure guide now has a provider capability table, and each supported feature has live tests.
 
 ### Fixed
 
 - Table names, column names and other attribute strings that contain a line break, tab, NUL or another control character now produce generated code that compiles. Before, a line break produced a compile error in the generated file, and a NUL stopped the generator with warning `CS8785`, so the store had no generated code. The generated string constants keep the exact value you wrote. In the generated documentation, the characters that would break it show as C# escapes, such as `\0`.
+- A SQL Server stored procedure with a `byte[]` `OutputParameter` now runs. Before, SqlClient rejected the call with "the Size property has an invalid size of 0".
 
 ## [1.0.0-preview.13] - 2026-11-02
 

@@ -37,7 +37,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
 
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
@@ -67,7 +67,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
 
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
@@ -82,6 +82,25 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void BinaryOutputParameterStampsMaxSize()
+    {
+        var source = ProcStoreHeader + """
+                [InquiryStoredProcedure("usp_GetPayload", OutputParameter = "Payload")]
+                public partial Task<byte[]?> GetPayloadAsync(long id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+
+        var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+
+        // SqlClient rejects a variable-length OUTPUT parameter with Size 0.
+        Assert.Contains("_p1.DbType = global::System.Data.DbType.Binary;", text);
+        Assert.Contains("_p1.Size = -1;", text);
+    }
+
+    [Fact]
     public void ReturnsValueBindsReturnDirectionAndReadsInt()
     {
         var source = ProcStoreHeader + """
@@ -90,7 +109,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
 
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
@@ -110,7 +129,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
 
         var text = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
@@ -134,7 +153,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ051");
     }
 
@@ -147,7 +166,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ051");
     }
 }

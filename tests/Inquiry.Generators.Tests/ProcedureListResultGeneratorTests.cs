@@ -109,7 +109,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         var diagnostics = result.RunResult.Diagnostics.Where(static d => d.Id == "INQ051").ToArray();
         Assert.Equal(2, diagnostics.Length);
         Assert.All(diagnostics, static d => Assert.Contains("Task<IReadOnlyList<T>> row result", d.GetMessage(CultureInfo.InvariantCulture)));
@@ -125,7 +125,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ051");
         Assert.Contains("IsInputOutput cannot be combined with a Task<IReadOnlyList<T>> row result", diagnostic.GetMessage(CultureInfo.InvariantCulture));
     }

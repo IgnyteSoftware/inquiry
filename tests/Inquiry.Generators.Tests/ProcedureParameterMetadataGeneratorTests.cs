@@ -44,7 +44,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -60,7 +60,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -76,7 +76,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -92,7 +92,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -108,7 +108,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -124,7 +124,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -140,7 +140,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -156,7 +156,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -172,7 +172,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -188,7 +188,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -205,7 +205,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -223,7 +223,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -244,7 +244,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -265,7 +265,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -282,7 +282,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -337,7 +337,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -374,7 +374,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetProcParamStore(result);
 
@@ -426,8 +426,9 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source, dialect: "Sqlite");
+        var result = RunGenerator(source, dialect: "Oracle");
         Assert.Contains(result.GeneratorDiagnostics, static d => d.Id == "INQ086");
+        Assert.DoesNotContain(result.GeneratorDiagnostics, static d => d.Id == "INQ114");
     }
 
     [Fact]

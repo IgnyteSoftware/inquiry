@@ -500,10 +500,12 @@ public sealed class SalesResult
 
 - Implement `Task<IReadOnlyList<TEntity>>` for procedures, with a live SQL Server and Oracle check.
 - Implement `[InquiryAdHoc]` procedure rows after #420.
-- Decide whether procedure methods on providers without procedures (SQLite) should fail at build
-  time with a provider diagnostic.
+- Done in #478: procedure methods on SQLite, PostgreSQL, MySQL and MariaDB fail the build with
+  `INQ114`, as do Oracle RETURN status and Oracle read-backs that ODP.NET cannot bind.
 - Keep combined results and `InquiryParameter.Name` as demand-driven issues.
-- Publish the provider capability table once live tests exist for each listed provider.
+- Done in #478 for SQL Server and Oracle: the [procedure guide](../articles/features/stored-procedures.md#provider-support)
+  has the capability table, and each supported feature has a live test. Add a provider to the table
+  only with its own live tests.
 
 ### Confidence
 

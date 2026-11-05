@@ -59,6 +59,14 @@ public sealed record ProcedureTvpContext(
     int Precision,
     int Scale);
 
+/// <summary>One stored-procedure OUTPUT or INOUT read-back that a provider must be able to bind.</summary>
+internal sealed record ProcedureReadBackContext(
+    string ParameterName,
+    bool IsInputOutput,
+    string TypeDisplay,
+    string? DbTypeExpression,
+    int DeclaredLength);
+
 /// <summary>Result of resolving a stored-procedure TVP: the descriptor expression, or a diagnostic.</summary>
 public sealed record ProcedureTvpResolution(
     string? DescriptorExpression,

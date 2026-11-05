@@ -12,6 +12,9 @@ namespace Inquiry.Stores;
 /// as <c>Task&lt;TScalar&gt;</c> — the read-back value becomes the task result. The two are
 /// mutually exclusive, and a RETURN value is always <c>Task&lt;int&gt;</c>. This scalar-output form
 /// does not also map a result set; use a separate method for the rows.
+/// <para>
+/// Procedure methods are generated for SQL Server and Oracle only. Other dialects report INQ114.
+/// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class InquiryStoredProcedureAttribute : Attribute
@@ -38,14 +41,14 @@ public sealed class InquiryStoredProcedureAttribute : Attribute
     /// Names an <c>OUTPUT</c> parameter whose post-execution value is returned as the method's
     /// <c>Task&lt;TScalar&gt;</c> result (the value's type is the method's <c>TScalar</c>). The name
     /// may be given with or without a leading <c>@</c>. Mutually exclusive with
-    /// <see cref="ReturnsValue"/>.
+    /// <see cref="ReturnsValue"/>. On Oracle the value must be numeric (INQ114 otherwise).
     /// </summary>
     public string? OutputParameter { get; set; }
 
     /// <summary>
     /// When <see langword="true"/>, the procedure's integer <c>RETURN</c> value is returned as the
     /// method's result — the method must be declared <c>Task&lt;int&gt;</c>. Mutually exclusive with
-    /// <see cref="OutputParameter"/>.
+    /// <see cref="OutputParameter"/>. SQL Server only: Oracle procedures have no RETURN value (INQ114).
     /// </summary>
     public bool ReturnsValue { get; set; }
 }

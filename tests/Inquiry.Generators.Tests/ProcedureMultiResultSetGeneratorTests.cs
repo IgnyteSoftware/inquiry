@@ -74,7 +74,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -98,7 +98,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -120,7 +120,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -142,7 +142,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -162,7 +162,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -185,7 +185,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -207,7 +207,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 
@@ -248,7 +248,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("UnmappedDto"));
     }
@@ -265,7 +265,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ005");
     }
 
@@ -281,7 +281,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ051");
     }
 
@@ -297,7 +297,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetMultiResultStore(result);
 

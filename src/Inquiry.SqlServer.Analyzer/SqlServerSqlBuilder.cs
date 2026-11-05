@@ -83,6 +83,9 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     public override ProcedureTvpResolution? ResolveProcedureTvp(ProcedureTvpContext context)
         => SqlServerTvpResolver.ResolveProcedure(context);
 
+    public override bool SupportsStoredProcedures => true;
+    public override bool SupportsProcedureReturnValue => true;
+
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
 
