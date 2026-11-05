@@ -554,6 +554,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var dbCommand = CreateCommandOrDisposeConnection(connection);
         var commandResources = InquiryCommandResources.CreateScope(dbCommand, connection);
 
+        object? rows = null;
         try
         {
             InitializeCommandSync(dbCommand, command);
@@ -567,10 +568,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
             materializer = InquiryMaterializerBinding.Bind(materializer, reader);
-            var list = new List<T>();
+            rows = InquiryBufferedList<T>.Start(-1);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                list.Add(materializer.Materialize(reader));
+                InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
             }
 
             if (HasInterceptors)
@@ -578,7 +579,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             }
 
-            return list;
+            return InquiryBufferedList<T>.Complete(rows);
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -604,6 +605,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
+            InquiryBufferedList<T>.Release(rows);
             await commandResources.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -623,6 +625,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var dbCommand = CreateCommandOrDisposeConnection(connection);
         var commandResources = InquiryCommandResources.CreateScope(dbCommand, connection);
 
+        object? rows = null;
         try
         {
             InitializeCommandSync(dbCommand, command);
@@ -636,10 +639,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
             materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
-            var list = capacityHint > 0 ? new List<T>(capacityHint) : new List<T>();
+            rows = InquiryBufferedList<T>.Start(capacityHint);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                list.Add(materializer.Materialize(reader));
+                InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
             }
 
             if (HasInterceptors)
@@ -647,7 +650,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             }
 
-            return list;
+            return InquiryBufferedList<T>.Complete(rows);
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -673,6 +676,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
+            InquiryBufferedList<T>.Release(rows);
             await commandResources.DisposeAsync().ConfigureAwait(false);
         }
     }
@@ -1257,6 +1261,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         var commandResources = InquiryCommandResources.CreateScope(dbCommand, connection);
         InquiryCommand? interceptorCommand = null;
 
+        object? rows = null;
         try
         {
             // Lazy: only allocate the InquiryCommand if interceptors need to observe the command.
@@ -1275,10 +1280,10 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
             commandResources.OwnReader(reader);
             materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
-            var list = capacityHint >= 0 ? new List<T>(capacityHint) : new List<T>();
+            rows = InquiryBufferedList<T>.Start(capacityHint);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                list.Add(materializer.Materialize(reader));
+                InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
             }
 
             if (interceptorCommand is not null)
@@ -1286,7 +1291,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             }
 
-            return list;
+            return InquiryBufferedList<T>.Complete(rows);
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -1312,6 +1317,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
         }
         finally
         {
+            InquiryBufferedList<T>.Release(rows);
             await commandResources.DisposeAsync().ConfigureAwait(false);
         }
     }
