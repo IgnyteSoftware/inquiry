@@ -16,10 +16,13 @@ values back differs, as described in [Provider notes](#provider-notes).
   `[InquiryColumn("BODY")]` or `[InquiryKey("ShipperID")]`.
 - **Nullability.** A column allows `NULL` when its property type is a nullable value type (`int?`) or a
   nullable reference type (`string?`). Otherwise generated DDL declares it `NOT NULL`. Key columns are
-  always `NOT NULL`. On a database-generated key, `int?` only means that C# has no value yet.
+  always `NOT NULL`. On a database-generated key, `int?` only means that C# has no value yet. A
+  computed column gets no `NOT NULL`: its expression decides, so make the property nullable when the
+  expression can return `NULL`.
 - **Types.** Inquiry infers the column type from the property type. `Length`, `Precision`, `Scale` and
-  `IsUnicode` adjust it on every provider. `SqlType = "NVARCHAR(64)"` replaces it with text that Inquiry
-  copies into the DDL unchanged, so a `SqlType` is specific to one provider.
+  `IsUnicode` adjust it on providers whose types take them. SQLite ignores them and declares `TEXT`,
+  `NUMERIC` or `INTEGER`. `SqlType = "NVARCHAR(64)"` replaces the type with text that Inquiry copies into
+  the DDL unchanged, so a `SqlType` is specific to one provider.
 
 ## Who supplies each value
 
@@ -43,8 +46,10 @@ leave the column to the database. Every entity-returning method reads all mapped
   insert.
 - Omission does not depend on the value. Inquiry does not treat `0`, `""` or `null` as "not set".
 - Batch and bulk inserts use the same INSERT column list.
-- A returning method gives you a new object read from the database. It does not change the object
-  you passed in.
+- A returning method gives you a new object read from the database. Inquiry does not copy
+  database-supplied values into the object you passed in. Sequential GUID keys and auditing columns
+  are the exception: Inquiry assigns them on your object before the statement runs (see
+  [CRUD](features/crud.md#return-values-and-input-mutation)).
 - Auditing, soft-delete, concurrency-token and global-filter columns add their own rules on top of
   this table. Their pages describe them.
 
