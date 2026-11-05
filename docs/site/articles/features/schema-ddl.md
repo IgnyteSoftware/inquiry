@@ -4,6 +4,8 @@ The generator emits a `CREATE TABLE` script for every entity in your assembly, i
 
 Set `[InquiryTable("Name", GenerateDdl = false)]` for a mapping whose table is managed by hand-written migrations or by another canonical mapping. The entity remains available to generated stores and materializers, but it is completely excluded from schema DDL, schema validation, indexes, checks, and foreign-key analysis.
 
+[Entity mapping](../entity-mapping.md) explains how `DefaultExpression`, `UseDatabaseDefault`, `Computed`, and generated keys change the generated INSERT and UPDATE statements.
+
 On SQL Server, a non-nullable `byte[]` marked `[InquiryConcurrencyToken(DatabaseGenerated = true)]` is emitted as `ROWVERSION NOT NULL`. Ordinary `byte[]` columns remain `VARBINARY(MAX)`. Returning mutations capture a rowversion through an internal `BINARY(8)` output table; `ROWVERSION` is used only for the physical table column.
 
 For providers that require database objects to bind collections, the same class also exposes:
@@ -122,6 +124,7 @@ Each provider analyzer emits the right flavor:
 
 ```csharp
 [InquiryColumn("FullName", Computed = "FirstName || ' ' || LastName")]
+[InquiryComputedExpression("postgresql", "\"FirstName\" || ' ' || \"LastName\"")]
 [InquiryComputedExpression("mysql", "CONCAT(FirstName, ' ', LastName)")]
 [InquiryComputedExpression("mariadb", "CONCAT(FirstName, ' ', LastName)")]
 public string FullName { get; set; } = "";
@@ -192,7 +195,7 @@ dotnet_diagnostic.INQ067.severity = warning
 | **`INQ061`** | A foreign-key column with no index. | Most engines (SQL Server, PostgreSQL, Oracle, SQLite) don't auto-index foreign keys, so joins and `ON DELETE/UPDATE` cascades over the column scan the table. Add `IsIndexed = true` to the column's `[InquiryColumn]` / `[InquiryForeignKey]`. **MySQL/InnoDB auto-indexes FK constraints and is exempt.** |
 | **`INQ062`** | A `decimal` column with no explicit precision/scale. | It silently takes the dialect default (e.g. `DECIMAL(18,2)`), which can round — a real hazard for money. Set `[InquiryColumn(Precision = …, Scale = …)]` (or `SqlType`). EF Core's `DecimalTypeDefaultWarning` is the same advisory. |
 | **`INQ064`** | A column a store method filters on (a `[InquirySelectAllByField]` field or an `[InquiryWhere]` criterion) with no index. | Those queries scan the table. Add `[InquiryColumn(IsIndexed = true)]` (or `IsUnique`) to a column you filter often. |
-| **`INQ066`** | A nullable column with a `DefaultExpression`. | New rows always receive the default, so `NULL` is unreachable via `INSERT` — the nullable + default pairing is usually unintentional. Either make the column `NOT NULL`, or remove the default if `NULL` is meaningful. |
+| **`INQ066`** | A nullable column with a `DefaultExpression`. | Generated inserts send the property value, so a `null` property stores `NULL`. The default applies only when an insert omits the column, as with `UseDatabaseDefault = true` or handwritten SQL. The pairing is usually unintentional. Either make the column `NOT NULL`, or remove the default if `NULL` is meaningful. |
 | **`INQ067`** | A `string` column with no explicit `Length` or `SqlType`. | It takes the dialect's unbounded text type (`TEXT`, `NVARCHAR(MAX)`, `CLOB`, etc.), which may inhibit indexing or bloat row storage. Set `[InquiryColumn(Length = …)]` (or `SqlType`) for a bounded type. |
 
 Because they're off by default, the lints never break a build until you opt in — then they participate in `dotnet build` (and CI) at the severity you choose, just like any analyzer diagnostic.

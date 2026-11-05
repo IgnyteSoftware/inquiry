@@ -218,6 +218,10 @@ try {
     $output = @(Invoke-Recipe 'partial-updates' @('schema.sql', 'ContactPatches.cs') @((Join-Path $PSScriptRoot 'PartialUpdatesRecipe.cs')))
     if ($output[-1] -cne 'PARTIAL-UPDATES-RECIPE-OK') { throw 'The partial-updates recipe did not complete.' }
     $checks.Add('net8.0/sqlite/docs-recipe-partial-updates')
+    $output = @(Invoke-Recipe 'entity-mapping' @('Models.cs', 'Stores.cs', 'SqlTrace.cs', 'Program.cs', 'output.txt') @())
+    $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-entity-mapping/output.txt'))
+    if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The entity-mapping output differs from its documented output.' }
+    $checks.Add('net8.0/sqlite/docs-recipe-entity-mapping')
     $sample = Join-Path $repoRoot 'samples/Inquiry.AotSmoke'
     $providers = @{ Sqlite = 'sqlite'; SqlServer = 'sqlserver'; PostgreSql = 'postgresql'; MySql = 'mysql'; MariaDb = 'mariadb'; Oracle = 'oracle' }
     foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {

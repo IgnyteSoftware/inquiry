@@ -50,7 +50,7 @@ public sealed class Employee
     [InquiryColumn]
     public string? Notes { get; set; }
 
-    [InquiryForeignKey("ReportsTo", "Employees", "EmployeeID")]
+    [InquiryForeignKey(typeof(Employee))]
     public int? ReportsTo { get; set; }
 
     [InquiryColumn]

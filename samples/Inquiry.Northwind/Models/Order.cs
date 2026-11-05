@@ -8,10 +8,10 @@ public sealed class Order
     [InquiryKey("OrderID", IsGenerated = true)]
     public int? OrderID { get; set; }
 
-    [InquiryForeignKey("CustomerID", "Customers", "CustomerID", Length = 5, IsIndexed = true)]
+    [InquiryForeignKey(typeof(Customer), Length = 5, IsIndexed = true)]
     public string? CustomerID { get; set; }
 
-    [InquiryForeignKey("EmployeeID", "Employees", "EmployeeID", IsIndexed = true)]
+    [InquiryForeignKey(typeof(Employee), IsIndexed = true)]
     public int? EmployeeID { get; set; }
 
     [InquiryColumn(IsIndexed = true)]
@@ -23,7 +23,7 @@ public sealed class Order
     [InquiryColumn(IsIndexed = true)]
     public DateTime? ShippedDate { get; set; }
 
-    [InquiryForeignKey("ShipVia", "Shippers", "ShipperID", IsIndexed = true)]
+    [InquiryForeignKey(typeof(Shipper), IsIndexed = true)]
     public int? ShipVia { get; set; }
 
     [InquiryColumn(Precision = 19, Scale = 4)]
