@@ -99,6 +99,27 @@ EF Core, Dapper, and ADO.NET have no first-class upsert; the benchmark uses a ha
 `INSERT … ON CONFLICT DO UPDATE` for each so the comparison is on wire SQL, not on
 re-implementing the feature in client code.
 
+Every Update leg, in these classes and in each provider's `ShipperBenchmarks`, alternates between
+two payloads that change every column it sets. With constant values, EF Core change tracking finds
+nothing to save after the first call and sends no `UPDATE`, and MySQL and MariaDB skip the row write.
+Each leg throws unless its call affects exactly one row: the returned row count must be 1, or the
+returned `bool` must be `true` for Inquiry and DLG. DLG returns only whether its procedure ran, so
+`ShipperUpdateLegTests` in `tests/Inquiry.Benchmarks.SqlServer.Tests` reads the row back after each
+DLG call to prove the update.
+
+### Cold start (`ColdStartBenchmarks`)
+
+Each case measures the first point read after `GlobalSetup` in a fresh process. The job uses
+`RunStrategy.ColdStart` with 10 launches of one call each, so no jitting, pilot or warmup call runs
+before the measured one. The result excludes process launch, database seeding and what setup already
+initialized (the SQLite provider, the DI container). Do not pass `--inProcess`, because every launch
+then shares one process. The class has no `MemoryDiagnoser`, because
+BenchmarkDotNet measures allocation on an extra call after the measured one.
+
+```powershell
+dotnet run -c Release -f net8.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ColdStartBenchmarks*"
+```
+
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
 
 Beyond CRUD, these classes cover the higher-level store features. Each follows the same
