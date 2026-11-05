@@ -60,7 +60,8 @@ public sealed class InquiryParameterAttribute : Attribute
     /// and the procedure's modified value is read back as the method's <c>Task&lt;T&gt;</c> result.
     /// At most one parameter per method may be marked as input/output, and it is mutually exclusive
     /// with <see cref="InquiryStoredProcedureAttribute.OutputParameter"/> and
-    /// <see cref="InquiryStoredProcedureAttribute.ReturnsValue"/>.
+    /// <see cref="InquiryStoredProcedureAttribute.ReturnsValue"/>. On Oracle the value must be numeric,
+    /// or a string or byte array with a positive <see cref="Length"/> (INQ114 otherwise).
     /// </summary>
     public bool IsInputOutput { get; set; }
 

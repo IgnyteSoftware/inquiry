@@ -1729,7 +1729,8 @@ internal static class StoreOperationEmitter
             {
                 source.AppendLine($"                _p{index}.DbType = {method.ProcedureOutputDbType};");
             }
-            if (!method.ProcedureReturnsValue && method.ProcedureOutputIsString)
+            if (!method.ProcedureReturnsValue &&
+                (method.ProcedureOutputIsString || method.ProcedureOutputDbType == "global::System.Data.DbType.Binary"))
             {
                 source.AppendLine($"                _p{index}.Size = -1;");
             }

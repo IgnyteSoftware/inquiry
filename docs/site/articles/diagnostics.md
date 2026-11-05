@@ -1424,4 +1424,14 @@ Failing shape: `[InquiryUpsert] public partial Task<int> UpsertAsync(Widget widg
 
 Smallest correction: Replace the upsert with separate insert and update methods. For a database-generated token, use an application-managed numeric token, or compile against SQL Server, which has `rowversion`.
 
+## INQ114
+
+Stored-procedure feature is not supported by the target dialect. Default: error, enabled.
+
+Trigger: An `[InquiryStoredProcedure]` method targets a dialect or a procedure feature that Inquiry does not generate. Procedures are generated only for SQL Server and Oracle, so the error fires on SQLite, PostgreSQL, MySQL and MariaDB. On Oracle it also fires for `ReturnsValue = true`, for a string or `byte[]` `OutputParameter`, for a string or `byte[]` INOUT parameter without a `Length`, and for an OUTPUT or INOUT value that is not a number, string or `byte[]`. Lowering INQ039 does not turn this error into a runtime stub.
+
+Failing shape: `[InquiryStoredProcedure("usp_Purge")]` on a store in a SQLite project, or `[InquiryStoredProcedure("P_STATUS", ReturnsValue = true)]` on Oracle.
+
+Smallest correction: On an unsupported dialect, remove the method or run the SQL through `IInquiry`. On Oracle, declare an `OUT NUMBER` parameter and set `OutputParameter` instead of `ReturnsValue`, and give string or `byte[]` INOUT parameters `[InquiryParameter(IsInputOutput = true, Length = n)]`. See [provider support](features/stored-procedures.md#provider-support).
+
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

@@ -48,7 +48,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -70,7 +70,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -88,7 +88,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -105,7 +105,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -123,7 +123,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -141,7 +141,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -167,7 +167,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -185,7 +185,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("IsInputOutput"));
     }
@@ -199,7 +199,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("IsInputOutput"));
     }
@@ -213,7 +213,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -234,7 +234,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("at most one"));
     }
@@ -248,7 +248,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         Assert.Contains(result.RunResult.Diagnostics,
             d => d.Id == "INQ051" && d.GetMessage(CultureInfo.CurrentCulture).Contains("must match"));
     }
@@ -262,7 +262,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -300,7 +300,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 
@@ -318,7 +318,7 @@ public sealed partial class InquiryGeneratorTests
             }
             """;
 
-        var result = RunGenerator(source);
+        var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
         var text = GetInOutStore(result);
 

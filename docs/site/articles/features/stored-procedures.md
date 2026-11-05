@@ -21,6 +21,41 @@ public partial class CustomerStore : InquiryStore<Customer>
 }
 ```
 
+## Provider support
+
+Inquiry generates `[InquiryStoredProcedure]` methods for SQL Server and Oracle only. On SQLite,
+PostgreSQL, MySQL and MariaDB, a procedure method fails the build with [INQ114](../diagnostics.md#inq114).
+SQLite has no stored procedures. PostgreSQL, MySQL and MariaDB have them, but this repository has no
+live procedure tests for those providers, so Inquiry does not generate procedure calls for them yet.
+
+| Feature | SQL Server | Oracle |
+|---|---|---|
+| Buffered list, stream, single row | Yes | Yes, through a `SYS_REFCURSOR` wrapper |
+| `Task<int>` without a read-back | Yes: the driver's affected-row count, or -1 under `SET NOCOUNT ON` | Yes: always -1 |
+| `OutputParameter` | Yes | Numbers only; other types report INQ114 |
+| INOUT parameter | Yes | Numbers, and strings or `byte[]` with a `Length`; other types report INQ114 |
+| `ReturnsValue` (RETURN status) | Yes | No: INQ114 |
+| Multiple result sets | Yes | Yes, one `SYS_REFCURSOR` per set |
+| Table-valued parameters | Yes | No: INQ086 |
+
+Each "Yes" has a live test in `tests/Inquiry.SqlServer.Tests` or `tests/Inquiry.Oracle.Tests`
+(`StoredProcedureProviderSupportIntegrationTests` and the procedure list and TVP tests). The tests
+check that each call runs the procedure once, that a call inside `ExecuteInTransactionAsync` commits
+and rolls back with the transaction, and that a canceled token stops the call before the procedure runs.
+
+On Oracle:
+
+- Procedures have no RETURN status. Declare an `OUT NUMBER` parameter and set `OutputParameter`.
+- ODP.NET needs a buffer size for string and binary output, and `OutputParameter` cannot declare one.
+  Return a string or `byte[]` through an INOUT parameter with
+  `[InquiryParameter(IsInputOutput = true, Length = n)]`, where `n` is the size the procedure declares.
+- Guid, DateTime and bool values cannot be read back from a procedure. Return them in a result set.
+  Guid and DateTime IN parameters also fail in ODP.NET today, because procedure parameters do not use
+  Oracle's type mapping.
+- Methods that read back a value or return `Task<int>` bind arguments by name, so the C# parameter
+  names must match the procedure's parameter names. Row-returning methods pass arguments by position
+  (see [Oracle stored procedures](#oracle-stored-procedures)).
+
 ## Supported return shapes
 
 | Return type | Pipeline call |
@@ -44,7 +79,8 @@ RETURN integer has a universal business-success meaning; follow the procedure's 
 A scalar OUTPUT/INOUT database NULL becomes default(T); use a nullable scalar when NULL must remain
 distinct from zero. Entity-returning calls use single-or-default cardinality, not first-row selection.
 
-Each method invocation executes the procedure. Do not invoke a side-effecting procedure repeatedly
+Each call executes the procedure once. A streaming method executes it once per enumeration: creating
+the stream does not run the procedure, and enumerating the same stream again runs it again. Do not invoke a side-effecting procedure repeatedly
 through different declarations to obtain its rows and outputs. The generated scalar read-back shape
 does not also return SELECT rows. If one execution must expose both channels, use a caller-owned
 ADO.NET command/reader or redesign the procedure to expose a supported single result shape.
@@ -68,7 +104,7 @@ public partial class OrderStore : InquiryStore<Order>
 ```
 
 - The generator binds the named parameter with `ParameterDirection.Output` (stamping its `DbType`, and `Size = -1` for `string`), or a `ParameterDirection.ReturnValue` parameter for `ReturnsValue`, then reads it back after execution.
-- A RETURN value is always an integer, so `ReturnsValue = true` requires `Task<int>`. `OutputParameter` and `ReturnsValue` are mutually exclusive. Misconfiguration is a build error (`INQ051`).
+- A RETURN value is always an integer, so `ReturnsValue = true` requires `Task<int>`. RETURN status is SQL Server only; Oracle reports `INQ114`. `OutputParameter` and `ReturnsValue` are mutually exclusive. Misconfiguration is a build error (`INQ051`).
 - This scalar-output form does not also map a result set. A separate declaration is an alternative invocation, not a way to retrieve rows from the same execution. Use `Task<TScalar?>` when the OUTPUT can be `NULL`.
 
 ## INOUT parameters
@@ -87,7 +123,7 @@ public partial class CounterStore : InquiryStore<Counter>
 
 - At most one INOUT parameter per method. Its CLR type must match the return type.
 - Mutually exclusive with `OutputParameter` and `ReturnsValue`. Misconfiguration is a build error (`INQ051`).
-- String and byte-array INOUT parameters auto-size to `Size = -1` (MAX). Decimal parameters stamp `Precision = 38; Scale = 10` by default; override with `[InquiryParameter(Precision = …, Scale = …)]`.
+- String and byte-array INOUT parameters auto-size to `Size = -1` (MAX). Oracle does not accept that size, so on Oracle they need a positive `Length` (`INQ114` otherwise). Decimal parameters stamp `Precision = 38; Scale = 10` by default; override with `[InquiryParameter(Precision = …, Scale = …)]`.
 
 ## Multiple result sets
 
@@ -132,7 +168,7 @@ For multi-result stored procedures, declare one `OUT SYS_REFCURSOR` per result s
 
 > **Input parameter order matters.** The PL/SQL wrapper passes arguments positionally, so your procedure's IN parameters must appear in the same order as the C# method parameters. Their names do not need to match.
 
-> **Every cursor must be opened.** If a procedure conditionally skips opening a cursor, `DBMS_SQL.RETURN_RESULT` raises ORA-29478 at runtime. Ensure every declared `OUT SYS_REFCURSOR` is opened on every code path (open an empty cursor with `OPEN p_cursor FOR SELECT … WHERE 1 = 0` for the no-data case).
+> **Every cursor must be opened.** If a procedure conditionally skips opening a cursor, the call fails with ORA-01001 (invalid cursor). Ensure every declared `OUT SYS_REFCURSOR` is opened on every code path (open an empty cursor with `OPEN p_cursor FOR SELECT … WHERE 1 = 0` for the no-data case).
 
 ## Table-valued parameters on stored procedures
 
@@ -148,6 +184,36 @@ public partial Task<int> BulkLookupAsync(
 The generator resolves the element type's physical SQL Server mapping at compile time and emits an `InquiryTvpParameter.Bind` call with a cached `InquiryTvpDescriptor`. The user-defined type must already exist on the target database — the generator does not emit DDL for procedure TVP types (unlike `Compare.In` collections, whose types are fully managed).
 
 Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Server providers do not currently support TVP parameters on stored procedures.
+
+## Result and output behavior
+
+On both providers:
+
+- An empty result gives an empty list or stream, and null for `Task<TEntity?>`. More than one row for
+  `Task<TEntity?>` throws `InvalidOperationException`.
+- Rows map by column name, as described under Limitations. Column order does not matter, and extra
+  columns are ignored. A missing mapped column throws `InvalidOperationException` before the first row,
+  and the message lists the result's columns. A value of an incompatible type throws when its row is read.
+- A NULL OUTPUT or INOUT value becomes `default(T)`. Declare a nullable result, such as `Task<int?>`,
+  when NULL must stay distinct from zero.
+- A tuple reads one result set per element. On SQL Server, result sets after the last element are
+  not read. On Oracle, the number of cursors must match exactly (see below).
+- A canceled call, or one that fails while rows are read, does not show that the procedure wrote
+  nothing. Call it inside `ExecuteInTransactionAsync` when its writes must roll back with the failure.
+
+On SQL Server:
+
+- A single-set method reads the first result set. A procedure that returns no result set gives an
+  empty list or null.
+- A procedure that returns fewer result sets than the tuple has elements throws
+  `InvalidOperationException` ("no more result sets").
+
+On Oracle:
+
+- The wrapper passes exactly one `SYS_REFCURSOR` per result set. A procedure that declares fewer or
+  more `OUT SYS_REFCURSOR` parameters than the method has result sets fails with PLS-00306 (wrong
+  number or types of arguments). An extra cursor parameter is not ignored.
+- A cursor that the procedure does not open fails with ORA-01001 (invalid cursor).
 
 ## Limitations (today)
 
@@ -168,11 +234,9 @@ Omitting `TvpTypeName` on a collection parameter reports `INQ086`. Non-SQL Serve
 - **Tuples.** A tuple needs at least two result sets. Use `Task<IReadOnlyList<TEntity>>` for one.
 - **Parameter names.** Database parameter names come from the C# names. No attribute overrides
   them. The Oracle result-set wrapper passes arguments by position.
-- **TVPs.** Table-valued parameters work on SQL Server only (`INQ086` elsewhere).
-- **No provider check.** The generator does not check that the database supports stored
-  procedures. A SQLite store accepts the declaration even though SQLite has no procedures.
-- **Live coverage.** This repository runs live procedure tests on SQL Server and Oracle. Other
-  providers have no live procedure tests.
+- **TVPs.** Table-valued parameters work on SQL Server only (`INQ086` on Oracle).
+- **Providers.** Procedures are generated for SQL Server and Oracle only (`INQ114` elsewhere). See
+  [Provider support](#provider-support).
 - **Deployment.** Inquiry does not create or validate procedures. Deploy them with your migrations.
   A changed result schema shows up when rows are read.
 

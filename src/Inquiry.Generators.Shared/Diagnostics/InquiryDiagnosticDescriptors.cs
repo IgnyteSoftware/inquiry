@@ -61,6 +61,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ109, INQ112  Named predicate binding         (INQ109 invalid [InquiryWhere(Parameter=…)] binding, INQ112 positional criteria share a parameter type) [IN USE]
     //   INQ111         Store method signature          (static, generic, ref/in/out/scoped parameter, or ref return: the generator cannot reproduce it) [IN USE]
     //   INQ113         Concurrency-token store shape   (upsert on a token entity, or a database-generated token the dialect cannot emit) [IN USE]
+    //   INQ114         Stored-procedure provider support (dialect without procedures, Oracle RETURN, or an Oracle read-back ODP.NET cannot bind) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1105,4 +1106,12 @@ internal static class InquiryDiagnosticDescriptors
         "Store '{0}' cannot generate {1}: {2}.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq113");
+
+    // INQ114 rejects the method instead of honouring the INQ039 stub opt-in: a procedure the dialect
+    // cannot run must not compile into a runtime stub.
+    public static readonly DiagnosticDescriptor StoredProcedureNotSupported = new(
+        "INQ114", "Stored-procedure feature is not supported by the target dialect",
+        "Stored-procedure method '{0}' cannot be generated for the '{1}' dialect: {2}",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq114");
 }

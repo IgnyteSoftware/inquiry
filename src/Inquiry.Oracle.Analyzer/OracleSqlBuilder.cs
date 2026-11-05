@@ -122,6 +122,34 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             ? formalName.Substring(1)
             : formalName;
 
+    public override bool SupportsStoredProcedures => true;
+
+    // Procedure read-backs bind DbTypes from the dialect-neutral mapper, and ODP.NET rejects some of
+    // them (Guid, DateTime2) and rejects Size = -1 on OUT buffers. Only bindings with live Oracle
+    // evidence are accepted.
+    internal override string? GetUnsupportedProcedureReadBackReason(ProcedureReadBackContext context)
+    {
+        var direction = context.IsInputOutput ? "INOUT" : "OUTPUT";
+        switch (context.DbTypeExpression)
+        {
+            case "global::System.Data.DbType.String" or "global::System.Data.DbType.AnsiString" or "global::System.Data.DbType.Binary":
+                if (!context.IsInputOutput)
+                {
+                    return $"OUTPUT parameter '{context.ParameterName}' is a string or binary value, and Oracle needs an explicit buffer size that OutputParameter cannot declare. Return the value through an IN OUT parameter with [InquiryParameter(IsInputOutput = true, Length = n)] instead.";
+                }
+
+                return context.DeclaredLength > 0
+                    ? null
+                    : $"INOUT parameter '{context.ParameterName}' is a string or binary value without a Length, and Oracle needs an explicit buffer size. Set [InquiryParameter(IsInputOutput = true, Length = n)] to the size the procedure declares.";
+            case "global::System.Data.DbType.Byte" or "global::System.Data.DbType.Int16" or "global::System.Data.DbType.Int32"
+                or "global::System.Data.DbType.Int64" or "global::System.Data.DbType.Single" or "global::System.Data.DbType.Double"
+                or "global::System.Data.DbType.Decimal":
+                return null;
+            default:
+                return $"{direction} parameter '{context.ParameterName}' has type '{context.TypeDisplay}'. Inquiry reads Oracle procedure OUTPUT and INOUT values only as numbers, or as strings and byte arrays through an IN OUT parameter with a Length. Return the value in a result set instead.";
+        }
+    }
+
     /// <summary>
     /// Oracle stored procedures cannot return result sets directly; the caller must pass an
     /// <c>OUT SYS_REFCURSOR</c> parameter. Rather than requiring users to declare cursor parameters

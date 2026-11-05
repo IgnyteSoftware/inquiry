@@ -2841,6 +2841,35 @@ internal static class StoreProcessor
         return new EquatableArray<GeneratedCommandDocumentation>(commands.ToImmutable());
     }
 
+    /// <summary>Returns the INQ114 reason when the dialect cannot run this procedure declaration, or null.</summary>
+    private static string? GetUnsupportedProcedureReason(StoreMethodData method, SqlBuilder sqlBuilder)
+    {
+        if (!sqlBuilder.SupportsStoredProcedures)
+        {
+            return "Inquiry generates [InquiryStoredProcedure] methods only for SQL Server and Oracle. Remove the method, replace it with a supported query, or compile the store for a supported dialect.";
+        }
+
+        if (method.ProcedureReturn != ProcedureReturnKind.TaskOfOutputScalar)
+        {
+            return null;
+        }
+
+        if (method.ProcedureReturnsValue)
+        {
+            return sqlBuilder.SupportsProcedureReturnValue
+                ? null
+                : $"{sqlBuilder.DialectName} procedures have no RETURN status. Declare an OUT parameter in the procedure and set OutputParameter to its name instead of ReturnsValue = true.";
+        }
+
+        var inOut = method.ProcedureInOutParameterName is { } inOutName
+            ? method.Parameters.AsImmutableArray().First(p => p.Name == inOutName)
+            : null;
+        var readBack = inOut is not null
+            ? new ProcedureReadBackContext(inOut.Name, true, inOut.TypeDisplay, inOut.DbTypeExpression, inOut.DeclaredLength)
+            : new ProcedureReadBackContext(method.ProcedureReadBackName!.TrimStart('@'), false, method.ScalarResultType!, method.ProcedureOutputDbType, 0);
+        return sqlBuilder.GetUnsupportedProcedureReadBackReason(readBack);
+    }
+
     private static bool IsMutatingOperation(StoreOperation operation)
         => operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert
             or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey
@@ -2859,6 +2888,13 @@ internal static class StoreProcessor
         if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation == StoreOperation.StoredProcedure))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
+            return false;
+        }
+
+        if (method.Operation == StoreOperation.StoredProcedure &&
+            GetUnsupportedProcedureReason(method, sqlBuilder) is { } procedureReason)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoredProcedureNotSupported, method.Location?.ToLocation(), method.Name, sqlBuilder.DialectName, procedureReason));
             return false;
         }
 
