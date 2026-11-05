@@ -59,5 +59,5 @@ public sealed class RowLockIntegrationTests
     }
 
     private Task<MariaDbTestHarness> CreateHarnessAsync()
-        => MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.MySqlDdl, "lock");
+        => MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.MySqlDdl, "lock", configureServices: CommandStartCounter.Register);
 }

@@ -44,7 +44,7 @@ internal static class RowLockShareScenarios
                 noWaitOutcome = ex;
             }
 
-            write = Task.Run(() => WorkItemService.RecordAttemptAsync(services, id));
+            write = await RowLockScenarios.StartAsync(services, () => WorkItemService.RecordAttemptAsync(services, id));
             await RowLockScenarios.AssertBlockedAsync(write);
             await secondTransaction.CommitAsync();
             await RowLockScenarios.AssertBlockedAsync(write);

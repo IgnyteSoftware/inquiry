@@ -50,5 +50,5 @@ public sealed class RowLockIntegrationTests
     }
 
     private Task<OracleTestHarness> CreateHarnessAsync()
-        => OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.OracleDdl, "lock");
+        => OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.OracleDdl, "lock", configureServices: CommandStartCounter.Register);
 }

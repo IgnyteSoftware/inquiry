@@ -112,7 +112,9 @@ The output below shows both: `StockInCategoryAsync("Produce")` returns `null`, a
 
 The provider's result is converted to `T`. `SUM` or `AVG` over a floating-point column can come back
 as a `double`, so converting it to `decimal` carries floating-point rounding. Use a decimal or integer
-column, and a matching `T`, when you need exact results.
+column, and a matching `T`, when you need exact results. On SQLite, a `decimal` property maps to a
+`NUMERIC` column, which stores fractional values as floating point. SQLite aggregates over fractional
+`decimal` values can therefore be inexact even with a `decimal` return type.
 
 ## Count shapes
 

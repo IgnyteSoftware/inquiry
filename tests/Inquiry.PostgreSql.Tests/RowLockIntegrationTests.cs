@@ -59,5 +59,5 @@ public sealed class RowLockIntegrationTests
     }
 
     private Task<PostgreSqlTestHarness> CreateHarnessAsync()
-        => PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.PostgreSqlDdl, "lock");
+        => PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.PostgreSqlDdl, "lock", configureServices: CommandStartCounter.Register);
 }

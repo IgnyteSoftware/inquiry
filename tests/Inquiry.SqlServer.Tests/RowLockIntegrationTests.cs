@@ -59,5 +59,5 @@ public sealed class RowLockIntegrationTests
     }
 
     private Task<SqlServerTestHarness> CreateHarnessAsync()
-        => SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.SqlServerDdl, "lock");
+        => SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockingSchema.SqlServerDdl, "lock", configureServices: CommandStartCounter.Register);
 }

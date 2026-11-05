@@ -1,5 +1,7 @@
 using Fulfillment;
+using Inquiry.Commands;
 using Inquiry.FeatureCatalog.Locking;
+using Inquiry.Interceptors;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inquiry.Tests.Shared;
@@ -18,7 +20,8 @@ internal static class RowLockScenarios
 
     /// <summary>
     /// <see cref="WorkItemService.RecordAttemptAsync"/> waits while another transaction holds the row, then
-    /// reads the committed value. Both increments survive.
+    /// reads the committed value. Both increments survive. The holder writes only after the worker is
+    /// blocked, so an unlocked read would return the old value and lose an increment.
     /// </summary>
     internal static async Task RecordAttemptWaitsForTheLockAndLosesNoUpdateAsync(IServiceProvider services)
     {
@@ -31,11 +34,12 @@ internal static class RowLockScenarios
         await using (var transaction = await inquiry.BeginTransactionAsync())
         {
             var held = await items.GetForUpdateAsync(id) ?? throw new InvalidOperationException("Seeded row is missing.");
+
+            recorded = await StartAsync(services, () => WorkItemService.RecordAttemptAsync(services, id));
+            await AssertBlockedAsync(recorded);
+
             held.Attempts++;
             Assert.True(await items.UpdateAsync(held));
-
-            recorded = Task.Run(() => WorkItemService.RecordAttemptAsync(services, id));
-            await AssertBlockedAsync(recorded);
             await transaction.CommitAsync();
         }
 
@@ -153,6 +157,24 @@ internal static class RowLockScenarios
         return await inquiry.ExecuteInTransactionAsync(_ => probe.GetForUpdateNoWaitAsync(id));
     }
 
+    /// <summary>
+    /// Starts <paramref name="work"/> on its own async flow and returns once it has sent its first
+    /// command, so a later blocked check measures the database, not a slow start.
+    /// </summary>
+    internal static async Task<Task<T>> StartAsync<T>(IServiceProvider services, Func<Task<T>> work)
+    {
+        var commands = services.GetRequiredService<CommandStartCounter>();
+        var before = commands.Count;
+        var worker = Task.Run(work);
+        using var timeout = new CancellationTokenSource(_completesWithin);
+        while (commands.Count == before && !worker.IsCompleted)
+        {
+            await Task.Delay(10, timeout.Token);
+        }
+
+        return worker;
+    }
+
     internal static async Task AssertBlockedAsync(Task worker)
     {
         await Task.WhenAny(worker, Task.Delay(_blockedFor));
@@ -162,5 +184,29 @@ internal static class RowLockScenarios
             await worker;
             Assert.Fail("The worker finished while another transaction held the lock.");
         }
+    }
+}
+
+/// <summary>
+/// Counts commands as they start. Register it with <see cref="Register"/> so a scenario can tell when a
+/// worker has sent its query.
+/// </summary>
+internal sealed class CommandStartCounter : IInquiryCommandInterceptor
+{
+    private int _count;
+
+    public int Count => Volatile.Read(ref _count);
+
+    public static void Register(IServiceCollection services)
+    {
+        var counter = new CommandStartCounter();
+        services.AddSingleton(counter);
+        services.AddSingleton<IInquiryCommandInterceptor>(counter);
+    }
+
+    public ValueTask CommandExecutingAsync(InquiryCommandContext context, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _count);
+        return ValueTask.CompletedTask;
     }
 }

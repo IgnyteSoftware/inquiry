@@ -181,8 +181,9 @@ It resolves the facade and the store from that scope so the store enlists in the
 
 `RecordAttemptAsync` locks one row with `Update`, increments `Attempts` and writes it back. If another
 transaction already holds the row, `GetForUpdateAsync` waits for it and then reads the committed value.
-In the tests, a second transaction locks and increments the row first; `RecordAttemptAsync` waits, then
-increments from 1 to 2. No update is lost.
+In the tests, another transaction locks the row first and `RecordAttemptAsync` waits. The other
+transaction then increments `Attempts` to 1 and commits, and `RecordAttemptAsync` reads 1 and writes 2.
+No update is lost.
 
 ## Example: claim queued work
 
@@ -209,8 +210,9 @@ The generator accepts the following combinations, but they do not lock as writte
   (ORA-01786).
 - **`Paged = true`** with a lock mode fails at run time on Oracle (ORA-02014). PostgreSQL and SQL
   Server ran the paged query in the same probe.
-- **A projection return type**, such as `Task<IReadOnlyList<WorkItemSummary>>`, runs a SELECT without
-  the lock clause on every provider, so no rows are locked.
+- **A projection return type** on an `[InquirySelectAll]` method without `OrderBy` or `Paged`, such as
+  `Task<IReadOnlyList<WorkItemSummary>>`, runs a SELECT without the lock clause, so no rows are locked.
+  This was seen in the generated SQL for PostgreSQL, SQL Server and Oracle.
 - **SQL Server, a column named like its table**: the table hint is inserted after the first occurrence
   of the table name, so a `[Status]` column in a `[Status]` table produces invalid SQL.
 
