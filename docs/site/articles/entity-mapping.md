@@ -20,8 +20,8 @@ values back differs, as described in [Provider notes](#provider-notes).
   computed column gets no `NOT NULL`: its expression decides, so make the property nullable when the
   expression can return `NULL`.
 - **Types.** Inquiry infers the column type from the property type. `Length`, `Precision`, `Scale` and
-  `IsUnicode` adjust it on providers whose types take them. SQLite ignores them and declares `TEXT`,
-  `NUMERIC` or `INTEGER`. `SqlType = "NVARCHAR(64)"` replaces the type with text that Inquiry copies into
+  `IsUnicode` adjust it on providers whose types take them. SQLite ignores them and declares a storage
+  type such as `TEXT` or `NUMERIC`. `SqlType = "NVARCHAR(64)"` replaces the type with text that Inquiry copies into
   the DDL unchanged, so a `SqlType` is specific to one provider.
 
 ## Who supplies each value
