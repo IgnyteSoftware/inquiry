@@ -6,23 +6,27 @@ a supported consumer scale, numeric release budget, or candidate disposition.
 
 ## Fixture and measurement boundaries
 
-`benchmarks/Inquiry.Benchmarks.Generators` constructs SQLite consumers with 25,
-100, or 500 entities and the same number of stores. Each entity has four mapped
+`benchmarks/Inquiry.Benchmarks.Generators` constructs SQLite consumers with 10,
+25, 100, 500, 1,000, or 5,000 entities and the same number of stores. The
+build evidence below uses 25, 100, and 500. Each entity has four mapped
 properties and a global filter. Each store has one eager streaming query. One
 parent has a collection relation to another entity. There are no DTOs or
 projections in this fixture. It is intentionally sparse, not equivalent to a
 relationship-rich production model.
 
-The fixture emits 52, 202, and 1,002 source files respectively. Setup validates
+The fixture emits two source files per entity plus two, so 52, 202, and 1,002
+source files at 25, 100, and 500 entities. Setup validates
 generator diagnostics and the resulting compilation, then compares each edited
 primed-driver result with fresh generation. Validation is outside timing.
 
-The four BenchmarkDotNet operations are:
+The five BenchmarkDotNet operations are:
 
 - Fresh generation on a prepared compilation with a new driver.
 - An unrelated constant edit.
-- A mapped-column edit in one model.
-- A related foreign-key column and global-filter edit in that model.
+- A mapped-column edit in `Model1`. `Model0` has a relation to `Model1`, so this
+  edit also reaches a related model.
+- The same mapped-column edit in `Model2`, which no relation reaches.
+- A related foreign-key column and global-filter edit in `Model1`.
 
 Every edit invocation starts from the same unchanged primed driver. Reassigning
 the driver after an invocation would measure repeated unchanged-input cache hits
@@ -80,6 +84,46 @@ its paired generated build; order and host noise limit causal interpretation.
 Raw reports and SHA-256 checksums are in
 [`benchmarks/evidence/issue-396-generator`](https://github.com/IgnyteSoftware/inquiry/tree/main/benchmarks/evidence/issue-396-generator).
 
+## Materializer outputs per model (#182)
+
+Each entity, view, projection, and ad-hoc DTO materializer now has its own
+generator output. An edit re-emits only the materializers whose model changed.
+Junctions, relation checks, stores, schema, and registration still share one
+output, so a model edit still re-runs them. #182 tracks moving stores to their
+own outputs.
+
+The table compares the same microbenchmark before and after this change. Both
+runs used a different host from the #396 results above: Windows 11, 12th Gen
+Intel Core i9-12900K, SDK 10.0.403, and .NET 10.0.14. Do not compare these
+numbers with the #396 tables. Each number is the ShortRun mean of three
+iterations. The latency samples are noisy, and the host was not quiet.
+Allocation is the steadier signal.
+
+| Entities | Operation | Before ms | After ms | Before MB | After MB |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 10 | Fresh generation | 2.77 | 2.67 | 3.4 | 3.4 |
+| 10 | Unrelated edit | 0.91 | 0.85 | 0.9 | 0.9 |
+| 10 | Isolated model edit | 3.41 | 2.65 | 3.4 | 3.1 |
+| 100 | Fresh generation | 11.52 | 10.14 | 26.5 | 26.7 |
+| 100 | Unrelated edit | 3.66 | 3.64 | 2.7 | 2.8 |
+| 100 | Isolated model edit | 16.24 | 16.13 | 26.3 | 22.7 |
+| 1,000 | Fresh generation | 213.71 | 158.31 | 256.4 | 258.0 |
+| 1,000 | Unrelated edit | 32.50 | 24.65 | 20.6 | 20.7 |
+| 1,000 | Isolated model edit | 152.27 | 142.59 | 255.3 | 218.1 |
+| 5,000 | Fresh generation | 904.45 | 724.32 | 1,279.8 | 1,288.1 |
+| 5,000 | Unrelated edit | 295.81 | 286.56 | 101.5 | 101.6 |
+| 5,000 | Isolated model edit | 902.23 | 658.83 | 1,273.7 | 1,086.9 |
+
+An isolated model edit allocates about 14% less from 100 entities up. That is
+the materializer share of the work. The related and relation/filter edits fall
+by the same amount. Fresh generation allocates under 1% more, for the extra
+per-model pipeline steps.
+
+These are local diagnostic numbers, not #396 acceptance evidence. The real
+consumer build evidence above was not rerun for this change. Both reports,
+with all 30 cases and their checksums, are in
+[`benchmarks/evidence/issue-182-generator`](https://github.com/IgnyteSoftware/inquiry/tree/main/benchmarks/evidence/issue-182-generator).
+
 ## Reproduce
 
 From the repository root:
@@ -93,7 +137,7 @@ Use a new directory for build evidence. The command refuses to overwrite an
 existing path. It retains consumer sources and build logs there; archive them
 with `build-evidence.json`. Both commands also support `-f net8.0`. Omit
 `--job Short` for the default BenchmarkDotNet configuration. `--job Dry` checks
-execution only. Require twelve populated statistics and memory records before
+execution only. Require 30 populated statistics and memory records before
 using an exported microbenchmark report; a zero process exit code alone is not
 enough. Require 45 build samples: three sizes, three repetitions, and five
 scenarios including the emitted-source control.

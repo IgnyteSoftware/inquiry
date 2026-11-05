@@ -49,23 +49,17 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 KnownSymbols.EntityAttributeNamespace + ".InquiryTableAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax,
                 transform: static (ctx, ct) => EntityProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
-            .WithTrackingName(EntitiesTrackingName)
-            .Collect();
+            .WithTrackingName(EntitiesTrackingName);
 
         // Views: each [InquiryView] class is projected into an equatable EntityData with IsView=true
-        // (read-only, keyless-permitted, no DDL). Merged into the entity array below so all the
-        // materializer / store-linking / registration machinery treats a view like any other entity.
+        // (read-only, keyless-permitted, no DDL). Every later stage treats a view like a table and
+        // processes tables first, then views.
         var views = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryViewAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 transform: static (ctx, ct) => EntityProcessor.ExtractView((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
-            .WithTrackingName(ViewsTrackingName)
-            .Collect();
-
-        // Tables and views share the EntityData model and every downstream stage, so concatenate them
-        // into one array. The Execute signature stays unchanged; IsView gates read-only behavior.
-        var allEntities = entities.Combine(views).Select(static (pair, _) => pair.Left.AddRange(pair.Right));
+            .WithTrackingName(ViewsTrackingName);
 
         // projections: each [InquiryProjection] class is projected into an equatable ProjectionData
         // (a keyless column subset) so its materializer caches like an entity's.
@@ -74,8 +68,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 KnownSymbols.EntityAttributeNamespace + ".InquiryProjectionAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
-            .WithTrackingName(ProjectionsTrackingName)
-            .Collect();
+            .WithTrackingName(ProjectionsTrackingName);
 
         // Ad-hoc DTOs: each [InquiryAdHoc] class is projected into an equatable AdHocData. Its
         // materializer registers like an entity's, giving the ad-hoc IInquiry.Query* path a
@@ -85,8 +78,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 KnownSymbols.EntityAttributeNamespace + ".InquiryAdHocAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
                 transform: static (ctx, ct) => AdHocProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
-            .WithTrackingName(AdHocTrackingName)
-            .Collect();
+            .WithTrackingName(AdHocTrackingName);
 
         // Stores carry no class-level attribute (identified by the InquiryStore<T> base), so they use
         // a narrow syntactic predicate; non-stores transform to null and are filtered out.
@@ -96,8 +88,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 transform: static (ctx, ct) => ExtractStore(ctx, ct))
             .Where(static store => store is not null)
             .Select(static (store, _) => store!)
-            .WithTrackingName(StoresTrackingName)
-            .Collect();
+            .WithTrackingName(StoresTrackingName);
 
         // Dialect ownership depends on the whole compilation (assembly attributes + referenced
         // assemblies), so it re-projects on every edit — but into a tiny equatable value, so the
@@ -106,10 +97,85 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .Select((compilation, cancellationToken) => ResolveOwnership(compilation, cancellationToken))
             .WithTrackingName(OwnershipTrackingName);
 
-        var combined = allEntities.Combine(stores).Combine(projections).Combine(adHocs).Combine(ownership);
+        var collectedTables = entities.Collect();
+        var collectedViews = views.Collect();
+        var collectedStores = stores.Collect();
+        var collectedProjections = projections.Collect();
+        var collectedAdHocs = adHocs.Collect();
 
-        context.RegisterSourceOutput(combined, (spc, data) =>
-            Execute(spc, data.Left.Left.Left.Left, data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
+        // Whether any model needs code at all, tested before computed expressions are resolved.
+        var hasWork = collectedTables.Combine(collectedViews).Combine(collectedStores).Combine(collectedProjections).Combine(collectedAdHocs)
+            .Select(static (all, _) =>
+                all.Left.Left.Left.Left.Any(static entity => entity.IsMapped) || all.Left.Left.Left.Right.Any(static entity => entity.IsMapped)
+                || !all.Left.Left.Right.IsEmpty || !all.Left.Right.IsEmpty || !all.Right.IsEmpty);
+
+        // Computed expressions resolve per entity, so editing one entity resolves only that entity again.
+        var resolvedTables = entities
+            .Select((entity, _) => ComputedExpressionResolver.Resolve(entity, CreateSqlBuilder()))
+            .WithTrackingName(ResolvedEntitiesTrackingName);
+        var resolvedViews = views
+            .Select((entity, _) => ComputedExpressionResolver.Resolve(entity, CreateSqlBuilder()))
+            .WithTrackingName(ResolvedViewsTrackingName);
+        var collectedResolvedTables = resolvedTables.Collect();
+        var collectedResolvedViews = resolvedViews.Collect();
+
+        var gate = ownership.Combine(hasWork).Combine(collectedResolvedTables).Combine(collectedResolvedViews)
+            .Combine(collectedProjections).Combine(collectedAdHocs)
+            .Select(static (all, _) => MaterializerGate.Create(
+                all.Left.Left.Left.Left.Left.Kind == DialectOwnershipKind.Owned && all.Left.Left.Left.Left.Right,
+                all.Left.Left.Left.Right, all.Left.Left.Right, all.Left.Right, all.Right))
+            .WithTrackingName(MaterializerGateTrackingName);
+
+        // Output nodes report diagnostics in registration order. They are registered in the order the
+        // single output stage used to report them, so the diagnostic sequence does not change.
+        context.RegisterSourceOutput(entities, static (spc, entity) => Report(spc, entity.Diagnostics));
+        context.RegisterSourceOutput(views, static (spc, entity) => Report(spc, entity.Diagnostics));
+        context.RegisterSourceOutput(projections, static (spc, projection) => Report(spc, projection.Diagnostics));
+        context.RegisterSourceOutput(adHocs, static (spc, adHoc) => Report(spc, adHoc.Diagnostics));
+        context.RegisterSourceOutput(ownership.Combine(hasWork), static (spc, pair) => ReportOwnership(spc, pair.Left, pair.Right));
+        context.RegisterSourceOutput(resolvedTables.Combine(gate), static (spc, pair) => ReportWhenEmitting(spc, pair.Left, pair.Right));
+        context.RegisterSourceOutput(resolvedViews.Combine(gate), static (spc, pair) => ReportWhenEmitting(spc, pair.Left, pair.Right));
+
+        // Each materializer reads only its own model, so each gets its own output. An edit re-emits only
+        // the materializers whose model changed.
+        var tableMaterializers = resolvedTables.Combine(gate)
+            .Select(static (pair, _) => pair.Right.Emits(pair.Left.Entity) ? pair.Left.Entity : null)
+            .WithTrackingName(EntityMaterializersTrackingName);
+        var viewMaterializers = resolvedViews.Combine(gate)
+            .Select(static (pair, _) => pair.Right.Emits(pair.Left.Entity) ? pair.Left.Entity : null)
+            .WithTrackingName(ViewMaterializersTrackingName);
+        var projectionMaterializers = projections.Combine(gate)
+            .Select(static (pair, _) => pair.Right.Emits(pair.Left) ? pair.Left : null)
+            .WithTrackingName(ProjectionMaterializersTrackingName);
+        var adHocMaterializers = adHocs.Combine(gate)
+            .Select(static (pair, _) => pair.Right.Emits(pair.Left) ? pair.Left : null)
+            .WithTrackingName(AdHocMaterializersTrackingName);
+        context.RegisterSourceOutput(tableMaterializers, (spc, entity) => EmitEntityMaterializer(spc, entity));
+        context.RegisterSourceOutput(viewMaterializers, (spc, entity) => EmitEntityMaterializer(spc, entity));
+        context.RegisterSourceOutput(projectionMaterializers, (spc, projection) =>
+        {
+            if (projection is not null)
+            {
+                ProjectionProcessor.EmitMaterializer(spc, projection, CreateSqlBuilder());
+            }
+        });
+        context.RegisterSourceOutput(adHocMaterializers, (spc, adHoc) =>
+        {
+            if (adHoc is not null)
+            {
+                AdHocProcessor.EmitMaterializer(spc, adHoc, CreateSqlBuilder());
+            }
+        });
+
+        // Junctions, relations, stores, schema and registration still share one output over the whole
+        // model, so any model edit re-runs all of them.
+        var model = collectedResolvedTables.Combine(collectedResolvedViews).Combine(collectedStores)
+            .Combine(collectedProjections).Combine(collectedAdHocs).Combine(ownership).Combine(gate)
+            .WithTrackingName(ModelOutputTrackingName);
+
+        context.RegisterSourceOutput(model, (spc, data) => Execute(spc,
+            data.Left.Left.Left.Left.Left.Left, data.Left.Left.Left.Left.Left.Right, data.Left.Left.Left.Left.Right,
+            data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
     }
 
     internal const string EntitiesTrackingName = "InquiryEntities";
@@ -118,6 +184,56 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     internal const string ProjectionsTrackingName = "InquiryProjections";
     internal const string AdHocTrackingName = "InquiryAdHocDtos";
     internal const string OwnershipTrackingName = "InquiryDialectOwnership";
+    internal const string ResolvedEntitiesTrackingName = "InquiryResolvedEntities";
+    internal const string ResolvedViewsTrackingName = "InquiryResolvedViews";
+    internal const string MaterializerGateTrackingName = "InquiryMaterializerGate";
+    internal const string EntityMaterializersTrackingName = "InquiryEntityMaterializers";
+    internal const string ViewMaterializersTrackingName = "InquiryViewMaterializers";
+    internal const string ProjectionMaterializersTrackingName = "InquiryProjectionMaterializers";
+    internal const string AdHocMaterializersTrackingName = "InquiryAdHocMaterializers";
+    internal const string ModelOutputTrackingName = "InquiryModelOutput";
+
+    private void EmitEntityMaterializer(SourceProductionContext context, EntityData? entity)
+    {
+        if (entity is not null)
+        {
+            EntityProcessor.EmitMaterializer(context, entity, CreateSqlBuilder());
+        }
+    }
+
+    private static void Report(SourceProductionContext context, EquatableArray<DiagnosticData> diagnostics)
+    {
+        foreach (var diagnostic in diagnostics)
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+    }
+
+    private static void ReportWhenEmitting(SourceProductionContext context, ResolvedEntity entity, MaterializerGate gate)
+    {
+        if (gate.Emit)
+        {
+            Report(context, entity.Diagnostics);
+        }
+    }
+
+    private static void ReportOwnership(SourceProductionContext context, DialectOwnership ownership, bool hasWork)
+    {
+        if (!hasWork)
+        {
+            return;
+        }
+
+        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectUnknown, null,
+                FormatDialectForDiagnostic(ownership.UnknownDialect), string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
+        }
+        else if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectAmbiguous, null, ownership.AmbiguousDialects));
+        }
+    }
 
     private static bool IsStoreCandidateClass(SyntaxNode node)
     {
@@ -160,62 +276,33 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
 
     private void Execute(
         SourceProductionContext context,
-        ImmutableArray<EntityData> entities,
+        ImmutableArray<ResolvedEntity> tables,
+        ImmutableArray<ResolvedEntity> views,
         ImmutableArray<StoreData> stores,
         ImmutableArray<ProjectionData> projections,
         ImmutableArray<AdHocData> adHocs,
-        DialectOwnership ownership)
+        DialectOwnership ownership,
+        MaterializerGate gate)
     {
-        // Entity (and projection/ad-hoc) diagnostics are surfaced regardless of dialect ownership
-        // (matching the previous behavior, where entity discovery ran before arbitration).
-        foreach (var entity in entities)
+        // Discovery, ownership and computed-expression diagnostics are reported by earlier outputs.
+        if (!gate.Emit)
         {
-            foreach (var diagnostic in entity.Diagnostics)
-            {
-                context.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-        }
-
-        foreach (var projection in projections)
-        {
-            foreach (var diagnostic in projection.Diagnostics)
-            {
-                context.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-        }
-
-        foreach (var adHoc in adHocs)
-        {
-            foreach (var diagnostic in adHoc.Diagnostics)
-            {
-                context.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-        }
-
-        if (!entities.Any(static entity => entity.IsMapped) && stores.IsEmpty && projections.IsEmpty && adHocs.IsEmpty)
-        {
-            return;
-        }
-
-        if (ownership.Kind is DialectOwnershipKind.NotMine or DialectOwnershipKind.AmbiguousFollower or DialectOwnershipKind.UnknownFollower)
-        {
-            return;
-        }
-
-        if (ownership.Kind == DialectOwnershipKind.UnknownLeader)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectUnknown, null,
-                FormatDialectForDiagnostic(ownership.UnknownDialect), string.IsNullOrWhiteSpace(ownership.AmbiguousDialects) ? "<none>" : ownership.AmbiguousDialects));
-            return;
-        }
-        if (ownership.Kind == DialectOwnershipKind.AmbiguousLeader)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.DialectAmbiguous, null, ownership.AmbiguousDialects));
             return;
         }
 
         var sqlBuilder = CreateSqlBuilder();
-        entities = ResolveComputedExpressions(context, entities, sqlBuilder, out var computedInvalidEntityNames);
+        var computedInvalidEntityNames = new HashSet<string>(System.StringComparer.Ordinal);
+        var resolvedEntities = ImmutableArray.CreateBuilder<EntityData>(tables.Length + views.Length);
+        foreach (var resolved in tables.Concat(views))
+        {
+            resolvedEntities.Add(resolved.Entity);
+            if (resolved.ComputedInvalid)
+            {
+                computedInvalidEntityNames.Add(resolved.Entity.FullyQualifiedName);
+            }
+        }
+
+        var entities = resolvedEntities.MoveToImmutable();
 
         // Auto-managed [InquiryManyToMany] junctions become real entities here, before anything looks at
         // the entity set. Each declaring relation is rewritten to name the synthesized junction, so
@@ -273,14 +360,20 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
                 continue;
             }
 
-            entityRegistrations.Add(EntityProcessor.EmitMaterializer(context, entity, sqlBuilder));
+            // Materializers have their own outputs. A name declared twice is emitted here once, as
+            // before, because two outputs cannot add the same hint name.
+            entityRegistrations.Add(gate.IsDuplicateEntity(entity.FullyQualifiedName)
+                ? EntityProcessor.EmitMaterializer(context, entity, sqlBuilder)
+                : new EntityRegistration(entity.FullyQualifiedName, entity.ClassMaterializerFullName));
         }
 
-        // projection materializers register and emit exactly like entity materializers (same
+        // projection materializers register like entity materializers (same
         // IInquiryEntityMaterializer<T> contract), so they share the registration set.
         foreach (var projection in mappedProjections.Values)
         {
-            entityRegistrations.Add(ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder));
+            entityRegistrations.Add(gate.IsDuplicateProjection(projection.FullyQualifiedName)
+                ? ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder)
+                : new EntityRegistration(projection.FullyQualifiedName, projection.ClassMaterializerFullName));
         }
 
         // ad-hoc DTO materializers share the registration set too. They are dialect-independent
@@ -288,7 +381,9 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         // the other materializers.
         foreach (var adHoc in mappedAdHocs.Values)
         {
-            entityRegistrations.Add(AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder));
+            entityRegistrations.Add(gate.IsDuplicateAdHoc(adHoc.FullyQualifiedName)
+                ? AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder)
+                : new EntityRegistration(adHoc.FullyQualifiedName, adHoc.ClassMaterializerFullName));
         }
 
         var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
@@ -351,123 +446,6 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     /// side — a reversed relation (INQ058), and a composite-key child (INQ041). A relation whose
     /// child type isn't a mapped entity is left alone (the emit path tolerates it).
     /// </summary>
-    private static ImmutableArray<EntityData> ResolveComputedExpressions(SourceProductionContext context, ImmutableArray<EntityData> entities, SqlBuilder builder,
-        out HashSet<string> computedInvalidEntityNames)
-    {
-        computedInvalidEntityNames = new HashSet<string>(System.StringComparer.Ordinal);
-        var resolved = ImmutableArray.CreateBuilder<EntityData>(entities.Length);
-        foreach (var entity in entities)
-        {
-            var valid = entity.IsMapped;
-            var columns = ImmutableArray.CreateBuilder<ColumnData>(entity.Columns.Count);
-            foreach (var column in entity.Columns)
-            {
-                var fallback = column.ComputedExpression;
-                var overrides = column.ComputedExpressionOverrides.AsImmutableArray();
-                var selected = fallback;
-                var selectedLocation = column.ComputedExpressionLocation ?? column.Location;
-                var reasons = new List<(LocationData? Location, string Reason)>();
-                foreach (var item in overrides)
-                {
-                    if (!IsValidProviderId(item.ProviderId))
-                    {
-                        reasons.Add((item.ProviderIdLocation, "provider id is invalid; use lowercase ASCII [a-z][a-z0-9.-]{0,63}"));
-                    }
-
-                    if (string.IsNullOrWhiteSpace(item.Expression))
-                    {
-                        reasons.Add((item.ExpressionLocation, "override expression is empty or whitespace"));
-                    }
-                }
-                foreach (var duplicate in overrides.Where(item => IsValidProviderId(item.ProviderId)).GroupBy(static item => item.ProviderId, System.StringComparer.Ordinal).Where(static group => group.Count() > 1))
-                {
-                    reasons.Add((duplicate.Skip(1).First().ExpressionLocation, "more than one override declares provider '" + duplicate.Key + "'"));
-                }
-
-                if (overrides.Length > 0 && string.IsNullOrWhiteSpace(fallback))
-                {
-                    reasons.Add((overrides[0].ExpressionLocation, "a provider override requires a non-empty InquiryColumn.Computed fallback"));
-                }
-
-                var providerOverride = overrides.FirstOrDefault(item => item.ProviderId == builder.ProviderId);
-                if (providerOverride is not null)
-                { selected = providerOverride.Expression; selectedLocation = providerOverride.ExpressionLocation; }
-                if (fallback is not null || overrides.Length > 0)
-                {
-                    if (string.IsNullOrWhiteSpace(selected))
-                    {
-                        if (providerOverride is null)
-                        {
-                            reasons.Add((selectedLocation, "expression is empty or whitespace"));
-                        }
-                    }
-                    else
-                    {
-                        var failures = builder.ValidateComputedExpression(selected!);
-                        if (failures.Count > 0)
-                        {
-                            reasons.Add((selectedLocation, string.Join("; ", failures)));
-                        }
-
-                        if (builder.RequiresBoundedComputedStrings && column.TypeClass == DbTypeClass.String)
-                        {
-                            var maxLength = builder.MaxBoundedStringLength(column.IsUnicode);
-                            if (column.Length <= 0 || column.Length > maxLength)
-                            {
-                                context.ReportDiagnostic(Diagnostic.Create(
-                                    InquiryDiagnosticDescriptors.ComputedStringRequiresBoundedLength,
-                                    selectedLocation?.ToLocation(),
-                                    entity.FullyQualifiedName + "." + column.PropertyName,
-                                    maxLength));
-                                valid = false;
-                                computedInvalidEntityNames.Add(entity.FullyQualifiedName);
-                                selected = null;
-                            }
-                        }
-                    }
-                }
-                foreach (var reason in reasons)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ComputedExpressionInvalid,
-                        reason.Location?.ToLocation(), entity.FullyQualifiedName + "." + column.PropertyName, builder.ProviderId, reason.Reason));
-                }
-
-                if (reasons.Count > 0)
-                { valid = false; computedInvalidEntityNames.Add(entity.FullyQualifiedName); }
-                columns.Add(column with { ComputedExpression = reasons.Count == 0 && selected is not null ? builder.RenderComputedExpression(selected) : selected });
-            }
-            var finalColumns = columns.ToImmutable();
-            ColumnData? Find(ColumnData? original) => original is null ? null : finalColumns.FirstOrDefault(column => column.PropertyName == original.PropertyName);
-            resolved.Add(entity with
-            {
-                Columns = new EquatableArray<ColumnData>(finalColumns),
-                Keys = new EquatableArray<ColumnData>(entity.Keys.AsImmutableArray().Select(key => finalColumns.First(column => column.PropertyName == key.PropertyName)).ToImmutableArray()),
-                SoftDeleteColumn = Find(entity.SoftDeleteColumn),
-                ConcurrencyToken = Find(entity.ConcurrencyToken),
-                IsMapped = valid,
-            });
-        }
-        return resolved.ToImmutable();
-    }
-
-    private static bool IsValidProviderId(string value)
-    {
-        if (value.Length is < 1 or > 64 || value[0] is < 'a' or > 'z')
-        {
-            return false;
-        }
-
-        for (var i = 1; i < value.Length; i++)
-        {
-            if (!(value[i] is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private static void ValidateRelations(SourceProductionContext context, Dictionary<string, EntityData> mappedEntities)
     {
         foreach (var entity in mappedEntities.Values)

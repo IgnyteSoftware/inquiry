@@ -7,7 +7,7 @@ namespace Inquiry.Benchmarks.Generators;
 [MemoryDiagnoser]
 public class GeneratorBenchmarks
 {
-    [Params(25, 100, 500)]
+    [Params(10, 25, 100, 500, 1000, 5000)]
     public int EntityCount { get; set; }
 
     private GeneratorFixture _fixture = null!;
@@ -19,7 +19,7 @@ public class GeneratorBenchmarks
         _fixture = new GeneratorFixture(EntityCount);
         _primed = GeneratorFixture.CreateDriver().RunGenerators(_fixture.Original);
         GeneratorFixture.Verify(_primed, _fixture.Original);
-        foreach (var edited in new[] { _fixture.Unrelated, _fixture.Model, _fixture.RelationFilter })
+        foreach (var edited in new[] { _fixture.Unrelated, _fixture.Model, _fixture.IsolatedModel, _fixture.RelationFilter })
         {
             var reused = _primed.RunGenerators(edited);
             GeneratorFixture.Verify(reused, edited);
@@ -38,8 +38,12 @@ public class GeneratorBenchmarks
     [Benchmark]
     public GeneratorDriver UnrelatedEdit() => _primed.RunGenerators(_fixture.Unrelated);
 
+    // Model1 is the relation child of Model0, so this edit also reaches a related model.
     [Benchmark]
     public GeneratorDriver ModelEdit() => _primed.RunGenerators(_fixture.Model);
+
+    [Benchmark]
+    public GeneratorDriver IsolatedModelEdit() => _primed.RunGenerators(_fixture.IsolatedModel);
 
     [Benchmark]
     public GeneratorDriver RelationFilterEdit() => _primed.RunGenerators(_fixture.RelationFilter);
@@ -52,6 +56,7 @@ internal sealed class GeneratorFixture
     public CSharpCompilation Original { get; }
     public CSharpCompilation Unrelated { get; }
     public CSharpCompilation Model { get; }
+    public CSharpCompilation IsolatedModel { get; }
     public CSharpCompilation RelationFilter { get; }
 
     public GeneratorFixture(int entityCount)
@@ -94,6 +99,7 @@ internal sealed class GeneratorFixture
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
         Unrelated = Edit("Unrelated.cs", Sources["Unrelated.cs"].Replace("Value = 1", "Value = 2"));
         Model = Edit("Model1.cs", Sources["Model1.cs"].Replace("[InquiryColumn] public string Name", "[InquiryColumn(\"DisplayName\")] public string Name"));
+        IsolatedModel = Edit("Model2.cs", Sources["Model2.cs"].Replace("[InquiryColumn] public string Name", "[InquiryColumn(\"DisplayName\")] public string Name"));
         RelationFilter = Edit("Model1.cs", Sources["Model1.cs"].Replace("[InquiryColumn] public int ParentId", "[InquiryColumn(\"OwnerId\")] public int ParentId")
             .Replace("InquiryGlobalFilter]", "InquiryGlobalFilter(KeepWhen = false)]"));
 
