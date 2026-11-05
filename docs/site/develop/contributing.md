@@ -250,6 +250,9 @@ The [partial-updates](../articles/features/partial-updates.md) recipe runs under
 `tests/Inquiry.PackageSmoke/PartialUpdatesRecipe.cs`, which checks every result that page documents.
 The [entity-mapping](../articles/entity-mapping.md) program must also print exactly its documented
 output, including the generated DDL and the SQL of each statement it runs.
+The [aggregates](../articles/features/aggregates.md) program must also print exactly its documented
+output. The [N+1 detection](../articles/features/interceptors.md#n1-detection) recipe runs under
+`tests/Inquiry.PackageSmoke/NPlusOneRecipe.cs`, which checks the warnings and rules that page states.
 The run fails if a marked file is missing or extra.
 
 The [migrations recipe](../articles/features/migrations.md) publishes the files of

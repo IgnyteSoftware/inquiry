@@ -2,8 +2,8 @@ namespace Inquiry.Stores;
 
 /// <summary>
 /// Specifies the row-level lock intent for a generated SELECT query. The generated SQL acquires
-/// the requested lock within the current transaction; using a lock mode outside a transaction is
-/// a provider-specific error at runtime.
+/// the requested lock within the current transaction, and the lock lasts until that transaction
+/// ends. Outside a transaction the query still runs, but the lock ends with the statement.
 /// </summary>
 public enum InquiryLockMode
 {
