@@ -62,6 +62,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ111         Store method signature          (static, generic, ref/in/out/scoped parameter, or ref return: the generator cannot reproduce it) [IN USE]
     //   INQ113         Concurrency-token store shape   (upsert on a token entity, or a database-generated token the dialect cannot emit) [IN USE]
     //   INQ114         Stored-procedure provider support (dialect without procedures, Oracle RETURN, or an Oracle read-back ODP.NET cannot bind) [IN USE]
+    //   INQ115         Unapplied criteria             ([InquiryWhere] or a specification on an operation that does not apply criteria) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1114,4 +1115,10 @@ internal static class InquiryDiagnosticDescriptors
         "Stored-procedure method '{0}' cannot be generated for the '{1}' dialect: {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq114");
+
+    public static readonly DiagnosticDescriptor WhereCriteriaNotSupported = new(
+        "INQ115", "Operation does not support InquiryWhere criteria",
+        "Store method '{0}' uses [{1}], which does not support [InquiryWhere] criteria, including criteria supplied by an [InquirySpecification] attribute. Remove the criteria, or move them to an operation that applies them.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq115");
 }

@@ -199,6 +199,14 @@ internal static class StoreProcessor
             return null;
         }
 
+        if (!AppliesWhereCriteria(operation) && HasWhereCriteria(method))
+        {
+            var attributeName = attribute.AttributeClass!.Name;
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.WhereCriteriaNotSupported, location, method.Name,
+                attributeName.EndsWith("Attribute", StringComparison.Ordinal) ? attributeName.Substring(0, attributeName.Length - "Attribute".Length) : attributeName));
+            return null;
+        }
+
         if (operation == StoreOperation.DeleteOneByKey &&
             (method.Parameters.Length == 0 ||
                 method.Parameters.Length == 1 && GeneratorHelpers.IsCancellationToken(method.Parameters[0].Type)))
@@ -254,12 +262,12 @@ internal static class StoreProcessor
         }
 
         var predicates = ImmutableArray<PredicateData>.Empty;
-        if (operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate or StoreOperation.Exists or StoreOperation.Aggregate)
+        if (AppliesWhereCriteria(operation))
         {
             predicates = ReadWherePredicates(method);
             // [InquiryExists] is valid with no criteria (tests whether the table has any row at all).
             // The other predicate operations require at least one criterion.
-            if (predicates.Length == 0 && operation is not StoreOperation.Exists and not StoreOperation.Aggregate)
+            if (predicates.Length == 0 && operation is not StoreOperation.Exists and not StoreOperation.Aggregate and not StoreOperation.Count)
             {
                 // A predicate select with no criteria is a parameter mismatch (INQ019); a set-based
                 // mutation with no criteria would touch every row, so it gets its own diagnostic (INQ023).
@@ -1091,6 +1099,10 @@ internal static class StoreProcessor
 
     private static bool HasWhereCriteria(IMethodSymbol method)
         => ReadWherePredicates(method).Length > 0;
+
+    private static bool AppliesWhereCriteria(StoreOperation operation)
+        => operation is StoreOperation.SelectAllByPredicate or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate
+            or StoreOperation.Exists or StoreOperation.Aggregate or StoreOperation.Count;
 
     private static ImmutableArray<SetExpressionData> ReadSetExpressions(IMethodSymbol method)
     {
@@ -1949,7 +1961,7 @@ internal static class StoreProcessor
         var needsDeleteReturning = valid.Any(m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && (!hasSoftDelete || m.Method.HardDelete));
         var needsSoftDeleteReturning = hasSoftDelete && valid.Any(static m => m.Method.Operation == StoreOperation.DeleteOneByKey && m.Method.ReturnsEntity && !m.Method.HardDelete);
         var needsRestore = valid.Any(static m => m.Method.Operation == StoreOperation.RestoreOneByKey);
-        var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count && m.Method.IgnoredFilterNames.Count == 0);
+        var needsCount = valid.Any(static m => m.Method.Operation == StoreOperation.Count && m.Method.IgnoredFilterNames.Count == 0 && m.Method.Predicates.Count == 0);
         // A [InquiryBulkInsert] on a dialect without a native bulk-copy API compiles down to the
         // batch-insert body, so it needs the same baked consts.
         var needsInsertAll = valid.Any(m => m.Method.Operation == StoreOperation.InsertAll
@@ -2146,6 +2158,10 @@ internal static class StoreProcessor
                 AppendSql("_sqlAgg_" + method.MemberName, sqlBuilder.BuildAggregateSql(
                     CtxFor(method), method.AggregateFunction!, sqlBuilder.QuoteIdentifier(aggColumn.ColumnName), aggregatePredicatePlan!.Predicates));
             }
+            else if (method.Operation == StoreOperation.Count && method.Predicates.Count > 0)
+            {
+                AppendSql("_sqlCountFor_" + method.MemberName, sqlBuilder.BuildCountByPredicateSql(CtxFor(method), aggregatePredicatePlan!.Predicates));
+            }
             else if (method.Operation == StoreOperation.SelectTopByOrder)
             {
                 var orderColumn = FindColumn(entity, method.TopByOrderColumn!)!;
@@ -2287,7 +2303,7 @@ internal static class StoreProcessor
                 // "_sqlCountFor_" rather than "_sqlCount_": the ReturnsPagedResult plan path already
                 // emits _sqlCount_<name>, and a paged overload sharing this method's name would
                 // otherwise collide into a CS0102 duplicate const in the generated store.
-                case StoreOperation.Count when method.IgnoredFilterNames.Count > 0:
+                case StoreOperation.Count when method.IgnoredFilterNames.Count > 0 && method.Predicates.Count == 0:
                     AppendSql("_sqlCountFor_" + method.MemberName, sqlBuilder.BuildCountSql(methodCtx));
                     break;
             }
@@ -2748,7 +2764,7 @@ internal static class StoreProcessor
                 AddSelect();
                 break;
             case StoreOperation.Count:
-                Add("query", method.IgnoredFilterNames.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount");
+                Add("query", method.IgnoredFilterNames.Count > 0 || method.Predicates.Count > 0 ? "_sqlCountFor_" + method.MemberName : "_sqlCount");
                 break;
             case StoreOperation.Exists:
                 Add("query", "_sqlExists_" + method.MemberName);
@@ -3129,7 +3145,9 @@ internal static class StoreProcessor
             return false;
         }
 
-        if (method.Operation is StoreOperation.SelectAllByPredicate or StoreOperation.Exists or StoreOperation.Aggregate)
+        // A Count with no criteria keeps its own parameter check, so a stray parameter still reports INQ006.
+        if (method.Operation is StoreOperation.SelectAllByPredicate or StoreOperation.Exists or StoreOperation.Aggregate ||
+            method.Operation == StoreOperation.Count && method.Predicates.Count > 0)
         {
             var pagingParameterCount = method.Operation == StoreOperation.SelectAllByPredicate && method.Pagination == Pagination.Offset ? 2 : 0;
             if (!TryResolvePredicates(context, method, entity, sqlBuilder, out predicatePlan, trailingParameterCount: pagingParameterCount))

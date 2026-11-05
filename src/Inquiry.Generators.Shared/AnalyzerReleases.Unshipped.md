@@ -114,3 +114,4 @@ INQ111 | Inquiry | Error | Store method signature cannot be generated
 INQ112 | Inquiry | Warning | Positional InquiryWhere criteria bind parameters of the same type
 INQ113 | Inquiry | Error | Store concurrency-token shape is not supported
 INQ114 | Inquiry | Error | Stored-procedure feature is not supported by the target dialect
+INQ115 | Inquiry | Error | Operation does not support InquiryWhere criteria
