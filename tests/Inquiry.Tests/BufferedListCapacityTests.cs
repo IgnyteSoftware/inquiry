@@ -113,6 +113,22 @@ public sealed class BufferedListCapacityTests
         AssertRowsInOrder((List<Row>)list, 100);
     }
 
+    [Fact]
+    public async Task GridMaterializerFailureAfterPoolingPropagates()
+    {
+        await using var connection = await OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = SelectRowsSql + "; SELECT 1;";
+        BindRowCount(command, 100);
+        var reader = await command.ExecuteReaderAsync();
+        var grid = new InquiryGridReader(reader, command, ownedConnection: null, lease: null);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            grid.ReadListAsync<Row, ThrowingRowMaterializer>(new ThrowingRowMaterializer()));
+        Assert.Equal("Row 40 failed.", exception.Message);
+        await grid.DisposeAsync();
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -120,32 +136,37 @@ public sealed class BufferedListCapacityTests
     {
         // PoolProbe is used only here, so no other test rents from ArrayPool<PoolProbe>.Shared. A
         // rent on the same thread gets the array returned last, and a second rent gets the same
-        // array again only if it was returned twice.
+        // array again only if it was returned twice. 100 rows rent 32, grow to 64, then to 128.
         object? rows = InquiryBufferedList<PoolProbe>.Start(-1);
-        for (var i = 0; i < 20; i++)
+        for (var i = 0; i < 100; i++)
         {
             InquiryBufferedList<PoolProbe>.Add(ref rows, new PoolProbe(i));
         }
 
         if (complete)
         {
-            Assert.Equal(20, InquiryBufferedList<PoolProbe>.Complete(rows).Capacity);
+            var list = InquiryBufferedList<PoolProbe>.Complete(rows);
+            Assert.Equal(100, list.Capacity);
+            Assert.Equal(Enumerable.Range(0, 100), list.Select(probe => probe.Value));
         }
 
         InquiryBufferedList<PoolProbe>.Release(rows);
         InquiryBufferedList<PoolProbe>.Release(rows);
 
-        var first = ArrayPool<PoolProbe>.Shared.Rent(32);
-        var second = ArrayPool<PoolProbe>.Shared.Rent(32);
-        try
+        foreach (var length in new[] { 32, 64, 128 })
         {
-            Assert.NotSame(first, second);
-            Assert.All(first, Assert.Null);
-        }
-        finally
-        {
-            ArrayPool<PoolProbe>.Shared.Return(first);
-            ArrayPool<PoolProbe>.Shared.Return(second);
+            var first = ArrayPool<PoolProbe>.Shared.Rent(length);
+            var second = ArrayPool<PoolProbe>.Shared.Rent(length);
+            try
+            {
+                Assert.NotSame(first, second);
+                Assert.All(first, Assert.Null);
+            }
+            finally
+            {
+                ArrayPool<PoolProbe>.Shared.Return(first);
+                ArrayPool<PoolProbe>.Shared.Return(second);
+            }
         }
     }
 

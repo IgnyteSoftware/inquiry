@@ -62,10 +62,11 @@ internal static class InquiryBufferedList<T>
         public PooledRows(List<T> list, T item)
         {
             _list = list;
-            var buffer = ArrayPool<T>.Shared.Rent(list.Count * 2);
+            var buffer = ArrayPool<T>.Shared.Rent(NextLength(list.Count));
             CollectionsMarshal.AsSpan(list).CopyTo(buffer);
             _count = list.Count;
-            buffer[_count++] = item;
+            buffer[_count] = item;
+            _count++;
             _buffer = buffer;
         }
 
@@ -77,7 +78,9 @@ internal static class InquiryBufferedList<T>
                 buffer = Grow(buffer);
             }
 
-            buffer[_count++] = item;
+            // Count the row only after the store succeeds, so a later clear never passes the array end.
+            buffer[_count] = item;
+            _count++;
         }
 
         public List<T> ToExactList()
@@ -102,12 +105,19 @@ internal static class InquiryBufferedList<T>
 
         private T[] Grow(T[] buffer)
         {
-            var next = ArrayPool<T>.Shared.Rent((int)Math.Min((uint)buffer.Length * 2, (uint)Array.MaxLength));
+            var next = ArrayPool<T>.Shared.Rent(NextLength(buffer.Length));
             Array.Copy(buffer, next, _count);
             _buffer = next;
             Return(buffer, _count);
             return next;
         }
+
+        // At Array.MaxLength the request is larger than any array, so the runtime throws
+        // OutOfMemoryException, as List<T> does when it cannot grow.
+        private static int NextLength(int length)
+            => length < Array.MaxLength
+                ? (int)Math.Min((uint)length * 2, (uint)Array.MaxLength)
+                : int.MaxValue;
 
         // Clear the used slots so the pool does not keep entities reachable.
         private static void Return(T[] buffer, int count)
