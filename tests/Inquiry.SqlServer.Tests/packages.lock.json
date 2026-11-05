@@ -8,6 +8,16 @@
         "resolved": "10.1.0",
         "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
       },
+      "dbup-sqlserver": {
+        "type": "Direct",
+        "requested": "[7.2.0, )",
+        "resolved": "7.2.0",
+        "contentHash": "1xhdu2ZoQEi2nNrirBfkkfn+AbHWQvy8CGilb+5dIjghFJrsMKFM17DiI5Nz+ofWg9N1lqz5WorujzuGvc/+fQ==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "6.1.4",
+          "dbup-core": "6.1.1"
+        }
+      },
       "Microsoft.Data.SqlClient": {
         "type": "Direct",
         "requested": "[7.0.3, )",
@@ -505,6 +515,29 @@
       "inquiry.integrationtesting": {
         "type": "Project"
       },
+      "inquiry.schemaevolution.v1": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "inquiry.schemaevolution.v2": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "dbup-core": {
+        "type": "CentralTransitive",
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "kgpuyJVEFJHoIj/slnc994Go88aoeZqNDfGHDBr4sh7CsEWwJhOTCt/FJqO4ziUImL5L0NEY0kxxOiNgPKI2Fw==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.0"
+        }
+      },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",
         "requested": "[10.0.11, )",
@@ -618,6 +651,16 @@
         "requested": "[10.1.0, )",
         "resolved": "10.1.0",
         "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
+      },
+      "dbup-sqlserver": {
+        "type": "Direct",
+        "requested": "[7.2.0, )",
+        "resolved": "7.2.0",
+        "contentHash": "1xhdu2ZoQEi2nNrirBfkkfn+AbHWQvy8CGilb+5dIjghFJrsMKFM17DiI5Nz+ofWg9N1lqz5WorujzuGvc/+fQ==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "6.1.4",
+          "dbup-core": "6.1.1"
+        }
       },
       "Microsoft.Data.SqlClient": {
         "type": "Direct",
@@ -1161,6 +1204,29 @@
       "inquiry.integrationtesting": {
         "type": "Project"
       },
+      "inquiry.schemaevolution.v1": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "inquiry.schemaevolution.v2": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "dbup-core": {
+        "type": "CentralTransitive",
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "kgpuyJVEFJHoIj/slnc994Go88aoeZqNDfGHDBr4sh7CsEWwJhOTCt/FJqO4ziUImL5L0NEY0kxxOiNgPKI2Fw==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.0"
+        }
+      },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",
         "requested": "[10.0.11, )",
@@ -1281,6 +1347,16 @@
         "requested": "[10.1.0, )",
         "resolved": "10.1.0",
         "contentHash": "SlYCIHnBYxINSUpR75SiM5JEmnx11pqT+Ac/C/fUqTTA0dLPl9eYzmFXKKuxmQhL3ZdTQl4PBD3YdAxAauaKLQ=="
+      },
+      "dbup-sqlserver": {
+        "type": "Direct",
+        "requested": "[7.2.0, )",
+        "resolved": "7.2.0",
+        "contentHash": "1xhdu2ZoQEi2nNrirBfkkfn+AbHWQvy8CGilb+5dIjghFJrsMKFM17DiI5Nz+ofWg9N1lqz5WorujzuGvc/+fQ==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "6.1.4",
+          "dbup-core": "6.1.1"
+        }
       },
       "Microsoft.Data.SqlClient": {
         "type": "Direct",
@@ -1819,6 +1895,29 @@
       },
       "inquiry.integrationtesting": {
         "type": "Project"
+      },
+      "inquiry.schemaevolution.v1": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "inquiry.schemaevolution.v2": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
+        }
+      },
+      "dbup-core": {
+        "type": "CentralTransitive",
+        "requested": "[6.1.1, )",
+        "resolved": "6.1.1",
+        "contentHash": "kgpuyJVEFJHoIj/slnc994Go88aoeZqNDfGHDBr4sh7CsEWwJhOTCt/FJqO4ziUImL5L0NEY0kxxOiNgPKI2Fw==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "8.0.0"
+        }
       },
       "Microsoft.Extensions.Configuration": {
         "type": "CentralTransitive",

@@ -20,6 +20,9 @@
     <Project Path="samples/Inquiry.Northwind/Inquiry.Northwind.csproj" />
     <Project Path="samples/Inquiry.Sample/Inquiry.Sample.csproj" />
     <Project Path="samples/Inquiry.Sample.Data/Inquiry.Sample.Data.csproj" />
+    <Project Path="samples/Inquiry.SchemaEvolution/Runner/Inquiry.SchemaEvolution.csproj" />
+    <Project Path="samples/Inquiry.SchemaEvolution/V1/Inquiry.SchemaEvolution.V1.csproj" />
+    <Project Path="samples/Inquiry.SchemaEvolution/V2/Inquiry.SchemaEvolution.V2.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Inquiry.Generators.Shared/Inquiry.Generators.Shared.csproj" />

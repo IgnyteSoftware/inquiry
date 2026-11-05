@@ -126,6 +126,73 @@ function Invoke-RestoreProbe([string] $Name, [string[]] $Packages, [bool] $Warni
     $checks.Add("net8.0/version-mismatch/$Name")
 }
 
+# The schema evolution sample has two entity libraries and runs against SQL Server, so it cannot use the
+# single-project consumer. Its sources and Runner project are copied unchanged; only the library projects
+# are generated, so they reference the candidate package instead of the repository's source projects.
+function Invoke-SchemaEvolutionSample {
+    $sample = Join-Path $repoRoot 'samples/Inquiry.SchemaEvolution'
+    $directory = Join-Path $workRoot 'schema-evolution'
+    foreach ($part in @('V1', 'V2', 'Runner', 'Scripts')) { New-Item -ItemType Directory -Path (Join-Path $directory $part) | Out-Null }
+    Copy-Item -Path (Join-Path $sample '*.cs'), (Join-Path $sample 'expected-output.txt') -Destination $directory
+    Copy-Item -Path (Join-Path $sample 'Scripts/*.sql') -Destination (Join-Path $directory 'Scripts')
+    Copy-Item -Path (Join-Path $sample 'Runner/Program.cs'), (Join-Path $sample 'Runner/Inquiry.SchemaEvolution.csproj') -Destination (Join-Path $directory 'Runner')
+    # SqlClient cannot open connections in invariant globalization mode, so this graph leaves it off.
+    @"
+<Project>
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+</Project>
+"@ | Set-Content -LiteralPath (Join-Path $directory 'Directory.Build.props') -Encoding utf8
+    # Third-party versions and the transitive security pins come from the repository's central file.
+    $centralPackages = [System.Security.SecurityElement]::Escape((Join-Path $repoRoot 'Directory.Packages.props'))
+    @"
+<Project>
+  <Import Project="$centralPackages" />
+  <ItemGroup><PackageVersion Include="Ignyte.Inquiry.SqlServer" Version="$PackageVersion" /></ItemGroup>
+</Project>
+"@ | Set-Content -LiteralPath (Join-Path $directory 'Directory.Packages.props') -Encoding utf8
+    foreach ($version in @('V1', 'V2')) {
+        Copy-Item -LiteralPath (Join-Path $sample "$version/Catalog.cs") -Destination (Join-Path $directory $version)
+        @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup><PackageReference Include="Ignyte.Inquiry.SqlServer" /></ItemGroup>
+</Project>
+"@ | Set-Content -LiteralPath (Join-Path $directory "$version/Inquiry.SchemaEvolution.$version.csproj") -Encoding utf8
+    }
+    $project = Join-Path $directory 'Runner/Inquiry.SchemaEvolution.csproj'
+    Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
+    foreach ($version in @('V1', 'V2')) {
+        $assets = Get-Content -Raw -LiteralPath (Join-Path $directory "$version/obj/project.assets.json") | ConvertFrom-Json
+        if (-not $assets.libraries.PSObject.Properties["Ignyte.Inquiry.SqlServer/$PackageVersion"]) {
+            throw "The schema evolution $version library did not restore the candidate Ignyte.Inquiry.SqlServer $PackageVersion."
+        }
+    }
+    Invoke-Dotnet @('build', $project, '-c', 'Release', '--no-restore')
+    # The Runner starts its own SQL Server container and has no skip path: without Docker it exits nonzero.
+    # It disposes the container itself, so the resource reaper and its Docker Hub pull are not needed.
+    $errorLog = Join-Path $results 'schema-evolution.stderr.log'
+    $previousRyuk = $env:TESTCONTAINERS_RYUK_DISABLED
+    $env:TESTCONTAINERS_RYUK_DISABLED = 'true'
+    try {
+        $output = @(& dotnet run --project $project -c Release --no-build 2> $errorLog | ForEach-Object { "$_" })
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $env:TESTCONTAINERS_RYUK_DISABLED = $previousRyuk
+    }
+    $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+    if ($exitCode -ne 0) { throw "The schema evolution sample failed ($exitCode)." }
+    $expected = @(Get-Content -LiteralPath (Join-Path $directory 'expected-output.txt'))
+    if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The schema evolution output differs from its documented output.' }
+}
+
 try {
     Invoke-Dotnet @('run', '--project', (Join-Path $repoRoot 'eng/Inquiry.ReleaseTools'), '-c', 'Release', '--',
         'verify-bundle', $repoRoot, (Join-Path $repoRoot 'eng/release-manifest.json'), $bundle, $Commit, '--version', $PackageVersion, '--branch', $RepositoryBranch)
@@ -204,6 +271,8 @@ try {
     & $binary 2>&1 | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'The actual-package NativeAOT consumer failed.' }
     $checks.Add("net10.0/$RuntimeIdentifier/nativeaot-crud")
+    Invoke-SchemaEvolutionSample
+    $checks.Add('net8.0/sqlserver/docs-sample-schema-evolution')
     if (@(Compare-Object ($hashes.file | Sort-Object) ((Get-ChildItem -LiteralPath $bundle -File).Name | Sort-Object)).Count -ne 0) {
         throw 'Bundle inventory changed during verification.'
     }

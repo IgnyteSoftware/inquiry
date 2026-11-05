@@ -199,4 +199,4 @@ Because they're off by default, the lints never break a build until you opt in â
 
 ## What it isn't
 
-This is not a full migration framework. It's a **CREATE-from-scratch** script. For evolving an existing schema (add column, drop table, etc.), use a dedicated migration tool (DbUp, FluentMigrator, EF Migrations, Flyway) and treat `InquiryGeneratedSchema.Ddl` as the canonical reference for what the live schema should look like.
+This is not a full migration framework. It's a **CREATE-from-scratch** script. For evolving an existing schema (add column, drop table, etc.), use a dedicated migration tool (DbUp, FluentMigrator, EF Migrations, Flyway) and treat `InquiryGeneratedSchema.Ddl` as the canonical reference for what the live schema should look like. The [migrations recipe](migrations.md) has a runnable DbUp example.

@@ -250,6 +250,12 @@ The [partial-updates](../articles/features/partial-updates.md) recipe runs under
 `tests/Inquiry.PackageSmoke/PartialUpdatesRecipe.cs`, which checks every result that page documents.
 The run fails if a marked file is missing or extra.
 
+The [migrations recipe](../articles/features/migrations.md) publishes the files of
+`samples/Inquiry.SchemaEvolution` through DocFX code includes. The runner copies those files, builds
+the two entity libraries against the candidate `Ignyte.Inquiry.SqlServer` package, and runs the sample.
+The sample starts its own SQL Server container, so this step needs Docker and fails without it. Its
+output must match `expected-output.txt`. The SQL Server integration suite runs the same workflow.
+
 CI runs this in the required `package-verifier` job. Its retained `package-consumers.json` identifies
 the commit, version, completed checks, and SHA-256 of every bundle file. A failed run retains its log
 but never writes passing evidence. The isolated consumer directory is printed for local diagnosis.

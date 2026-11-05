@@ -36,4 +36,14 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <!-- The schema evolution sample runs here against the shared container, from the same files as its Runner. -->
+  <ItemGroup>
+    <PackageReference Include="dbup-sqlserver" />
+    <ProjectReference Include="..\..\samples\Inquiry.SchemaEvolution\V1\Inquiry.SchemaEvolution.V1.csproj" />
+    <ProjectReference Include="..\..\samples\Inquiry.SchemaEvolution\V2\Inquiry.SchemaEvolution.V2.csproj" />
+    <Compile Include="..\..\samples\Inquiry.SchemaEvolution\*.cs" LinkBase="SchemaEvolution" />
+    <EmbeddedResource Include="..\..\samples\Inquiry.SchemaEvolution\Scripts\*.sql" LogicalName="Scripts.%(Filename)%(Extension)" />
+    <None Include="..\..\samples\Inquiry.SchemaEvolution\expected-output.txt" Link="SchemaEvolution\expected-output.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
