@@ -1,6 +1,7 @@
 using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Engines;
 using Dapper;
 using Inquiry.Benchmarks.Ef;
 using Inquiry.Benchmarks.LinqToDb;
@@ -14,11 +15,17 @@ using Microsoft.EntityFrameworkCore;
 namespace Inquiry.Benchmarks;
 
 /// <summary>
-/// First-call cost (cold start) for a point read. Measures JIT compilation, connection pool
-/// creation, and framework initialization overhead by running with no warmup — the first
-/// iteration captures the full cold-start penalty.
+/// First point-read call after fixture setup in a fresh benchmark process. Each launch is a new
+/// process that runs <c>GlobalSetup</c> and then measures one call, with no jitting, pilot or warmup
+/// calls before it. The result excludes process launch, database seeding and the initialization that
+/// setup already did, such as loading the SQLite provider and building the DI container.
 /// </summary>
-[WarmupCount(0), IterationCount(3), MemoryDiagnoser]
+/// <remarks>
+/// Do not run this class with <c>--inProcess</c>, because every launch then shares one process.
+/// There is no MemoryDiagnoser: BenchmarkDotNet measures allocation on an extra call after the
+/// measured one, so it cannot report first-call allocation.
+/// </remarks>
+[SimpleJob(RunStrategy.ColdStart, launchCount: 10, warmupCount: 0, iterationCount: 1, invocationCount: 1)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 public class ColdStartBenchmarks
