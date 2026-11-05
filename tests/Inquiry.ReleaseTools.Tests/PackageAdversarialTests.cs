@@ -11,6 +11,7 @@ public sealed class PackageAdversarialTests
     private static readonly Lazy<PackageFixture> _aspireFixture = new(() => CreateFixture("Ignyte.Inquiry.Aspire", "src/Inquiry.Aspire/Inquiry.Aspire.csproj"));
     private static readonly Lazy<PackageFixture> _providerFixture = new(() => CreateFixture("Ignyte.Inquiry.Sqlite", "src/Inquiry.Sqlite/Inquiry.Sqlite.csproj"));
     private static readonly Lazy<PackageFixture> _sqlServerFixture = new(() => CreateFixture("Ignyte.Inquiry.SqlServer", "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj"));
+    private static readonly Lazy<PackageFixture> _testingPreviewFixture = new(() => CreateFixture("Ignyte.Inquiry.Testing", "src/Inquiry.Testing/Inquiry.Testing.csproj", "1.0.0-preview.1"));
 
     [Theory]
     [InlineData("extra-entry")]
@@ -114,6 +115,80 @@ public sealed class PackageAdversarialTests
             fixture.Commit);
     }
 
+    [Theory]
+    [InlineData("1.0.0")]
+    [InlineData("[1.0.1]")]
+    public void Provider_core_dependency_must_be_the_exact_package_version(string version)
+    {
+        var fixture = _providerFixture.Value;
+        var directory = Directory.CreateTempSubdirectory("inquiry-core-range-mutation-");
+        try
+        {
+            var nupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Sqlite.1.0.0.nupkg");
+            var snupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Sqlite.1.0.0.snupkg");
+            File.Copy(fixture.Nupkg, nupkg);
+            File.Copy(fixture.Snupkg, snupkg);
+            Mutate(nupkg, archive => ReplaceText(
+                archive,
+                "Ignyte.Inquiry.Sqlite.nuspec",
+                "id=\"Ignyte.Inquiry\" version=\"[1.0.0]\"",
+                $"id=\"Ignyte.Inquiry\" version=\"{version}\""));
+
+            var exception = Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyPackagePairForTests(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                directory.FullName,
+                "Ignyte.Inquiry.Sqlite",
+                fixture.Commit));
+            Assert.Contains("dependency Ignyte.Inquiry must be [1.0.0]", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preview_package_pins_core_to_the_preview_version()
+    {
+        var fixture = _testingPreviewFixture.Value;
+
+        PackageVerifier.VerifyPackagePairForTests(
+            RepositoryFixture.Root,
+            Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+            Path.GetDirectoryName(fixture.Nupkg)!,
+            "Ignyte.Inquiry.Testing",
+            fixture.Commit,
+            "1.0.0-preview.1");
+
+        var directory = Directory.CreateTempSubdirectory("inquiry-preview-range-mutation-");
+        try
+        {
+            var nupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Testing.1.0.0-preview.1.nupkg");
+            var snupkg = Path.Combine(directory.FullName, "Ignyte.Inquiry.Testing.1.0.0-preview.1.snupkg");
+            File.Copy(fixture.Nupkg, nupkg);
+            File.Copy(fixture.Snupkg, snupkg);
+            Mutate(nupkg, archive => ReplaceText(
+                archive,
+                "Ignyte.Inquiry.Testing.nuspec",
+                "id=\"Ignyte.Inquiry\" version=\"[1.0.0-preview.1]\"",
+                "id=\"Ignyte.Inquiry\" version=\"[1.0.0]\""));
+
+            var exception = Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyPackagePairForTests(
+                RepositoryFixture.Root,
+                Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json"),
+                directory.FullName,
+                "Ignyte.Inquiry.Testing",
+                fixture.Commit,
+                "1.0.0-preview.1"));
+            Assert.Contains("dependency Ignyte.Inquiry must be [1.0.0-preview.1]", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void Non_Oracle_package_cannot_include_System_Configuration_compile_assets()
     {
@@ -196,7 +271,7 @@ public sealed class PackageAdversarialTests
         }
     }
 
-    private static PackageFixture CreateFixture(string packageId, string project)
+    private static PackageFixture CreateFixture(string packageId, string project, string version = "1.0.0")
     {
         var root = RepositoryFixture.Root;
         var commit = Run(root, "git", "rev-parse", "HEAD").Trim();
@@ -210,13 +285,13 @@ public sealed class PackageAdversarialTests
         }
 
         var inputStamp = string.Join('-', inputs);
-        var output = Path.Combine(Path.GetTempPath(), "inquiry-release-tools-fixture", packageId + "-" + commit + "-" + inputStamp);
-        using var fixtureLock = new Mutex(false, "Inquiry.ReleaseTools.PackageFixture." + packageId + "." + commit + "." + inputStamp);
+        var output = Path.Combine(Path.GetTempPath(), "inquiry-release-tools-fixture", packageId + "-" + version + "-" + commit + "-" + inputStamp);
+        using var fixtureLock = new Mutex(false, "Inquiry.ReleaseTools.PackageFixture." + packageId + "." + version + "." + commit + "." + inputStamp);
         Assert.True(fixtureLock.WaitOne(TimeSpan.FromMinutes(2)), "Timed out waiting for the shared package fixture.");
         try
         {
-            var nupkg = Path.Combine(output, $"{packageId}.1.0.0.nupkg");
-            var snupkg = Path.Combine(output, $"{packageId}.1.0.0.snupkg");
+            var nupkg = Path.Combine(output, $"{packageId}.{version}.nupkg");
+            var snupkg = Path.Combine(output, $"{packageId}.{version}.snupkg");
             if (!File.Exists(nupkg) || !File.Exists(snupkg))
             {
                 if (Directory.Exists(output))
@@ -228,7 +303,7 @@ public sealed class PackageAdversarialTests
                 // checkout — the manifest requires refs/heads/main in the nuspec.
                 _ = Run(root, "dotnet", "pack", project, "--configuration", "Release", "--output", output,
                     "--no-restore", "--disable-build-servers", "-m:1", "-p:ContinuousIntegrationBuild=true",
-                    "-p:MinVerVersionOverride=1.0.0", $"-p:RepositoryCommit={commit}",
+                    $"-p:MinVerVersionOverride={version}", $"-p:RepositoryCommit={commit}",
                     "-p:RepositoryBranch=refs/heads/main");
             }
         }
@@ -237,8 +312,8 @@ public sealed class PackageAdversarialTests
             fixtureLock.ReleaseMutex();
         }
         return new PackageFixture(
-            Path.Combine(output, $"{packageId}.1.0.0.nupkg"),
-            Path.Combine(output, $"{packageId}.1.0.0.snupkg"),
+            Path.Combine(output, $"{packageId}.{version}.nupkg"),
+            Path.Combine(output, $"{packageId}.{version}.snupkg"),
             commit);
     }
 

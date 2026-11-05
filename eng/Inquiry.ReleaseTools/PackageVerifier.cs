@@ -82,6 +82,8 @@ public static class PackageVerifier
                 Require(package.LibTfms.Contains(pruned.Key, StringComparer.Ordinal), $"{package.Id} prunes dependencies for unknown TFM {pruned.Key}.");
                 Require(pruned.Value is not null && pruned.Value.All(id => package.Dependencies.ContainsKey(id)),
                     $"{package.Id} prunes dependencies that are not declared for {pruned.Key}.");
+                Require(pruned.Value is not null && pruned.Value.All(id => !packagesById.ContainsKey(id)),
+                    $"{package.Id} cannot prune Inquiry package dependencies for {pruned.Key}.");
             }
             Require(dependencies.All(dependency => !string.IsNullOrWhiteSpace(dependency.Key) && !string.IsNullOrWhiteSpace(dependency.Value)),
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
@@ -99,8 +101,8 @@ public static class PackageVerifier
             foreach (var dependency in dependencies.Keys.Where(packagesById.ContainsKey))
             {
                 Require(dependency != package.Id, $"{package.Id} cannot depend on itself.");
-                Require(dependencies[dependency] == manifest.PackageVersion,
-                    $"{package.Id} dependency {dependency} must equal package version {manifest.PackageVersion}.");
+                Require(dependencies[dependency] == ExactRange(manifest.PackageVersion),
+                    $"{package.Id} dependency {dependency} must be {ExactRange(manifest.PackageVersion)}.");
             }
         }
 
@@ -179,15 +181,17 @@ public static class PackageVerifier
         string manifestPath,
         string bundleDirectory,
         string packageId,
-        string expectedCommit)
+        string expectedCommit,
+        string? expectedVersion = null)
     {
         var root = Path.GetFullPath(repositoryRoot);
         var manifest = ReleaseTool.ReadManifest(Path.GetFullPath(manifestPath, root));
         var package = manifest.Packages.Single(item => item.Id == packageId);
-        var nupkg = Path.Combine(bundleDirectory, $"{package.Id}.{manifest.PackageVersion}.nupkg");
-        var snupkg = Path.Combine(bundleDirectory, $"{package.Id}.{manifest.PackageVersion}.snupkg");
-        var identities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit, manifest.PackageVersion, manifest.Assets.RepositoryBranch);
-        VerifySnupkg(snupkg, package, manifest, expectedCommit, identities, manifest.PackageVersion, manifest.Assets.RepositoryBranch);
+        var version = expectedVersion ?? manifest.PackageVersion;
+        var nupkg = Path.Combine(bundleDirectory, $"{package.Id}.{version}.nupkg");
+        var snupkg = Path.Combine(bundleDirectory, $"{package.Id}.{version}.snupkg");
+        var identities = VerifyNupkg(root, nupkg, package, manifest, expectedCommit, version, manifest.Assets.RepositoryBranch);
+        VerifySnupkg(snupkg, package, manifest, expectedCommit, identities, version, manifest.Assets.RepositoryBranch);
     }
 
     private static void VerifyPackableProjects(string root, IReadOnlyDictionary<string, ReleasePackage> packagesById)
@@ -365,9 +369,9 @@ public static class PackageVerifier
                 var familyIds = manifest.Packages.Select(item => item.Id).ToHashSet(StringComparer.Ordinal);
                 foreach (var dependency in package.Dependencies.Where(item => actual.ContainsKey(item.Key)))
                 {
-                    // Sibling packages are packed at the effective version, which can be a -preview.N version.
+                    // Sibling packages are pinned to the effective version, which can be a -preview.N version.
                     // External dependencies stay at their manifest-pinned versions.
-                    var expectedDependencyVersion = familyIds.Contains(dependency.Key) ? version : dependency.Value;
+                    var expectedDependencyVersion = familyIds.Contains(dependency.Key) ? ExactRange(version) : dependency.Value;
                     Require(actual[dependency.Key] == expectedDependencyVersion,
                         $"{package.Id} dependency {dependency.Key} must be {expectedDependencyVersion}; found {actual[dependency.Key]}.");
                 }
@@ -897,6 +901,8 @@ public static class PackageVerifier
         value.Length == length && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static string AssemblyName(ReleasePackage package) => Path.GetFileNameWithoutExtension(package.Project);
+
+    private static string ExactRange(string version) => $"[{version}]";
 
     private static bool IsStableSemVer(string version) =>
         Version.TryParse(version, out var parsed) && parsed.Major >= 0 && parsed.Minor >= 0 && parsed.Build >= 0 && parsed.Revision == -1
