@@ -279,72 +279,95 @@ public class ShipperCrudBenchmarks
 
     // ---- Update -------------------------------------------------------------------------
 
+    // Every update leg alternates two payloads, so each call changes the row. With constant values,
+    // EF Core finds no change and sends no UPDATE after the first call.
+    private static int _updateCount;
+
+    private static (string CompanyName, string Phone) NextUpdate()
+        => (Interlocked.Increment(ref _updateCount) & 1) == 0
+            ? ("Updated Shipper A", "555-9991")
+            : ("Updated Shipper B", "555-9992");
+
+    private static int RequireOneRow(int rows)
+        => rows == 1 ? rows : throw new InvalidOperationException($"The update affected {rows} rows. Expected 1.");
+
+    private static bool RequireUpdated(bool updated)
+        => updated ? updated : throw new InvalidOperationException("The update affected no row. Expected 1.");
+
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public async Task<int> Update_AdoNet()
     {
+        var (company, phone) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE Shippers SET CompanyName = $company, Phone = $phone WHERE ShipperID = $id;";
         command.Parameters.Add("$id", SqliteType.Integer).Value = TargetShipperId;
-        command.Parameters.Add("$company", SqliteType.Text).Value = "Updated Shipper";
-        command.Parameters.Add("$phone", SqliteType.Text).Value = "555-9999";
-        return await command.ExecuteNonQueryAsync();
+        command.Parameters.Add("$company", SqliteType.Text).Value = company;
+        command.Parameters.Add("$phone", SqliteType.Text).Value = phone;
+        return RequireOneRow(await command.ExecuteNonQueryAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_Dapper()
     {
+        var (company, phone) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        return await connection.ExecuteAsync(
+        return RequireOneRow(await connection.ExecuteAsync(
             "UPDATE Shippers SET CompanyName = @company, Phone = @phone WHERE ShipperID = @id;",
-            new { id = TargetShipperId, company = "Updated Shipper", phone = "555-9999" });
+            new { id = TargetShipperId, company, phone }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_EfCore()
     {
+        var (company, phone) = NextUpdate();
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Shippers.FirstAsync(s => s.ShipperID == TargetShipperId);
-        entity.CompanyName = "Updated Shipper";
-        entity.Phone = "555-9999";
-        return await ctx.SaveChangesAsync();
+        entity.CompanyName = company;
+        entity.Phone = phone;
+        return RequireOneRow(await ctx.SaveChangesAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_LinqToDb()
     {
+        var (company, phone) = NextUpdate();
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.UpdateAsync(new L2Shipper
+        return RequireOneRow(await dc.UpdateAsync(new L2Shipper
         {
             ShipperID = TargetShipperId,
-            CompanyName = "Updated Shipper",
-            Phone = "555-9999",
-        });
+            CompanyName = company,
+            Phone = phone,
+        }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_RepoDb()
     {
+        var (company, phone) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdShipper
+        return RequireOneRow(await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdShipper
         {
             ShipperID = TargetShipperId,
-            CompanyName = "Updated Shipper",
-            Phone = "555-9999",
-        });
+            CompanyName = company,
+            Phone = phone,
+        }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<bool> Update_Inquiry()
-        => await _db.Shippers.UpdateAsync(new Shipper
+    {
+        var (company, phone) = NextUpdate();
+        return RequireUpdated(await _db.Shippers.UpdateAsync(new Shipper
         {
             ShipperID = TargetShipperId,
-            CompanyName = "Updated Shipper",
-            Phone = "555-9999",
-        });
+            CompanyName = company,
+            Phone = phone,
+        }));
+    }
 
     // ---- Upsert -------------------------------------------------------------------------
 

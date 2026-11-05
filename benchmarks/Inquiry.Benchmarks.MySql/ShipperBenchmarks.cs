@@ -216,47 +216,69 @@ public class ShipperBenchmarks
 
     // ---- Update -------------------------------------------------------------------------
 
+    // Every update leg alternates two payloads, so each call changes the row. With constant values,
+    // EF Core finds no change and sends no UPDATE after the first call. The counter is static because
+    // the database is shared by the process, so a new instance must not repeat the stored payload.
+    private static int _updateCount;
+
+    private static (string CompanyName, string Phone) NextUpdate()
+        => (Interlocked.Increment(ref _updateCount) & 1) == 0
+            ? ("Updated Shipper A", "555-9991")
+            : ("Updated Shipper B", "555-9992");
+
+    private static int RequireOneRow(int rows)
+        => rows == 1 ? rows : throw new InvalidOperationException($"The update affected {rows} rows. Expected 1.");
+
+    private static bool RequireUpdated(bool updated)
+        => updated ? updated : throw new InvalidOperationException("The update affected no row. Expected 1.");
+
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public async Task<int> Update_AdoNet()
     {
+        var (company, phone) = NextUpdate();
         await using var connection = OpenConnection();
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = "UPDATE `Shippers` SET `CompanyName` = @company, `Phone` = @phone WHERE `ShipperID` = @id;";
         command.Parameters.AddWithValue("id", TargetShipperId);
-        command.Parameters.AddWithValue("company", "Updated Shipper");
-        command.Parameters.AddWithValue("phone", "555-9999");
-        return await command.ExecuteNonQueryAsync();
+        command.Parameters.AddWithValue("company", company);
+        command.Parameters.AddWithValue("phone", phone);
+        return RequireOneRow(await command.ExecuteNonQueryAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_Dapper()
     {
+        var (company, phone) = NextUpdate();
         await using var connection = OpenConnection();
         await connection.OpenAsync();
-        return await connection.ExecuteAsync(
+        return RequireOneRow(await connection.ExecuteAsync(
             "UPDATE `Shippers` SET `CompanyName` = @company, `Phone` = @phone WHERE `ShipperID` = @id;",
-            new { id = TargetShipperId, company = "Updated Shipper", phone = "555-9999" });
+            new { id = TargetShipperId, company, phone }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_EfCore()
     {
+        var (company, phone) = NextUpdate();
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Shippers.FirstAsync(s => s.ShipperID == TargetShipperId);
-        entity.CompanyName = "Updated Shipper";
-        entity.Phone = "555-9999";
-        return await ctx.SaveChangesAsync();
+        entity.CompanyName = company;
+        entity.Phone = phone;
+        return RequireOneRow(await ctx.SaveChangesAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<bool> Update_Inquiry()
-        => await _db.Shippers.UpdateAsync(new Shipper
+    {
+        var (company, phone) = NextUpdate();
+        return RequireUpdated(await _db.Shippers.UpdateAsync(new Shipper
         {
             ShipperID = TargetShipperId,
-            CompanyName = "Updated Shipper",
-            Phone = "555-9999",
-        });
+            CompanyName = company,
+            Phone = phone,
+        }));
+    }
 
     // ---- Upsert -------------------------------------------------------------------------
 

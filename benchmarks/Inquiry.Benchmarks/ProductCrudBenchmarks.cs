@@ -351,101 +351,128 @@ public class ProductCrudBenchmarks
 
     // ---- Update -------------------------------------------------------------------------
 
+    // Every update leg alternates two payloads, so each call changes the row. With constant values,
+    // EF Core finds no change and sends no UPDATE after the first call. Categories 1 and 2 are both seeded.
+    private static int _updateCount;
+
+    private static (string Name, int CategoryId, decimal Price, short Stock, bool Discontinued) NextUpdate()
+        => (Interlocked.Increment(ref _updateCount) & 1) == 0
+            ? ("Updated Product A", 1, 19.99m, (short)7, false)
+            : ("Updated Product B", 2, 21.99m, (short)8, true);
+
+    private static int RequireOneRow(int rows)
+        => rows == 1 ? rows : throw new InvalidOperationException($"The update affected {rows} rows. Expected 1.");
+
+    private static bool RequireUpdated(bool updated)
+        => updated ? updated : throw new InvalidOperationException("The update affected no row. Expected 1.");
+
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public async Task<int> Update_AdoNet()
     {
+        var (name, category, price, stock, discontinued) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(CancellationToken.None);
         await using var command = connection.CreateCommand();
         command.CommandText =
             "UPDATE Products SET ProductName = $name, CategoryID = $category, " +
-            "UnitPrice = $price, UnitsInStock = $stock, Discontinued = 0 WHERE ProductID = $id;";
+            "UnitPrice = $price, UnitsInStock = $stock, Discontinued = $discontinued WHERE ProductID = $id;";
         command.Parameters.Add("$id", SqliteType.Integer).Value = TargetProductId;
-        command.Parameters.Add("$name", SqliteType.Text).Value = "Updated Product";
-        command.Parameters.Add("$category", SqliteType.Integer).Value = TargetCategoryId;
-        command.Parameters.Add("$price", SqliteType.Real).Value = 19.99;
-        command.Parameters.Add("$stock", SqliteType.Integer).Value = 7;
-        return await command.ExecuteNonQueryAsync(CancellationToken.None);
+        command.Parameters.Add("$name", SqliteType.Text).Value = name;
+        command.Parameters.Add("$category", SqliteType.Integer).Value = category;
+        command.Parameters.Add("$price", SqliteType.Real).Value = (double)price;
+        command.Parameters.Add("$stock", SqliteType.Integer).Value = stock;
+        command.Parameters.Add("$discontinued", SqliteType.Integer).Value = discontinued ? 1 : 0;
+        return RequireOneRow(await command.ExecuteNonQueryAsync(CancellationToken.None));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_Dapper()
     {
+        var (name, category, price, stock, discontinued) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(CancellationToken.None);
-        return await connection.ExecuteAsync(
+        return RequireOneRow(await connection.ExecuteAsync(
             "UPDATE Products SET ProductName = @name, CategoryID = @category, " +
-            "UnitPrice = @price, UnitsInStock = @stock, Discontinued = 0 WHERE ProductID = @id;",
-            new { id = TargetProductId, name = "Updated Product", category = TargetCategoryId, price = 19.99m, stock = (short)7 });
+            "UnitPrice = @price, UnitsInStock = @stock, Discontinued = @discontinued WHERE ProductID = @id;",
+            new { id = TargetProductId, name, category, price, stock, discontinued }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_EfCore()
     {
+        var (name, category, price, stock, discontinued) = NextUpdate();
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync(CancellationToken.None);
         var entity = await ctx.Products.FirstAsync(p => p.ProductID == TargetProductId, CancellationToken.None);
-        entity.ProductName = "Updated Product";
-        entity.CategoryID = TargetCategoryId;
-        entity.UnitPrice = 19.99m;
-        entity.UnitsInStock = 7;
-        entity.Discontinued = false;
-        return await ctx.SaveChangesAsync(CancellationToken.None);
+        entity.ProductName = name;
+        entity.CategoryID = category;
+        entity.UnitPrice = price;
+        entity.UnitsInStock = stock;
+        entity.Discontinued = discontinued;
+        return RequireOneRow(await ctx.SaveChangesAsync(CancellationToken.None));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_LinqToDb()
     {
+        var (name, category, price, stock, discontinued) = NextUpdate();
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.UpdateAsync(new L2Product
+        return RequireOneRow(await dc.UpdateAsync(new L2Product
         {
             ProductID = TargetProductId,
-            ProductName = "Updated Product",
-            CategoryID = TargetCategoryId,
-            UnitPrice = 19.99m,
-            UnitsInStock = 7,
-            Discontinued = false,
-        }, token: CancellationToken.None);
+            ProductName = name,
+            CategoryID = category,
+            UnitPrice = price,
+            UnitsInStock = stock,
+            Discontinued = discontinued,
+        }, token: CancellationToken.None));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_RepoDb()
     {
+        var (name, category, price, stock, discontinued) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(CancellationToken.None);
-        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdProduct
+        return RequireOneRow(await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdProduct
         {
             ProductID = TargetProductId,
-            ProductName = "Updated Product",
-            CategoryID = TargetCategoryId,
-            UnitPrice = 19.99m,
-            UnitsInStock = 7,
-            Discontinued = false,
-        }, cancellationToken: CancellationToken.None);
+            ProductName = name,
+            CategoryID = category,
+            UnitPrice = price,
+            UnitsInStock = stock,
+            Discontinued = discontinued,
+        }, cancellationToken: CancellationToken.None));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<bool> Update_Inquiry()
-        => await _db.Products.UpdateAsync(new Product
+    {
+        var (name, category, price, stock, discontinued) = NextUpdate();
+        return RequireUpdated(await _db.Products.UpdateAsync(new Product
         {
             ProductID = TargetProductId,
-            ProductName = "Updated Product",
-            CategoryID = TargetCategoryId,
-            UnitPrice = 19.99m,
-            UnitsInStock = 7,
-            Discontinued = false,
-        }, CancellationToken.None);
+            ProductName = name,
+            CategoryID = category,
+            UnitPrice = price,
+            UnitsInStock = stock,
+            Discontinued = discontinued,
+        }, CancellationToken.None));
+    }
 
     [BenchmarkCategory("CancellationUpdate"), Benchmark]
     public async Task<bool> Update_Inquiry_Cancellable()
-        => await _db.Products.UpdateAsync(new Product
+    {
+        var (name, category, price, stock, discontinued) = NextUpdate();
+        return RequireUpdated(await _db.Products.UpdateAsync(new Product
         {
             ProductID = TargetProductId,
-            ProductName = "Updated Product",
-            CategoryID = TargetCategoryId,
-            UnitPrice = 19.99m,
-            UnitsInStock = 7,
-            Discontinued = false,
-        }, _cancellationTokenSource.Token);
+            ProductName = name,
+            CategoryID = category,
+            UnitPrice = price,
+            UnitsInStock = stock,
+            Discontinued = discontinued,
+        }, _cancellationTokenSource.Token));
+    }
 
     // ---- Upsert -------------------------------------------------------------------------
 
