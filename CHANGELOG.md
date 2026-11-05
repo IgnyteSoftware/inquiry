@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Every `Ignyte.Inquiry*` package now depends on `Ignyte.Inquiry`, and on any other Inquiry package it uses, at exactly its own version, such as `[1.0.0]`. Before, the dependency was a minimum, so a provider could restore with a different `Ignyte.Inquiry`. The provider's generator then read attributes from another release and reported unhelpful mapping errors. Now NuGet rejects the mix at restore. Two Inquiry packages at different versions fail with `NU1107`. A direct `Ignyte.Inquiry` reference older than the provider fails with `NU1605`. A direct reference newer than the provider warns `NU1608`, which fails restore only under `TreatWarningsAsErrors`. To upgrade, set every `Ignyte.Inquiry*` reference to the same version, and update them together. Packages that were published before this change keep their minimum ranges.
+
 ### Fixed
 
 - Table names, column names and other attribute strings that contain a line break, tab, NUL or another control character now produce generated code that compiles. Before, a line break produced a compile error in the generated file, and a NUL stopped the generator with warning `CS8785`, so the store had no generated code. The generated string constants keep the exact value you wrote. In the generated documentation, the characters that would break it show as C# escapes, such as `\0`.

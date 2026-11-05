@@ -155,8 +155,8 @@ gated by `eng/release-manifest.json`, whose `packageVersion` is the single sourc
 | Admin pushes tag `v<packageVersion>` on `main` | the stable on nuget.org + GitHub release |
 | Tag version doesn't match the manifest, or the commit isn't on `main` | Release fails closed — nothing publishes |
 
-To cut a release: open a PR bumping `packageVersion` (and the matching `tag` and inter-package
-dependency versions) in `eng/release-manifest.json` and cutting `CHANGELOG.md` as described in
+To cut a release: open a PR bumping `packageVersion` (and the matching `tag` and the exact
+`[X.Y.Z]` inter-package dependency ranges) in `eng/release-manifest.json` and cutting `CHANGELOG.md` as described in
 [CONTRIBUTING.md](https://github.com/IgnyteSoftware/inquiry/blob/main/CONTRIBUTING.md#releases-tag-driven),
 merge it, then push the tag. The release fails if the tag's version has no changelog section. Before you push the
 tag, run the Docs workflow manually on `main` and wait for it to deploy
@@ -180,7 +180,9 @@ $output = Join-Path ([System.IO.Path]::GetTempPath()) 'inquiry-release-candidate
 This requires a clean worktree at the named `HEAD`, creates a detached temporary worktree at that exact
 commit, and restores and builds only from that immutable snapshot. It refuses a non-empty or linked
 output directory, and validates exact nupkg and snupkg inventory, versions, dependencies, repository
-commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings. It does not publish or
+commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings. Every dependency on
+another Inquiry package must be the exact range `[version]` at the packed version, including
+`-preview.N` versions. It does not publish or
 create a tag.
 
 ### Shippable packages
@@ -234,6 +236,12 @@ The runner uses fresh NuGet caches and maps every manifest package ID exclusivel
 It compiles all six provider generators, runs SQLite CRUD and companion APIs on each framework,
 and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution
 remains covered by the required integration matrix.
+
+Restore probes on .NET 8 prove that a mixed set of Inquiry packages fails. The runner copies candidate
+packages and rewrites their nuspec version to an older and a newer version. These copies stay in its
+work folder and never enter the bundle. A newer companion package must fail with `NU1107`, and an
+older direct `Ignyte.Inquiry` must fail with `NU1605`. A newer direct `Ignyte.Inquiry` must warn
+`NU1608`, and fail when warnings are errors. A coordinated set must restore cleanly.
 
 It also runs the complete documentation recipes on .NET 8 against the candidate packages. It
 extracts the files marked with `<!-- recipe: name/File -->` comments from the published pages. The

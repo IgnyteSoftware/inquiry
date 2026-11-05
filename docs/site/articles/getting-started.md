@@ -170,6 +170,17 @@ An `INQ039` error means the chosen provider does not support the declared operat
 declaration or choose a supported provider. Project-wide warning or suppression configuration for
 `INQ039` deliberately changes unsupported operations into generated throwing stubs.
 
+## Troubleshooting: restore errors NU1107, NU1605 and NU1608
+
+Every `Ignyte.Inquiry*` package depends on the other Inquiry packages at exactly its own version.
+The attributes in `Ignyte.Inquiry` and the generator in the provider package must come from the same
+release. Set every `Ignyte.Inquiry*` reference to the same version to fix these restore results:
+
+- `NU1107` (error): two Inquiry packages require different versions of `Ignyte.Inquiry`.
+- `NU1605` (error): a direct `Ignyte.Inquiry` reference is older than the provider requires.
+- `NU1608` (warning): a direct `Ignyte.Inquiry` reference is newer than the provider allows. Restore
+  continues, and the build can fail with generator errors. With `TreatWarningsAsErrors`, restore fails.
+
 ## Next steps
 
 - [CRUD](features/crud.md) covers reads, inserts, updates, and returning forms.
