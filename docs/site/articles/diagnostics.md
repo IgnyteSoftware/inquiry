@@ -17,13 +17,23 @@ such as Ignyte.Inquiry.Sqlite. Do not wait for an INQ diagnostic from an analyze
 
 ## Severity and suppression
 
-Fix errors rather than suppressing them. Suppression does not turn an invalid mapping into supported
-SQL and does not guarantee that a partial implementation is emitted. Keep generated SQL hover help
-for inspecting valid methods; ordinary declaration repairs should start here.
+Fix errors rather than suppressing them. When an Inquiry error rejects a store method or a whole
+store, suppressing or lowering it never produces runnable generated code for that method. A rejected
+method gets no generated implementation, so the build still fails with CS8795 at its declaration. The generator still emits the store constructor, so CS7036 does not
+appear. This holds when every method of a store is rejected and when the store's entity is invalid
+(INQ008). One case differs: when no rejected method needs a generated body, for example a method that
+is not `partial` (INQ010), the store gets no generated source and the missing constructor (CS7036)
+fails the build instead. Keep generated SQL hover help for inspecting valid methods; ordinary declaration repairs
+should start here.
 
-INQ039 is an explicit exception: lowering it to warning or none project-wide opts unsupported methods
-into synchronous NotSupportedException stubs. That is a deliberate unavailable-operation policy,
-not a repair. Local pragma suppression is not a substitute for that project-wide choice.
+INQ039 is the only exception. It means the declaration is valid but the active dialect cannot run it.
+Lowering INQ039 to warning or none project-wide opts those methods into synchronous
+NotSupportedException stubs. That is a deliberate unavailable-operation policy, not a repair. It stubs
+only methods that report INQ039, never a method rejected by another error.
+
+Change severity with `<NoWarn>` or with `.editorconfig` or `.globalconfig` severity. `#pragma warning
+disable` has no effect on diagnostics from the Inquiry source generators, at any severity. Only INQ048
+comes from an analyzer, so it is the only Inquiry ID a pragma can suppress.
 
 INQ048 is a SQL-injection warning. Suppress it locally only after verifying that dynamic SQL cannot
 contain untrusted values or identifiers. Bind values with InquirySql.Sql or the FormattableString APIs.
@@ -34,7 +44,7 @@ DDL lints INQ061, INQ062, INQ064, INQ066, and INQ067 are disabled by default. En
 dotnet_diagnostic.INQ061.severity = warning
 ```
 
-For an accepted warning, use a narrowly scoped configuration or pragma and document the reason.
+For an accepted warning, use a narrowly scoped configuration and document the reason.
 Each entry below lists the descriptor's default severity and whether it is enabled. Provider SQL limits
 still apply even when a warning is suppressed. IDs INQ003, INQ013, INQ015, and INQ027 are retired and are
 not reused. INQ076 belongs to the SQL Server analyzer; the other active IDs are shared.
@@ -162,7 +172,7 @@ Trigger: The operation's parameters or entity capabilities do not meet its requi
 
 Failing shape: A select-all method omits the trailing CancellationToken.
 
-Smallest correction: Add CancellationToken ct = default; for keyed/mutation forms match entity/key parameters. Token upserts and unsupported token/provider combinations can also report this ID.
+Smallest correction: Add CancellationToken ct = default; for keyed/mutation forms match entity/key parameters. Token upserts and unsupported token/provider combinations report [INQ113](#inq113).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L99).
 
@@ -187,6 +197,8 @@ Trigger: The store's entity is not a valid mapped entity.
 Failing shape: InquiryStore&lt;Product&gt; with an undecorated Product.
 
 Smallest correction: Add [InquiryTable("Products")] and valid key/column mappings; repair earlier entity diagnostics first.
+
+The generated store keeps only its constructor, so each of its partial methods also reports CS8795 until the entity is fixed.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L117).
 
@@ -522,7 +534,7 @@ Trigger: The selected dialect cannot emit this operation.
 
 Failing shape: A returning mutation form rejected for the active dialect.
 
-Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. Lowering severity deliberately emits throwing stubs, not working SQL.
+Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. Lowering severity project-wide deliberately emits throwing stubs, not working SQL. It is the only diagnostic whose severity changes the generated code; see [Severity and suppression](#severity-and-suppression).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L668).
 
@@ -1378,6 +1390,18 @@ Smallest correction: Add `[JsonSerializable(typeof(CustomerPreferences))]` to th
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
 
+## INQ111
+
+Store method signature cannot be generated. Default: error, enabled.
+
+Trigger: An Inquiry store method is static or generic, has a `ref`, `in`, `out`, `ref readonly` or `scoped` parameter, or returns by reference. The generated implementation must repeat the declaration exactly, and Inquiry does not generate those forms. The message lists each unsupported part. The method gets no generated implementation, so CS8795 also appears at the declaration.
+
+Failing shape: `[InquiryExists, InquiryWhere("Value", Compare.In)] public static partial Task<bool> Find(IReadOnlyList<int?> values, CancellationToken ct = default);`
+
+Smallest correction: Declare a non-generic instance method with by-value parameters and a by-value return. A stored procedure INOUT parameter is a by-value parameter with `[InquiryParameter(IsInputOutput = true)]`, not a C# `ref` or `out` parameter. To keep an unsupported signature, remove the Inquiry attribute and implement the method yourself.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
 ## INQ112
 
 Positional InquiryWhere criteria bind parameters of the same type. Default: warning, enabled.
@@ -1387,5 +1411,17 @@ Trigger: Two or more criteria of one method bind by position to parameters of th
 Failing shape: `[InquiryWhere("Category")] [InquiryWhere("Name")]` on `FindAsync(string category, string name, ...)`.
 
 Smallest correction: Set `Parameter = nameof(...)` on each value criterion. The SQL does not change. See [migrate a positional method](features/query-composition.md#migrate-a-positional-method).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ113
+
+Store concurrency-token shape is not supported. Default: error, enabled.
+
+Trigger: The store's entity has an `[InquiryConcurrencyToken]`, and the store cannot be generated with it. Either the store declares an upsert, whose conflict handling with a token is not defined, or the token is database-generated and the active dialect has no native row-version type. The upsert case is reported at each upsert method. The database-generated case is reported at the store and names its methods; [INQ068](#inq068) also marks the token property. The store keeps only its constructor, so each of its methods also reports CS8795.
+
+Failing shape: `[InquiryUpsert] public partial Task<int> UpsertAsync(Widget widget, CancellationToken ct = default);` on a store whose `Widget` declares `[InquiryConcurrencyToken] public int Version { get; set; }`.
+
+Smallest correction: Replace the upsert with separate insert and update methods. For a database-generated token, use an application-managed numeric token, or compile against SQL Server, which has `rowversion`.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

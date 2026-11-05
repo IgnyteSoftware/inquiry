@@ -229,7 +229,7 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "MySql");
         var diagnostic = Assert.Single(result.RunResult.Diagnostics.Where(d => d.Id == "INQ072"));
         Assert.NotEqual(Microsoft.CodeAnalysis.Location.None, diagnostic.Location);
-        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
+        Assert.Contains(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
         Assert.DoesNotContain(result.RunResult.GeneratedTrees, tree => tree.GetText().ToString().Contains("CREATE TABLE `T`", StringComparison.Ordinal));
     }
 
@@ -272,7 +272,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void InvalidManyToManyJunctionProducesCompileSafeStoreStub()
+    public void InvalidManyToManyJunctionProducesConstructorOnlyStore()
     {
         const string source = """
             using System.Collections.Generic; using System.Threading; using System.Threading.Tasks; using Inquiry.Entities; using Inquiry.Stores;
@@ -285,9 +285,11 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, dialect: "MySql");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ072");
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ008" && d.GetMessage(CultureInfo.CurrentCulture).Contains("relation dependency", StringComparison.Ordinal));
-        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
+        Assert.Contains(result.Compilation.GetDiagnostics(), d => d.Id == "CS8795");
+        Assert.DoesNotContain(result.Compilation.GetDiagnostics(), d => d.Id == "CS7036");
         var store = Assert.Single(result.RunResult.GeneratedTrees, tree => tree.FilePath.EndsWith("OrderStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
-        Assert.Contains("NotSupportedException", store);
+        Assert.Contains("public OrderStore(global::Inquiry.IInquiry inquiry)", store);
+        Assert.DoesNotContain("NotSupportedException", store);
         Assert.DoesNotContain("JOIN", store);
     }
 

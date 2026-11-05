@@ -2312,19 +2312,20 @@ public sealed partial class InquiryGeneratorTests
         Assert.All(result.RunResult.Results, static r => Assert.Null(r.Exception));
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ012");
 
-        // The method is dropped rather than emitted against a single key column, but the store must
-        // still be emitted as throwing stubs. Omitting it entirely buries INQ012 under CS8795
-        // ("partial method must have an implementation part") and CS7036 (no constructor).
+        // The method is dropped rather than emitted against a single key column. The store keeps its
+        // constructor, so the only compiler error is CS8795 on the rejected declaration (no CS7036).
         var errors = result.Compilation.GetDiagnostics()
             .Where(static d => d.Severity == DiagnosticSeverity.Error)
             .ToArray();
-        Assert.Empty(errors);
+        Assert.NotEmpty(errors);
+        Assert.All(errors, static d => Assert.Equal("CS8795", d.Id));
 
         var text = Assert.Single(
             result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("OrderLineStore.InquiryStore.g.cs", StringComparison.Ordinal))
             .GetText().ToString();
-        Assert.Contains("global::System.NotSupportedException", text);
+        Assert.Contains("public OrderLineStore(global::Inquiry.IInquiry inquiry)", text);
+        Assert.DoesNotContain("NotSupportedException", text);
         Assert.DoesNotContain("Inquiry.QueryMultipleAsync(", text);
     }
 
@@ -2672,9 +2673,10 @@ public sealed partial class InquiryGeneratorTests
         ReportDiagnostic? unsupportedOperationSeverity = null,
         SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null,
         IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null,
-        bool includeNoGridGenerator = false)
+        bool includeNoGridGenerator = false,
+        LanguageVersion languageVersion = LanguageVersion.CSharp10)
     {
-        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+        var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(languageVersion);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
 
         // The generator picks its SqlBuilder from [assembly: Inquiry.InquiryDialect(...)]; tests

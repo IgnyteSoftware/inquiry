@@ -18,4 +18,5 @@ internal sealed record StoreData(
     bool GenerateInterface,
     EquatableArray<StoreMethodData> Methods,
     LocationData? Location,
-    EquatableArray<DiagnosticData> Diagnostics);
+    EquatableArray<DiagnosticData> Diagnostics,
+    bool HasMethodNeedingBody = false);

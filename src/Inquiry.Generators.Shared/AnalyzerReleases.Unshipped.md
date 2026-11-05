@@ -110,4 +110,6 @@ INQ107 | Inquiry | Error | InquiryInclude names an invalid relation
 INQ108 | Inquiry | Error | JSON serializer context type is invalid
 INQ109 | Inquiry | Error | InquiryWhere named parameter binding is invalid
 INQ110 | Inquiry | Error | JSON column type is missing from the serializer context
+INQ111 | Inquiry | Error | Store method signature cannot be generated
 INQ112 | Inquiry | Warning | Positional InquiryWhere criteria bind parameters of the same type
+INQ113 | Inquiry | Error | Store concurrency-token shape is not supported

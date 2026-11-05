@@ -66,9 +66,9 @@ and the diagnostic registry. Naive parallelism collides there. The project's ans
 
 ## Diagnostic suppression and unsupported stubs (#268)
 
-Status: proposed. Merging the pull request that adds this section accepts it. The user-facing rules
-stay in the [Diagnostic repair index](../articles/diagnostics.md#severity-and-suppression) and change
-only when the follow-up work lands.
+Status: accepted and implemented by the follow-up work below. The user-facing rules are in the
+[Diagnostic repair index](../articles/diagnostics.md#severity-and-suppression). The line references in
+the context table describe the code before that work.
 
 ### Context
 
@@ -162,9 +162,14 @@ INQ039 is already lowered.
 - Two configurations that build today stop building. Both need a changelog entry:
   - A rejecting error is suppressed on an all-rejected or invalid-entity store.
   - A provider facet error, such as INQ076, is suppressed and INQ039 is lowered.
-- No configuration that fails today starts to build.
-- Diagnostic IDs and default severities do not change, so the `AnalyzerReleases.*.md` files need no
-  update.
+- No configuration that fails today starts to build, with one exception. A store method that keeps
+  its Inquiry attribute and also has a hand-written implementing declaration fails today, because the
+  generator adds a second implementation (CS0757). When that method is rejected and its error is
+  suppressed, the generator adds no member and the hand-written body compiles. Only user-written code
+  runs; no generated code becomes runnable.
+- Existing diagnostic IDs and default severities do not change. The follow-up work adds two errors:
+  INQ111 for a store method signature the generator cannot reproduce (#267), and INQ113 for an
+  unsupported concurrency-token store shape (#270), which replaces INQ006 for token upserts.
 - Pragmas do not affect generator diagnostics. The repair index should say so, so readers do not
   expect a local opt-out.
 - Tests that pin the removed stubs change. These include

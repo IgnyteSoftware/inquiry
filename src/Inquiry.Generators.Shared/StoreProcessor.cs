@@ -54,6 +54,7 @@ internal static class StoreProcessor
         }
 
         var methods = ImmutableArray.CreateBuilder<StoreMethodData>();
+        var hasMethodNeedingBody = false;
         if (emittable)
         {
             foreach (var method in storeSymbol.GetMembers().OfType<IMethodSymbol>().Where(static m => m.MethodKind == MethodKind.Ordinary))
@@ -65,6 +66,11 @@ internal static class StoreProcessor
                 {
                     continue;
                 }
+
+                // A non-void partial definition without a body always fails with CS8795, so a generated
+                // constructor next to it cannot make the build succeed. A store with no such method gets no
+                // constructor when its methods are rejected, so CS7036 keeps the build failing.
+                hasMethodNeedingBody |= method.IsPartialDefinition && method.PartialImplementationPart is null && !method.ReturnsVoid;
 
                 var model = ExtractMethod(method, operation, operationAttribute!, entityType, diagnostics);
                 if (model is not null)
@@ -107,7 +113,56 @@ internal static class StoreProcessor
             GenerateInterface: HasGenerateInterfaceAttribute(storeSymbol),
             Methods: new EquatableArray<StoreMethodData>(methods.ToImmutable()),
             Location: LocationData.From(location),
-            Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()));
+            Diagnostics: new EquatableArray<DiagnosticData>(diagnostics.ToImmutable()),
+            HasMethodNeedingBody: hasMethodNeedingBody);
+    }
+
+    /// <summary>
+    /// Names the parts of a store method signature the generator cannot reproduce in its implementing
+    /// declaration, or returns null when it can reproduce all of them.
+    /// </summary>
+    private static string? DescribeUnsupportedSignature(IMethodSymbol method)
+    {
+        var reasons = new List<string>();
+        if (method.IsStatic)
+        {
+            reasons.Add("the method is static");
+        }
+
+        if (method.IsGenericMethod)
+        {
+            reasons.Add("the method is generic");
+        }
+
+        foreach (var parameter in method.Parameters)
+        {
+            var modifier = parameter.RefKind switch
+            {
+                RefKind.Ref => "ref",
+                RefKind.Out => "out",
+                RefKind.In => "in",
+                RefKind.RefReadOnlyParameter => "ref readonly",
+                _ => null,
+            };
+
+            // An out parameter is implicitly scoped, so only a by-value parameter reports 'scoped'.
+            if (modifier is null && parameter.ScopedKind != ScopedKind.None)
+            {
+                modifier = "scoped";
+            }
+
+            if (modifier is not null)
+            {
+                reasons.Add($"parameter '{parameter.Name}' is '{modifier}'");
+            }
+        }
+
+        if (method.ReturnsByRef || method.ReturnsByRefReadonly)
+        {
+            reasons.Add("the method returns by reference");
+        }
+
+        return reasons.Count == 0 ? null : string.Join("; ", reasons);
     }
 
     private static StoreMethodData? ExtractMethod(
@@ -128,6 +183,12 @@ internal static class StoreProcessor
         if (!method.IsPartialDefinition)
         {
             diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.MethodMustBePartial, location, method.Name));
+            return null;
+        }
+
+        if (DescribeUnsupportedSignature(method) is { } unsupportedSignature)
+        {
+            diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.StoreMethodSignatureNotSupported, location, method.Name, unsupportedSignature));
             return null;
         }
 
@@ -1494,7 +1555,7 @@ internal static class StoreProcessor
                 store.Location?.ToLocation(),
                 store.Name,
                 StripGlobalPrefix(store.EntityFullyQualifiedName)));
-            return EmitInvalidEntityStore(context, store);
+            return EmitConstructorOnlyStore(context, store);
         }
         if (invalidEntityNames is not null && (entity.Relations.AsImmutableArray().Any(relation => invalidEntityNames.Contains(relation.ChildEntityFullyQualifiedName)
                 || relation.JunctionEntityFullyQualifiedName is not null && invalidEntityNames.Contains(relation.JunctionEntityFullyQualifiedName))
@@ -1503,7 +1564,7 @@ internal static class StoreProcessor
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoreEntityNotMapped,
                 store.Location?.ToLocation(), store.Name, "a return or relation dependency with an invalid computed expression"));
-            return EmitInvalidEntityStore(context, store);
+            return EmitConstructorOnlyStore(context, store);
         }
 
         // Resolve the parent's relation → child-entity map up-front so per-method validation can
@@ -1604,32 +1665,40 @@ internal static class StoreProcessor
             // A store with no generator-implemented methods at all is legitimate — a partial store that
             // only hand-writes methods over the inherited Inquiry property, with its own constructor.
             // Emitting anything there would collide with that constructor.
-            if (store.Methods.Count == 0)
+            if (store.Methods.Count == 0 && !store.HasMethodNeedingBody)
             {
                 return null;
             }
 
             // Otherwise every declared method was rejected (each already reported its own diagnostic).
-            // Emit throwing stubs rather than nothing: omitting the store leaves the user's partial
-            // declarations unimplemented, burying the real diagnostic under CS8795 and CS7036.
-            return EmitStubOnlyStore(context, store,
-                "Every method on this store was rejected during validation; see the preceding Inquiry diagnostics.");
+            return EmitConstructorOnlyStore(context, store);
         }
 
         // a database-managed concurrency token (e.g. rowversion) is only supported on dialects with a
-        // native row-version type — currently SQL Server. Schema emission owns the property-located
-        // INQ068 diagnostic; this remains as defensive suppression so no unsupported store is emitted.
-        // Upsert on a token entity has unclear conflict semantics in v1, so it is likewise rejected.
-        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } && !sqlBuilder.SupportsDatabaseGeneratedConcurrencyToken)
+        // native row-version type — currently SQL Server. Schema emission also reports INQ068 at the
+        // property. Upsert on a token entity has unclear conflict semantics in v1, so it is likewise
+        // rejected. Either shape rejects every method on the store.
+        if (entity.ConcurrencyToken is { IsDatabaseGeneratedToken: true } token && !sqlBuilder.SupportsDatabaseGeneratedConcurrencyToken)
         {
-            return null;
+            var methodNames = store.Methods.AsImmutableArray().Select(static m => m.Name).Distinct(StringComparer.Ordinal).ToArray();
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.StoreConcurrencyShapeNotSupported, store.Location?.ToLocation(), store.Name,
+                (methodNames.Length == 1 ? "method " : "methods ") + string.Join(", ", methodNames.Select(static name => $"'{name}'")),
+                $"the '{sqlBuilder.DialectName}' dialect does not support database-generated concurrency token '{entity.Name}.{token.PropertyName}'. Use an application-managed token, or compile against a dialect that supports database-generated tokens"));
+            return store.HasMethodNeedingBody ? EmitConstructorOnlyStore(context, store) : null;
         }
 
-        if (entity.ConcurrencyToken is not null && store.Methods.AsImmutableArray().Any(static m => m.Operation == StoreOperation.Upsert))
+        if (entity.ConcurrencyToken is { } upsertToken && store.Methods.AsImmutableArray().Any(static m => m.Operation == StoreOperation.Upsert))
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                InquiryDiagnosticDescriptors.InvalidParameters, store.Location?.ToLocation(), store.Name));
-            return null;
+            foreach (var upsert in store.Methods.AsImmutableArray().Where(static m => m.Operation == StoreOperation.Upsert))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.StoreConcurrencyShapeNotSupported, upsert.Location?.ToLocation(), store.Name,
+                    $"method '{upsert.Name}'",
+                    $"upsert is not supported for entity '{entity.Name}' because it declares concurrency token '{upsertToken.PropertyName}'. Use separate insert and update methods"));
+            }
+
+            return store.HasMethodNeedingBody ? EmitConstructorOnlyStore(context, store) : null;
         }
 
         var entityColumns = ToColumnList(entity.Columns);
@@ -2449,15 +2518,10 @@ internal static class StoreProcessor
             {
                 unsupportedReason = lockError;
             }
-            // The provider diagnostic was already reported at the precise invalid facet above. Still
-            // emit a safe body without adding the generic INQ039 for the same transport failure.
-            if (collectionErrors.TryGetValue(method, out var collectionError))
+            // The provider diagnostic was already reported at the precise invalid facet above. The method
+            // gets no member: only INQ039 may produce a stub.
+            if (collectionErrors.ContainsKey(method))
             {
-                if (emitUnsupportedOperationStubs)
-                {
-                    documentedMethods[method] = method with { UnsupportedReason = collectionError };
-                    StoreOperationEmitter.EmitUnsupportedStub(source, method, collectionError);
-                }
                 continue;
             }
             if (unsupportedReason is not null)
@@ -2527,7 +2591,9 @@ internal static class StoreProcessor
             interfaceFullyQualifiedName = store.Namespace is null
                 ? $"global::I{store.Name}"
                 : $"global::{store.Namespace}.I{store.Name}";
-            EmitStoreInterface(source, store, valid.Select(m => documentedMethods.TryGetValue(m.Method, out var documented) ? documented : m.Method));
+            // Only methods with a generated body or INQ039 stub belong to the interface. A skipped method
+            // would add an interface member the store does not implement.
+            EmitStoreInterface(source, store, valid.Where(m => documentedMethods.ContainsKey(m.Method)).Select(m => documentedMethods[m.Method]));
         }
 
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
@@ -2541,17 +2607,13 @@ internal static class StoreProcessor
                 .ToImmutableArray());
     }
 
-    private static StoreEmissionResult EmitInvalidEntityStore(SourceProductionContext context, StoreData store)
-        => EmitStubOnlyStore(context, store,
-            "The store depends on an entity whose provider-specific mapping is invalid; see the preceding Inquiry diagnostic.");
-
     /// <summary>
-    /// Emits a store whose every method is a throwing stub, plus the constructor. Used when nothing can
-    /// be emitted normally — an invalid entity, or every method rejected by validation. Without this the
-    /// store source is omitted entirely and the user's <c>partial</c> declarations report CS8795 (and the
-    /// missing constructor CS7036) on top of the real Inquiry diagnostic.
+    /// Emits only the store constructor, plus an empty generated interface when one is requested. Used
+    /// when no method can be generated: an invalid entity, every method rejected, or an unsupported
+    /// concurrency-token shape. Each rejected <c>partial</c> declaration then reports CS8795, and the
+    /// missing constructor does not add CS7036.
     /// </summary>
-    private static StoreEmissionResult EmitStubOnlyStore(SourceProductionContext context, StoreData store, string reason)
+    private static StoreEmissionResult EmitConstructorOnlyStore(SourceProductionContext context, StoreData store)
     {
         var source = new StringBuilder();
         source.AppendLine("// <auto-generated />");
@@ -2563,14 +2625,12 @@ internal static class StoreProcessor
         source.AppendLine("        : base(inquiry)");
         source.AppendLine("    {");
         source.AppendLine("    }");
-        foreach (var method in store.Methods)
-        { source.AppendLine(); StoreOperationEmitter.EmitUnsupportedStub(source, method, reason); }
         source.AppendLine("}");
         string? interfaceName = null;
         if (store.GenerateInterface)
         {
             interfaceName = store.Namespace is null ? $"global::I{store.Name}" : $"global::{store.Namespace}.I{store.Name}";
-            EmitStoreInterface(source, store, store.Methods.AsImmutableArray().Select(method => method with { UnsupportedReason = reason }));
+            EmitStoreInterface(source, store, Enumerable.Empty<StoreMethodData>());
         }
         GeneratorHelpers.AppendNamespaceEnd(source, store.Namespace);
         context.AddSource(store.HintName, SourceText.From(source.ToString(), Encoding.UTF8));

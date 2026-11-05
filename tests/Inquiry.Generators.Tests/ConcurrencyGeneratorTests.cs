@@ -9,7 +9,7 @@ namespace Inquiry.Generators.Tests;
 /// key WHERE, DELETE AND-composes the same predicate, RETURNING/OUTPUT keeps projecting the token, a
 /// database-managed token (SqlServer rowversion) is absent from INSERT but present in the UPDATE
 /// WHERE + OUTPUT, the conflict-throw branch is emitted only for token entities, and the diagnostics
-/// (INQ028 dup, INQ029 token==key, DB-managed-on-unsupported-dialect, upsert+token) fire.
+/// (INQ028 dup, INQ029 token==key, INQ068/INQ113 DB-managed-on-unsupported-dialect, INQ113 upsert+token) fire.
 /// </summary>
 public sealed partial class InquiryGeneratorTests
 {
@@ -406,7 +406,8 @@ public sealed partial class InquiryGeneratorTests
             [InquiryUpsert]
             public partial Task<int> UpsertAsync(Widget widget, CancellationToken cancellationToken = default);
             """));
-        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ006");
+        Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ113");
+        Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ006");
     }
 
     [Fact]
