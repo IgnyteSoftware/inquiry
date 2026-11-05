@@ -1,7 +1,6 @@
 using System.Data;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Diagnosers;
 using Inquiry.Commands;
 using Inquiry.DependencyInjection;
 using Inquiry.Interceptors;
@@ -25,7 +24,7 @@ namespace Inquiry.Benchmarks;
 /// binding, interceptor routing, provider execution, scalar conversion, and disposal.
 /// </remarks>
 [MemoryDiagnoser]
-[DisassemblyDiagnoser(maxDepth: 4, printSource: true)]
+[Config(typeof(OptInDisassemblyConfig))]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "BenchmarkDotNet disposes these fields in the [GlobalCleanup] method.")]
