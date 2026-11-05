@@ -10,6 +10,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -108,7 +109,7 @@ public class CustomerCrudBenchmarks
     public async Task<int> SelectAll_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Customer>().ToListAsync();
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Customer>());
         return list.Count;
     }
 
@@ -164,7 +165,7 @@ public class CustomerCrudBenchmarks
     public async Task<L2Customer?> SelectByKey_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Customer>().FirstOrDefaultAsync(c => c.CustomerID == TargetCustomerId);
+        return await L2Async.FirstOrDefaultAsync(dc.GetTable<L2Customer>(), c => c.CustomerID == TargetCustomerId);
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
@@ -222,7 +223,7 @@ public class CustomerCrudBenchmarks
     public async Task<int> SelectByField_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Customer>().Where(c => c.Country == TargetCountry).ToListAsync();
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Customer>().Where(c => c.Country == TargetCountry));
         return list.Count;
     }
 

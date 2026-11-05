@@ -10,6 +10,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -91,7 +92,7 @@ public class ShipperCrudBenchmarks
     public async Task<int> SelectAll_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Shipper>().ToListAsync();
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Shipper>());
         return list.Count;
     }
 
@@ -147,7 +148,7 @@ public class ShipperCrudBenchmarks
     public async Task<L2Shipper?> SelectByKey_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Shipper>().FirstOrDefaultAsync(s => s.ShipperID == TargetShipperId);
+        return await L2Async.FirstOrDefaultAsync(dc.GetTable<L2Shipper>(), s => s.ShipperID == TargetShipperId);
     }
 
     [BenchmarkCategory("SelectByKey"), Benchmark]
@@ -205,7 +206,7 @@ public class ShipperCrudBenchmarks
     public async Task<int> SelectByField_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Shipper>().Where(s => s.CompanyName == TargetCompanyName).ToListAsync();
+        var list = await L2Async.ToListAsync(dc.GetTable<L2Shipper>().Where(s => s.CompanyName == TargetCompanyName));
         return list.Count;
     }
 
@@ -416,13 +417,15 @@ public class ShipperCrudBenchmarks
     [BenchmarkCategory("Upsert"), Benchmark]
     public async Task<int> Upsert_LinqToDb()
     {
+        // InsertOrReplace rejects identity keys, so use InsertOrUpdate (one INSERT ... ON CONFLICT statement).
+        // The values are locals so linq2db sends them as parameters, like the other legs.
+        var id = TargetShipperId;
+        var company = "Upserted Shipper";
+        var phone = "555-1234";
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.InsertOrReplaceAsync(new L2Shipper
-        {
-            ShipperID = TargetShipperId,
-            CompanyName = "Upserted Shipper",
-            Phone = "555-1234",
-        });
+        return await dc.GetTable<L2Shipper>().InsertOrUpdateAsync(
+            () => new L2Shipper { ShipperID = id, CompanyName = company, Phone = phone },
+            row => new L2Shipper { CompanyName = company, Phone = phone });
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

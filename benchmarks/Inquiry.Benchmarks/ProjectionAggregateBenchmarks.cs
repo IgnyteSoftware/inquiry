@@ -10,6 +10,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -101,9 +102,9 @@ public class ProjectionAggregateBenchmarks
     public async Task<int> Projection_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        var list = await dc.GetTable<L2Product>()
-            .Select(p => new { p.ProductID, p.ProductName, p.UnitPrice })
-            .ToListAsync();
+        var list = await L2Async.ToListAsync(
+            dc.GetTable<L2Product>()
+                .Select(p => new { p.ProductID, p.ProductName, p.UnitPrice }));
         return list.Count;
     }
 
@@ -147,7 +148,7 @@ public class ProjectionAggregateBenchmarks
     public async Task<long> Count_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().CountAsync();
+        return await L2Async.CountAsync(dc.GetTable<L2Product>());
     }
 
     [BenchmarkCategory("Count"), Benchmark]
@@ -189,7 +190,7 @@ public class ProjectionAggregateBenchmarks
     public async Task<decimal?> Sum_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().SumAsync(p => p.UnitPrice);
+        return await L2Async.SumAsync(dc.GetTable<L2Product>(), p => p.UnitPrice);
     }
 
     [BenchmarkCategory("Sum"), Benchmark]
@@ -233,7 +234,7 @@ public class ProjectionAggregateBenchmarks
     public async Task<decimal?> Avg_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().AverageAsync(p => p.UnitPrice);
+        return await L2Async.AverageAsync(dc.GetTable<L2Product>(), p => p.UnitPrice);
     }
 
     [BenchmarkCategory("Avg"), Benchmark]
@@ -275,7 +276,7 @@ public class ProjectionAggregateBenchmarks
     public async Task<decimal?> Min_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().MinAsync(p => p.UnitPrice);
+        return await L2Async.MinAsync(dc.GetTable<L2Product>(), p => p.UnitPrice);
     }
 
     [BenchmarkCategory("Min"), Benchmark]
@@ -317,7 +318,7 @@ public class ProjectionAggregateBenchmarks
     public async Task<decimal?> Max_LinqToDb()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Product>().MaxAsync(p => p.UnitPrice);
+        return await L2Async.MaxAsync(dc.GetTable<L2Product>(), p => p.UnitPrice);
     }
 
     [BenchmarkCategory("Max"), Benchmark]

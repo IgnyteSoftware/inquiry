@@ -10,6 +10,7 @@ using LinqToDB;
 using LinqToDB.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using L2Async = LinqToDB.Async.AsyncExtensions;
 
 namespace Inquiry.Benchmarks;
 
@@ -38,6 +39,11 @@ public class ConcurrencyBenchmarks
         _db = BenchmarkDatabase.CreateAsync().GetAwaiter().GetResult();
         _connectionString = _db.ConnectionString;
         _linqToDbOptions = _db.LinqToDbOptions;
+
+        // linq2db 6.5 can build a DataConnection without its provider when 16 or more threads make the
+        // process's first linq2db query at the same time. One query here keeps the measured calls off that race.
+        using var dc = new DataConnection(_linqToDbOptions);
+        _ = dc.GetTable<L2Shipper>().FirstOrDefault(s => s.ShipperID == TargetShipperId);
     }
 
     [GlobalCleanup]
@@ -127,7 +133,7 @@ public class ConcurrencyBenchmarks
     private async Task<L2Shipper?> LinqToDbPointRead()
     {
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.GetTable<L2Shipper>().FirstOrDefaultAsync(s => s.ShipperID == TargetShipperId);
+        return await L2Async.FirstOrDefaultAsync(dc.GetTable<L2Shipper>(), s => s.ShipperID == TargetShipperId);
     }
 
     [BenchmarkCategory("ConcurrentPointRead"), Benchmark]
