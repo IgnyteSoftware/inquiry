@@ -30,7 +30,7 @@ function Invoke-Dotnet([string[]] $Arguments) {
 }
 
 # A package entry is an ID, or ID=Version to reference a version other than the candidate's.
-function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [string[]] $Sources, [switch] $AspNetCore, [bool] $WarningsAsErrors = $true) {
+function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [string[]] $Sources, [switch] $AspNetCore, [switch] $Logging, [bool] $WarningsAsErrors = $true) {
     $directory = Join-Path $workRoot $Name
     New-Item -ItemType Directory -Path $directory | Out-Null
     foreach ($source in $Sources) { Copy-Item -LiteralPath $source -Destination $directory }
@@ -44,6 +44,10 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
         $references += '<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="' + $diVersion + '" />'
     }
     if ($AspNetCore) { $references += '<FrameworkReference Include="Microsoft.AspNetCore.App" />' }
+    if ($Logging) {
+        $loggingVersion = $core.dependencies.'Microsoft.Extensions.Logging.Abstractions'
+        $references += '<PackageReference Include="Microsoft.Extensions.Logging" Version="' + $loggingVersion + '" />'
+    }
     @"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -72,8 +76,8 @@ function Copy-Recipe([string] $Recipe, [string] $Directory) {
     return @($files)
 }
 
-function Invoke-Recipe([string] $Recipe, [string[]] $ExpectedFiles, [string[]] $Sources) {
-    $project = New-Consumer "recipe-$Recipe" 'net8.0' @('Ignyte.Inquiry.Sqlite') $Sources
+function Invoke-Recipe([string] $Recipe, [string[]] $ExpectedFiles, [string[]] $Sources, [string[]] $Packages = @('Ignyte.Inquiry.Sqlite'), [switch] $Logging) {
+    $project = New-Consumer "recipe-$Recipe" 'net8.0' $Packages $Sources -Logging:$Logging
     $directory = Split-Path -Parent $project
     $files = Copy-Recipe $Recipe $directory
     if (@(Compare-Object ($files | Sort-Object) ($ExpectedFiles | Sort-Object)).Count -ne 0) {
@@ -222,6 +226,13 @@ try {
     $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-entity-mapping/output.txt'))
     if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The entity-mapping output differs from its documented output.' }
     $checks.Add('net8.0/sqlite/docs-recipe-entity-mapping')
+    $output = @(Invoke-Recipe 'aggregates' @('Product.cs', 'ProductStore.cs', 'Program.cs', 'output.txt') @())
+    $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-aggregates/output.txt'))
+    if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The aggregates output differs from its documented output.' }
+    $checks.Add('net8.0/sqlite/docs-recipe-aggregates')
+    $output = @(Invoke-Recipe 'n-plus-one' @('Order.cs', 'OrderStore.cs', 'NPlusOneExample.cs') @((Join-Path $PSScriptRoot 'NPlusOneRecipe.cs')) @('Ignyte.Inquiry.Sqlite', 'Ignyte.Inquiry.Interceptors') -Logging)
+    if ($output[-1] -cne 'N-PLUS-ONE-RECIPE-OK') { throw 'The N+1 detection recipe did not complete.' }
+    $checks.Add('net8.0/sqlite/docs-recipe-n-plus-one')
     $sample = Join-Path $repoRoot 'samples/Inquiry.AotSmoke'
     $providers = @{ Sqlite = 'sqlite'; SqlServer = 'sqlserver'; PostgreSql = 'postgresql'; MySql = 'mysql'; MariaDb = 'mariadb'; Oracle = 'oracle' }
     foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {
