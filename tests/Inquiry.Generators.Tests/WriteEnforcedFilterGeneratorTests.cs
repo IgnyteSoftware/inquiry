@@ -558,12 +558,14 @@ public sealed partial class InquiryGeneratorTests
             additionalDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["INQ095"] = ReportDiagnostic.Suppress });
 
         // Suppressing the error must not buy back an unenforced statement. This store's ONLY method is
-        // the upsert, so every method was rejected and the whole store degrades to throwing stubs.
+        // the upsert, so every method was rejected and the store keeps only its constructor.
         Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ095");
         var text = GetTenantDocStore(result);
         Assert.DoesNotContain("_sqlUpsert", text);
-        Assert.Contains("UpsertAsync", text);
-        Assert.Contains("throw new global::System.NotSupportedException", text);
+        Assert.DoesNotContain("UpsertAsync", text);
+        Assert.DoesNotContain("NotSupportedException", text);
+        Assert.Contains("public DocStore(global::Inquiry.IInquiry inquiry)", text);
+        Assert.Contains(result.Compilation.GetDiagnostics(), static d => d.Id == "CS8795");
     }
 
     [Fact]
@@ -579,9 +581,8 @@ public sealed partial class InquiryGeneratorTests
                 """),
             additionalDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["INQ095"] = ReportDiagnostic.Suppress });
 
-        // The stub-only fallback fires only when EVERY method is rejected. With a surviving sibling the
-        // upsert is simply not emitted, so the user's `partial` declaration has no implementation and
-        // the build fails on CS8795 — still fail-closed, but by a different mechanism than the stub.
+        // The upsert is not emitted, so the user's `partial` declaration has no implementation and the
+        // build fails on CS8795, the same as when the upsert is the store's only method.
         Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ095");
         var text = GetTenantDocStore(result);
         Assert.DoesNotContain("_sqlUpsert", text);

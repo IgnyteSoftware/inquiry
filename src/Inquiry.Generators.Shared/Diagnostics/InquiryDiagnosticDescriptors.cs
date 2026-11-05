@@ -21,7 +21,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ022–INQ023  Batch & bulk operations       (INQ022 token entity, INQ023 set-based mutation needs [InquiryWhere]) [IN USE]
     //   INQ024–INQ027  Projections + aggregations    (INQ024 no columns, INQ025 not mapped, INQ026 entity mismatch; INQ027 retired in P3 #14) [IN USE]
     //   INQ028–INQ029  Optimistic concurrency        (INQ028 >1 token, INQ029 token==key)  [IN USE]
-    //                       (DB-managed-on-unsupported-dialect and upsert+token reuse INQ006 at emit time, per convention)
+    //                       (DB-managed-on-unsupported-dialect and upsert+token report INQ113)
     //   INQ030–INQ032  Migrations / schema DDL       (INQ030 generated key not integer, INQ031 string key needs Length, INQ032 indexed string needs Length) [IN USE]
     //   INQ033–INQ034  Soft deletes
     //   INQ035         Full-text search              (unsupported by dialect)
@@ -59,6 +59,8 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ096         Mutation target                 (targetless delete, conflicting all/predicate, or unsupported returning mode) [IN USE]
     //   INQ103–INQ105  Relationship keys               (INQ103 auto-junction option on an explicit junction, INQ104 key storage mismatch, INQ105 junction FK target contradicts its position) [IN USE]
     //   INQ109, INQ112  Named predicate binding         (INQ109 invalid [InquiryWhere(Parameter=…)] binding, INQ112 positional criteria share a parameter type) [IN USE]
+    //   INQ111         Store method signature          (static, generic, ref/in/out/scoped parameter, or ref return: the generator cannot reproduce it) [IN USE]
+    //   INQ113         Concurrency-token store shape   (upsert on a token entity, or a database-generated token the dialect cannot emit) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1091,4 +1093,16 @@ internal static class InquiryDiagnosticDescriptors
         "Store method '{0}' binds criteria on '{1}' and '{2}' by position to parameters of type '{3}'. Swapping those parameters still compiles and swaps the filters. Set Parameter = nameof(...) on each value criterion to bind by name.",
         "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq112");
+
+    public static readonly DiagnosticDescriptor StoreMethodSignatureNotSupported = new(
+        "INQ111", "Store method signature cannot be generated",
+        "Store method '{0}' has an unsupported signature: {1}. Inquiry generates only non-generic instance methods with by-value parameters and a by-value return. Declare the method that way, or remove the Inquiry attribute and implement it yourself.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq111");
+
+    public static readonly DiagnosticDescriptor StoreConcurrencyShapeNotSupported = new(
+        "INQ113", "Store concurrency-token shape is not supported",
+        "Store '{0}' cannot generate {1}: {2}.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq113");
 }

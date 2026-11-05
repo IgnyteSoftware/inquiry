@@ -184,6 +184,7 @@ public sealed partial class InquiryGeneratorTests
             .ToDictionary(static generated => generated.HintName, static generated => generated.SourceText.ToString(), StringComparer.Ordinal);
         Assert.Contains("Alpha.UnmappedStore.InquiryStore.g.cs", stores.Keys);
         Assert.Contains("Beta.UnmappedStore.InquiryStore.g.cs", stores.Keys);
-        Assert.All(stores.Values, static generated => Assert.Contains("throw new global::System.NotSupportedException", generated, StringComparison.Ordinal));
+        Assert.All(stores.Values, static generated => Assert.Contains("public UnmappedStore(global::Inquiry.IInquiry inquiry)", generated, StringComparison.Ordinal));
+        Assert.All(stores.Values, static generated => Assert.DoesNotContain("NotSupportedException", generated, StringComparison.Ordinal));
     }
 }

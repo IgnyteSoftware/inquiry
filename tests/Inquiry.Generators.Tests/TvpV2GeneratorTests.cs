@@ -78,7 +78,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("[InquiryColumn(SqlType = \"VARCHAR(20)\")] public System.DateTime Value { get; set; }")]
     [InlineData("[InquiryColumn(SqlType = \"NVARCHAR(20)\", Length = 20)] public string Value { get; set; } = \"\";")]
     [InlineData("[InquiryColumn(SqlType = \"XML\")] public string Value { get; set; } = \"\";")]
-    public void SqlServerInvalidTvpPhysicalMappingReportsInq076AndEmitsUnreachableStub(string property)
+    public void SqlServerInvalidTvpPhysicalMappingReportsInq076AndEmitsNoStub(string property)
     {
         var element = "string";
         if (property.Contains("Guid"))
@@ -107,7 +107,8 @@ public sealed partial class InquiryGeneratorTests
         var generated = string.Join("\n", result.RunResult.GeneratedTrees.Select(static tree => tree.GetText().ToString()));
         Assert.DoesNotContain("CREATE TYPE", generated);
         Assert.DoesNotContain("BindUnsupported", generated);
-        Assert.Contains("throw new global::System.NotSupportedException", generated);
+        Assert.DoesNotContain("NotSupportedException", generated);
+        Assert.Contains(CompileErrors(result), static diagnostic => diagnostic.Id == "CS8795");
     }
 
     [Fact]
@@ -166,7 +167,8 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Good\", values", store);
         Assert.DoesNotContain("InquiryTvpParameter.Bind(_c, \"@Bad\", values", store);
-        Assert.Single(ThrowNotSupportedRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Empty(ThrowNotSupportedRegex().Matches(store));
+        Assert.Contains(CompileErrors(result), static diagnostic => diagnostic.Id == "CS8795");
     }
 
     [Fact]
@@ -241,7 +243,7 @@ public sealed partial class InquiryGeneratorTests
     [Theory]
     [InlineData(ReportDiagnostic.Warn)]
     [InlineData(ReportDiagnostic.Suppress)]
-    public void SqlServerInvalidCollectionFacetEmitsCompileSafeStubOnlyWithProjectWideOptIn(
+    public void SqlServerSuppressedCollectionFacetErrorNeverEmitsAStub(
         ReportDiagnostic unsupportedOperationAction)
     {
         const string source = """
@@ -265,11 +267,13 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.DoesNotContain(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ076");
         Assert.DoesNotContain(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ039");
-        Assert.DoesNotContain(result.Compilation.GetDiagnostics(),
-            static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+
+        // Only INQ039 can produce a stub. Lowering INQ039 does not stub a suppressed provider error.
+        Assert.All(CompileErrors(result), static diagnostic => Assert.Equal("CS8795", diagnostic.Id));
+        Assert.NotEmpty(CompileErrors(result));
         var store = Assert.Single(result.RunResult.GeneratedTrees,
             static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
-        Assert.Contains("throw new global::System.NotSupportedException", store);
+        Assert.DoesNotContain("NotSupportedException", store);
         Assert.DoesNotContain("InquiryTvpParameter.Bind", store);
     }
 
