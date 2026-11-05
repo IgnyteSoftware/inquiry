@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Table names, column names and other attribute strings that contain a line break, tab, NUL or another control character now produce generated code that compiles. Before, a line break produced a compile error in the generated file, and a NUL stopped the generator with warning `CS8785`, so the store had no generated code. The generated string constants keep the exact value you wrote. In the generated documentation, the characters that would break it show as C# escapes, such as `\0`.
+
 ## [1.0.0-preview.13] - 2026-11-02
 
 ### Added

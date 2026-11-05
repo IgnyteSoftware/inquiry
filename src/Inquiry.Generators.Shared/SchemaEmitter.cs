@@ -174,7 +174,7 @@ internal static class SchemaEmitter
             source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.ChunkCount\", \"{manifestChunks.Count}\")] ");
             for (var i = 0; i < manifestChunks.Count; i++)
             {
-                source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.Chunk.{i:D4}\", \"{EscapeCSharpString(manifestChunks[i])}\")] ");
+                source.AppendLine($"[assembly: global::System.Reflection.AssemblyMetadataAttribute(\"Inquiry.SchemaManifest.Chunk.{i:D4}\", \"{GeneratorHelpers.Escape(manifestChunks[i])}\")] ");
             }
         }
         source.AppendLine($"namespace {GeneratedNamespace};");
@@ -362,9 +362,6 @@ internal static class SchemaEmitter
         4 => "set-default",
         _ => "no-action",
     };
-
-    private static string EscapeCSharpString(string value)
-        => value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n");
 
     internal static void ReportRotatingTokenStorageDiagnostics(
         SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)

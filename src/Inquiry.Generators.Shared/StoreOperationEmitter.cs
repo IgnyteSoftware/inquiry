@@ -2991,8 +2991,7 @@ internal static class StoreOperationEmitter
         method = method with { UnsupportedReason = reason };
         var parameters = GetParameterDeclaration(method.Parameters);
         AppendHeader(source, method, parameters, isAsync: false);
-        var escaped = reason.Replace("\\", "\\\\").Replace("\"", "\\\"");
-        source.AppendLine($"        throw new global::System.NotSupportedException(\"{escaped}\");");
+        source.AppendLine($"        throw new global::System.NotSupportedException({GeneratorHelpers.Literal(reason)});");
         source.AppendLine("    }");
     }
 
@@ -3068,7 +3067,7 @@ internal static class StoreOperationEmitter
             member.Elements("returns").Remove();
             member.Add(new XElement("summary", "This operation is unsupported by the selected provider."));
             member.Add(new XElement("returns", "No result: invocation throws synchronously before returning a task or stream."));
-            member.Add(new XElement("exception", new XAttribute("cref", "System.NotSupportedException"), method.UnsupportedReason));
+            member.Add(new XElement("exception", new XAttribute("cref", "System.NotSupportedException"), DocumentationText(method.UnsupportedReason)));
             return;
         }
 
@@ -3175,9 +3174,34 @@ internal static class StoreOperationEmitter
     {
         // Numeric entities display as the original SQL in IntelliSense without duplicating executable
         // parameter and quoted-identifier tokens in source-based generator checks.
-        return new XText(commandText).ToString()
+        return new XText(DocumentationText(commandText)).ToString()
             .Replace("@", "&#64;")
             .Replace("`", "&#96;");
+    }
+
+    // XML rejects some characters, and U+0085, U+2028 and U+2029 end a /// comment line.
+    // Show those characters as C# escapes and keep all other text as written.
+    private static string DocumentationText(string text)
+    {
+        StringBuilder? result = null;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            var paired = char.IsHighSurrogate(c)
+                ? i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])
+                : char.IsLowSurrogate(c) && i > 0 && char.IsHighSurrogate(text[i - 1]);
+            if (!paired && (c is '\u0085' or '\u2028' or '\u2029' || !System.Xml.XmlConvert.IsXmlChar(c)))
+            {
+                result ??= new StringBuilder(text, 0, i, text.Length + 16);
+                result.Append(GeneratorHelpers.Escape(c.ToString()));
+            }
+            else
+            {
+                result?.Append(c);
+            }
+        }
+
+        return result?.ToString() ?? text;
     }
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)

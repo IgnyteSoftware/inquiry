@@ -1,4 +1,5 @@
 using Inquiry.Generators.Abstractions;
+using Inquiry.Generators.Infrastructure;
 
 namespace Inquiry.SqlServer.Analyzer;
 
@@ -76,14 +77,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     {
         var artifact = context.Resolution.Artifact
             ?? throw new System.InvalidOperationException("A successful SQL Server TVP resolution must include an artifact.");
-        return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{EscapeLiteral(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
+        return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
     }
 
     public override ProcedureTvpResolution? ResolveProcedureTvp(ProcedureTvpContext context)
         => SqlServerTvpResolver.ResolveProcedure(context);
-
-    private static string EscapeLiteral(string value)
-        => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public override string QuoteIdentifier(string identifier)
         => "[" + identifier.Replace("]", "]]") + "]";
