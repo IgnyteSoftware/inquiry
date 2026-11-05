@@ -11,7 +11,7 @@ public sealed class Territory
     [InquiryColumn]
     public string TerritoryDescription { get; set; } = string.Empty;
 
-    [InquiryForeignKey("RegionID", "Region", "RegionID")]
+    [InquiryForeignKey(typeof(Region))]
     public int RegionID { get; set; }
 
     [InquiryRelation(nameof(RegionID))]

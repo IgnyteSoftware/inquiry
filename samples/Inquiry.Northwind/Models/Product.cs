@@ -11,10 +11,10 @@ public sealed class Product
     [InquiryColumn(IsIndexed = true, Length = 40)]
     public string ProductName { get; set; } = string.Empty;
 
-    [InquiryForeignKey("SupplierID", "Suppliers", "SupplierID", IsIndexed = true)]
+    [InquiryForeignKey(typeof(Supplier), IsIndexed = true)]
     public int? SupplierID { get; set; }
 
-    [InquiryForeignKey("CategoryID", "Categories", "CategoryID", IsIndexed = true)]
+    [InquiryForeignKey(typeof(Category), IsIndexed = true)]
     public int? CategoryID { get; set; }
 
     [InquiryColumn]

@@ -6,10 +6,10 @@ namespace Inquiry.Northwind.Models;
 public sealed class EmployeeTerritory
 {
     [InquiryKey("EmployeeID")]
-    [InquiryForeignKey("EmployeeID", "Employees", "EmployeeID")]
+    [InquiryForeignKey(typeof(Employee))]
     public int EmployeeID { get; set; }
 
     [InquiryKey("TerritoryID", Length = 40)]
-    [InquiryForeignKey("TerritoryID", "Territories", "TerritoryID")]
+    [InquiryForeignKey(typeof(Territory))]
     public string TerritoryID { get; set; } = string.Empty;
 }
