@@ -82,4 +82,10 @@ internal sealed class ResolvedPredicatePlan
 
     /// <summary>The method-parameter index of each plain SET column, in SET-column order.</summary>
     public IReadOnlyList<int> SetParameterIndexes { get; init; } = System.Array.Empty<int>();
+
+    /// <summary>For an offset-paged select, the logical bind name of the offset. Null otherwise.</summary>
+    public string? OffsetParameterName { get; init; }
+
+    /// <summary>For an offset-paged select, the logical bind name of the limit. Null otherwise.</summary>
+    public string? LimitParameterName { get; init; }
 }

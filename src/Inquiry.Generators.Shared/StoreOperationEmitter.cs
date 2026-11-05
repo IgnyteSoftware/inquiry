@@ -1242,8 +1242,8 @@ internal static class StoreOperationEmitter
         if (includePaging)
         {
             var pi = plan.Bindings.Count;
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__offset", method.Parameters[method.Parameters.Count - 3].Name);
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__limit", method.Parameters[method.Parameters.Count - 2].Name);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.OffsetParameterName!, method.Parameters[method.Parameters.Count - 3].Name);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.LimitParameterName!, method.Parameters[method.Parameters.Count - 2].Name);
         }
         source.AppendLine("            });");
     }
@@ -1343,8 +1343,8 @@ internal static class StoreOperationEmitter
 
     /// <summary>
     /// Emits an ordered and/or offset-paged buffered select. Binds the field/filter parameters (for
-    /// SelectAllByField) and, when offset-paged, the synthetic <c>@__offset</c>/<c>@__limit</c> int
-    /// parameters through an immutable generated command and static binder.
+    /// SelectAllByField) and, when offset-paged, the offset and limit int parameters under the names in
+    /// <paramref name="plan"/>, through an immutable generated command and static binder.
     /// </summary>
     private static void EmitOffsetPaged(
         StringBuilder source,
@@ -1403,8 +1403,8 @@ internal static class StoreOperationEmitter
         {
             var offsetArg = method.Parameters[fieldColumns.Count].Name;
             var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__offset", offsetArg);
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, "__limit", limitArg);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.OffsetParameterName!, offsetArg);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.LimitParameterName!, limitArg);
             // The limit is the exact maximum row count, so pre-size the result list (#61).
             pagedCapacityArg = $", capacityHint: {method.Parameters[fieldColumns.Count + 1].Name}";
         }

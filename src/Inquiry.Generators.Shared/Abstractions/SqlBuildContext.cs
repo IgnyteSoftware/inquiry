@@ -27,10 +27,17 @@ public sealed class SqlBuildContext
     }
 
     internal static string GlobalFilterParameterName(IEnumerable<IColumn> columns, IColumn filter, ISet<string> allocated)
+        => SyntheticParameterName(columns, "__gf_" + filter.PropertyName, allocated);
+
+    /// <summary>
+    /// A generated bind name that starts as <paramref name="baseName"/> and gains leading underscores
+    /// until no mapped property and no name in <paramref name="allocated"/> uses it, ignoring case.
+    /// </summary>
+    internal static string SyntheticParameterName(IEnumerable<IColumn> columns, string baseName, ISet<string>? allocated = null)
     {
-        var nameBuilder = new StringBuilder("__gf_").Append(filter.PropertyName);
-        var name = nameBuilder.ToString();
-        while (allocated.Contains(name) ||
+        var nameBuilder = new StringBuilder(baseName);
+        var name = baseName;
+        while (allocated?.Contains(name) == true ||
             columns.Any(c => string.Equals(c.PropertyName, name, StringComparison.OrdinalIgnoreCase)))
         {
             name = nameBuilder.Insert(0, '_').ToString();
