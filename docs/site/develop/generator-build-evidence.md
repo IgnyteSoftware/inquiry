@@ -26,7 +26,7 @@ The five BenchmarkDotNet operations are:
 - A mapped-column edit in `Model1`. `Model0` has a relation to `Model1`, so this
   edit also reaches a related model.
 - The same mapped-column edit in `Model2`, which no relation reaches.
-- A related foreign-key column and global-filter edit in that model.
+- A related foreign-key column and global-filter edit in `Model1`.
 
 Every edit invocation starts from the same unchanged primed driver. Reassigning
 the driver after an invocation would measure repeated unchanged-input cache hits
