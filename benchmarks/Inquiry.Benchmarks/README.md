@@ -279,6 +279,31 @@ the ordinal baseline, including wide rows, a large final column read first, and 
 disposal. Reordered columns and the class path add no measurable cost, and repeated reads of one
 result shape allocate no map.
 
+### Cancelable caller tokens ([#507](https://github.com/IgnyteSoftware/inquiry/issues/507))
+
+`CancelableTokenBenchmarks` exists in the SQLite suite and in each provider project (SQL Server,
+PostgreSQL, MySQL, MariaDB, Oracle). It runs a point read (`ShipperStore.SelectByKeyAsync`), a non-query
+(`ShipperStore.UpdateAsync` on a fixed key) and a scalar (`IInquiry.ExecuteScalarAsync<string>`), each
+against an ADO.NET baseline that passes the same token to every driver call. `TokenMode` picks the
+token: `None` is the default token, `Reused` is one never-cancelled source for the whole run, and `Fresh`
+is a new source per call, the per-request shape of ASP.NET Core.
+
+Compare a cancelable mode with `None` to see what the token costs. The ADO.NET legs show the driver's own
+cost, so `(Inquiry cancelable − Inquiry None) − (ADO.NET cancelable − ADO.NET None)` is what Inquiry adds.
+With `Reused`, a registration reuses a callback node from the source's free list. With `Fresh`, each
+registration that Inquiry adds costs one more node.
+
+`CancellationHelperBenchmarks` (SQLite suite only) measures the cancellation race helper on its own,
+against awaiting the same task directly. `Completed` is the task shape that Microsoft.Data.Sqlite returns.
+`Pending` is the shape of a networked driver, which SQLite cannot show.
+
+```powershell
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*CancelableTokenBenchmarks*" "*CancellationHelperBenchmarks*"
+dotnet run -c Release -f net10.0 -r win-x64 --project benchmarks\Inquiry.Benchmarks.PostgreSql -- --filter "*CancelableTokenBenchmarks*" --inProcess
+```
+
+Run each provider project the same way. `--inProcess` lets the cases share one container.
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,

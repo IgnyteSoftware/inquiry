@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Results of 16 rows or fewer, and lists whose capacity hint covers the result, such as paged reads, allocate exactly as before.
   - Results of 28 to 32 rows without a hint allocate up to 40 bytes more. A hint smaller than the result can cost the same 40 bytes near other sizes.
   - The first large read of an entity type on a thread, and the first one after the pool releases idle arrays, allocates the rented arrays as well.
+- Non-query, scalar and bulk-insert calls that receive a cancelable token, such as an ASP.NET Core request token, no longer allocate anything beyond the token registration in the steady state. Before, each call allocated a race object, a boxed registration and up to three async state machines, even when the driver had already finished. Inquiry reuses the object that tracks a running call, so a call that starts while many others are in flight can still allocate one. The cancellation behaviour is unchanged: cancellation that beats the driver still throws `OperationCanceledException` with the caller's token, and a result that beat the cancellation is still returned.
 
 ### Fixed
 

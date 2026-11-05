@@ -1439,7 +1439,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (HasInterceptors)
             {
@@ -1511,7 +1511,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (HasInterceptors)
             {
@@ -1596,7 +1596,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
 
             // No Prepare: a procedure call with output parameters runs once; preparing it adds a
             // round trip with no reuse benefit.
-            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             // ADO.NET populates output / return-value DbParameters after ExecuteNonQuery; read the
             // named one back and convert it the same way as a scalar result.
@@ -1668,7 +1668,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                 await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
             }
 
-            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
             var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
             if (interceptorCommand is not null)
             {
@@ -1819,7 +1819,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (interceptorCommand is not null)
             {
@@ -1889,7 +1889,7 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             }
 
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-            var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+            var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
             if (interceptorCommand is not null)
             {
