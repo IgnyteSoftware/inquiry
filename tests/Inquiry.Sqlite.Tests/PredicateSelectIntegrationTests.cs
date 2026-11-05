@@ -101,6 +101,19 @@ public sealed class PredicateSelectIntegrationTests
     }
 
     [Fact]
+    public async Task CountAppliesItsCriteria()
+    {
+        await using var harness = await SeedAsync();
+        var products = harness.GetRequiredService<ProductStore>();
+
+        Assert.Equal(5, await products.CountAsync());
+        Assert.Equal(1, await products.CountWithoutCategoryAsync());
+        Assert.Equal(2, await products.CountInCategoryAsync(2));
+        // The specification excludes discontinued rows and rows with no stock.
+        Assert.Equal(3, await products.CountAvailableStockAsync(true, 1));
+    }
+
+    [Fact]
     public async Task OrGroupMatchesEitherCriterion()
     {
         await using var harness = await SeedAsync();

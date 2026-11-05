@@ -108,6 +108,18 @@ public partial class ProductStore : InquiryStore<Product>
     [InquiryCount]
     public partial Task<long> CountAsync(CancellationToken cancellationToken = default);
 
+    [InquiryCount]
+    [InquiryWhere("CategoryID", Compare.IsNull)]
+    public partial Task<long> CountWithoutCategoryAsync(CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    [InquiryWhere("CategoryID")]
+    public partial Task<long> CountInCategoryAsync(int? categoryID, CancellationToken cancellationToken = default);
+
+    [InquiryCount]
+    [AvailableStock]
+    public partial Task<long> CountAvailableStockAsync(bool discontinued, short? threshold, CancellationToken cancellationToken = default);
+
     [InquiryAggregate(InquiryAggregateFunction.Max, "UnitPrice")]
     public partial Task<decimal?> MaxUnitPriceAsync(CancellationToken cancellationToken = default);
 

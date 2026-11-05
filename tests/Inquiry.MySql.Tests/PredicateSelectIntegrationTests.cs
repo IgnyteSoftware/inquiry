@@ -121,6 +121,21 @@ public sealed class PredicateSelectIntegrationTests
     }
 
     [SkippableFact]
+    public async Task CountAppliesItsCriteria()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await MySqlTestHarness.CreateAsync(_fixture.AdminConnectionString, "predcount");
+        var (_, c2) = await SeedAsync(harness);
+        var products = harness.GetRequiredService<ProductStore>();
+
+        Assert.Equal(5, await products.CountAsync());
+        Assert.Equal(1, await products.CountWithoutCategoryAsync());
+        Assert.Equal(2, await products.CountInCategoryAsync(c2));
+        // The specification excludes discontinued rows and rows with no stock.
+        Assert.Equal(3, await products.CountAvailableStockAsync(true, 1));
+    }
+
+    [SkippableFact]
     public async Task OrGroupMatchesEitherCriterion()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
