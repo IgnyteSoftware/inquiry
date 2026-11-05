@@ -300,17 +300,18 @@ public sealed class InquiryGridReader : IAsyncDisposable
         where TMaterializer : struct, IInquiryEntityMaterializer<TEntity>
     {
         EnsureResultSet();
+        object? rows = null;
         try
         {
             materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
-            var list = new List<TEntity>();
+            rows = InquiryBufferedList<TEntity>.Start(-1);
             while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                list.Add(materializer.Materialize(_reader));
+                InquiryBufferedList<TEntity>.Add(ref rows, materializer.Materialize(_reader));
             }
 
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
-            return list;
+            return InquiryBufferedList<TEntity>.Complete(rows);
         }
         catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
         {
@@ -321,6 +322,10 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             await FailAsync(exception, cancellationToken).ConfigureAwait(false);
             throw;
+        }
+        finally
+        {
+            InquiryBufferedList<TEntity>.Release(rows);
         }
     }
 

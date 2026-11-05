@@ -726,6 +726,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var readBehavior = materializer.IsInquirySequentialAccessSafe ? SequentialReadBehavior : ReadBehavior;
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            object? rows = null;
             try
             {
                 dbCommand.Transaction = _transaction;
@@ -740,10 +741,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 var reader = await dbCommand.ExecuteReaderAsync(readBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 materializer = InquiryMaterializerBinding.Bind(materializer, reader);
-                var list = new List<T>();
+                rows = InquiryBufferedList<T>.Start(-1);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    list.Add(materializer.Materialize(reader));
+                    InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
                 }
 
                 if (HasInterceptors)
@@ -751,7 +752,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 }
 
-                return list;
+                return InquiryBufferedList<T>.Complete(rows);
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -777,6 +778,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             finally
             {
+                InquiryBufferedList<T>.Release(rows);
                 await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
@@ -802,6 +804,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
         {
             var dbCommand = CreateCommand();
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
+            object? rows = null;
             try
             {
                 dbCommand.Transaction = _transaction;
@@ -816,10 +819,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
-                var list = capacityHint > 0 ? new List<T>(capacityHint) : new List<T>();
+                rows = InquiryBufferedList<T>.Start(capacityHint);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    list.Add(materializer.Materialize(reader));
+                    InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
                 }
 
                 if (HasInterceptors)
@@ -827,7 +830,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 }
 
-                return list;
+                return InquiryBufferedList<T>.Complete(rows);
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -853,6 +856,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             finally
             {
+                InquiryBufferedList<T>.Release(rows);
                 await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
@@ -1248,6 +1252,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             var commandResources = InquiryCommandResources.CreateScope(dbCommand);
             var interceptorCommand = HasActiveInterceptors ? new InquiryCommand(commandText, commandType) : null;
 
+            object? rows = null;
             try
             {
                 dbCommand.Transaction = _transaction;
@@ -1265,10 +1270,10 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 var reader = await dbCommand.ExecuteReaderAsync(SequentialReadBehavior, cancellationToken).ConfigureAwait(false);
                 commandResources.OwnReader(reader);
                 materializer = InquiryMaterializerBinding.Bind<T, TMaterializer>(materializer, reader);
-                var list = capacityHint >= 0 ? new List<T>(capacityHint) : new List<T>();
+                rows = InquiryBufferedList<T>.Start(capacityHint);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    list.Add(materializer.Materialize(reader));
+                    InquiryBufferedList<T>.Add(ref rows, materializer.Materialize(reader));
                 }
 
                 if (interceptorCommand is not null)
@@ -1276,7 +1281,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 }
 
-                return list;
+                return InquiryBufferedList<T>.Complete(rows);
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -1302,6 +1307,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
             }
             finally
             {
+                InquiryBufferedList<T>.Release(rows);
                 await commandResources.DisposeAsync().ConfigureAwait(false);
             }
         }
