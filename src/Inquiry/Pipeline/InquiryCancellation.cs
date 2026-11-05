@@ -1,8 +1,13 @@
+using System.Threading.Tasks.Sources;
+
 namespace Inquiry.Pipeline;
 
 /// <summary>Normalizes provider cancellation exceptions at the pipeline boundary.</summary>
 internal static class InquiryCancellation
 {
+    private const string CompletedAfterCancellationMessage =
+        "The operation was canceled while the command was in flight; the provider reported completion after cancellation was requested, so the outcome on the server is indeterminate.";
+
     internal static bool RequiresCallerToken(
         OperationCanceledException exception,
         CancellationToken callerToken)
@@ -32,6 +37,7 @@ internal static class InquiryCancellation
     /// that cancelled mid-flight would observe a successful result for work the server abandoned.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The enforcement is a race, not a post-await token check. A bare
     /// <c>ThrowIfCancellationRequested()</c> after the await would also fire when the token cancels
     /// AFTER the provider completed but before this continuation resumes, misreporting a genuinely
@@ -42,11 +48,22 @@ internal static class InquiryCancellation
     /// outcome ADO.NET drivers themselves report after an in-flight cancel. When the two land within
     /// the same visibility window (sub-microsecond), either resolution can win; both directions sit
     /// inside the indeterminacy the driver already imposes, so neither is a misreport.
+    /// </para>
+    /// <para>
+    /// Every cancelable request token takes this path, so it must cost no more than the token
+    /// registration itself (#507). A provider task that already completed cannot have lost the race and
+    /// is returned as is. A pending one is raced by a pooled <see cref="CallerTokenRace{T}"/>, so the
+    /// steady state allocates nothing beyond the registration.
+    /// </para>
     /// </remarks>
+    internal static ValueTask<T> AwaitExecutionAsync<T>(Task<T> providerTask, CancellationToken callerToken)
+        => !callerToken.CanBeCanceled || providerTask.IsCompleted
+            ? new ValueTask<T>(providerTask)
+            : CallerTokenRace<T>.Start(providerTask, callerToken);
+
+    /// <summary><see cref="AwaitExecutionAsync{T}"/> for callers that need a <see cref="Task{TResult}"/>.</summary>
     internal static Task<T> AwaitEnforcingCallerToken<T>(Task<T> providerTask, CancellationToken callerToken)
-        => !callerToken.CanBeCanceled
-            ? providerTask
-            : AwaitEnforcingCallerTokenCore(providerTask, callerToken);
+        => AwaitExecutionAsync(providerTask, callerToken).AsTask();
 
     /// <summary>
     /// Register-first variant for provider awaits with no downstream token check to backstop them
@@ -68,14 +85,6 @@ internal static class InquiryCancellation
         => !callerToken.CanBeCanceled
             ? providerTask
             : AwaitEnforcingCallerTokenCore(providerTask, callerToken);
-
-    private static async Task<T> AwaitEnforcingCallerTokenCore<T>(Task<T> providerTask, CancellationToken callerToken)
-    {
-        // The re-await is on an already-settled task (the core either completed it or threw), so it
-        // resolves synchronously to the result.
-        await AwaitEnforcingCallerTokenCore((Task)providerTask, callerToken).ConfigureAwait(false);
-        return await providerTask.ConfigureAwait(false);
-    }
 
     private static async Task AwaitEnforcingCallerTokenCore(Func<CancellationToken, Task> startProviderTask, CancellationToken callerToken)
     {
@@ -128,9 +137,7 @@ internal static class InquiryCancellation
 
         if (race.CancelledWhilePending)
         {
-            throw new OperationCanceledException(
-                "The operation was canceled while the command was in flight; the provider reported completion after cancellation was requested, so the outcome on the server is indeterminate.",
-                callerToken);
+            throw new OperationCanceledException(CompletedAfterCancellationMessage, callerToken);
         }
     }
 
@@ -172,6 +179,140 @@ internal static class InquiryCancellation
             if (providerTask is null || !providerTask.IsCompleted)
             {
                 Volatile.Write(ref _cancelledWhilePending, 1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The cancellation race for one pending provider task, and the source of the
+    /// <see cref="ValueTask{TResult}"/> that reports its outcome. One instance is both, and instances are
+    /// reused, so a steady stream of calls allocates nothing here.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "The registration is disposed when the provider task completes, before the instance can be reused.")]
+    private sealed class CallerTokenRace<T> : IValueTaskSource<T>
+    {
+        // One slot per thread and one shared slot. A missed rent allocates a new instance; a return to
+        // two full slots drops the instance, so the pool never grows.
+        [ThreadStatic]
+        private static CallerTokenRace<T>? _threadCached;
+        private static CallerTokenRace<T>? _sharedCached;
+
+        private readonly Action _onProviderCompleted;
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Major Code Smell", "S3459", Justification = "A mutable struct that its own methods change; it is never assigned as a whole.")]
+        private ManualResetValueTaskSourceCore<T> _completion;
+        private Task<T>? _providerTask;
+        private CancellationToken _callerToken;
+        private CancellationTokenRegistration _registration;
+        private int _cancelledWhilePending;
+
+        private CallerTokenRace() => _onProviderCompleted = OnProviderCompleted;
+
+        internal static ValueTask<T> Start(Task<T> providerTask, CancellationToken callerToken)
+        {
+            var race = _threadCached;
+            if (race is not null)
+            {
+                _threadCached = null;
+            }
+            else
+            {
+                race = Interlocked.Exchange(ref _sharedCached, null) ?? new CallerTokenRace<T>();
+            }
+
+            race._providerTask = providerTask;
+            race._callerToken = callerToken;
+            race._registration = callerToken.UnsafeRegister(
+                static state => ((CallerTokenRace<T>)state!).RecordIfPending(), race);
+            providerTask.ConfigureAwait(false).GetAwaiter().UnsafeOnCompleted(race._onProviderCompleted);
+            return new ValueTask<T>(race, race._completion.Version);
+        }
+
+        private void RecordIfPending()
+        {
+            // Same rule as CancellationRace.RecordIfPending: record only while the provider task is pending.
+            if (!_providerTask!.IsCompleted)
+            {
+                Volatile.Write(ref _cancelledWhilePending, 1);
+            }
+        }
+
+        private void OnProviderCompleted()
+        {
+            // Dispose waits for a callback that is running on another thread, so the flag read after it
+            // is final: a callback that saw the task pending always wins.
+            _registration.Dispose();
+            var cancelledWhilePending = Volatile.Read(ref _cancelledWhilePending) == 1;
+
+            T result = default!;
+            Exception? error = null;
+            try
+            {
+                result = _providerTask!.GetAwaiter().GetResult();
+                if (cancelledWhilePending)
+                {
+                    error = new OperationCanceledException(CompletedAfterCancellationMessage, _callerToken);
+                }
+            }
+            catch (Exception exception)
+            {
+                // A driver-native error after an in-flight cancel becomes the caller's OCE, as in
+                // AwaitRegisteredAsync. Provider OCEs pass through for the pipeline's catch to normalize.
+                error = cancelledWhilePending && exception is not OperationCanceledException
+                    ? NormalizeNativeError(exception, _callerToken)
+                    : exception;
+            }
+
+            // The consumer can run inline here and reuse this instance, so nothing touches it afterwards.
+            if (error is null)
+            {
+                _completion.SetResult(result);
+            }
+            else
+            {
+                _completion.SetException(error);
+            }
+        }
+
+        public T GetResult(short token)
+        {
+            try
+            {
+                return _completion.GetResult(token);
+            }
+            finally
+            {
+                // A stale token means a second read of the same result; that must not return the instance twice.
+                if (token == _completion.Version)
+                {
+                    Reset();
+                    Cache(this);
+                }
+            }
+        }
+
+        public ValueTaskSourceStatus GetStatus(short token) => _completion.GetStatus(token);
+
+        public void OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+            => _completion.OnCompleted(continuation, state, token, flags);
+
+        private void Reset()
+        {
+            _completion.Reset();
+            _providerTask = null;
+            _callerToken = default;
+            _registration = default;
+            _cancelledWhilePending = 0;
+        }
+
+        private static void Cache(CallerTokenRace<T> race)
+        {
+            if (_threadCached is null)
+            {
+                _threadCached = race;
+            }
+            else
+            {
+                Interlocked.CompareExchange(ref _sharedCached, race, null);
             }
         }
     }

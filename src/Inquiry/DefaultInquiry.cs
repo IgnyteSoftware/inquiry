@@ -302,7 +302,7 @@ internal sealed class DefaultInquiry : IInquiry
             // surfaced after the caller's token fired (MySqlConnector wraps the cancel in a
             // MySqlException during LOAD DATA LOCAL INFILE) normalizes to an OCE carrying the
             // caller's token, and completion that beat the token is trusted.
-            var rowCount = await InquiryCancellation.AwaitEnforcingCallerToken(
+            var rowCount = await InquiryCancellation.AwaitExecutionAsync(
                 copier.BulkInsertAsync(definition, rows, context, cancellationToken),
                 cancellationToken).ConfigureAwait(false);
             RecordBulkInsertCompletion(activity, startTimestamp, dbSystem, enlisted, rowCount);

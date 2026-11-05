@@ -1443,7 +1443,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
                 if (HasInterceptors)
                 {
@@ -1534,7 +1534,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
                 if (interceptorCommand is not null)
                 {
@@ -1597,7 +1597,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
                 if (HasInterceptors)
                 {
@@ -1683,7 +1683,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(command, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
-                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
                 var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
 
                 if (HasInterceptors)
@@ -1760,7 +1760,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                     await InvokeExecutingAsync(interceptorCommand, dbCommand, cancellationToken).ConfigureAwait(false);
                 }
 
-                var recordsAffected = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var recordsAffected = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteNonQueryAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
                 var readBack = ScalarConvert.From<T>(InquiryParameterBinder.FindByLogicalName(dbCommand.Parameters, readBackParameterName).Value);
                 if (interceptorCommand is not null)
                 {
@@ -1926,7 +1926,7 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 }
 
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
-                var value = await InquiryCancellation.AwaitEnforcingCallerToken(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
+                var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
                 if (interceptorCommand is not null)
                 {

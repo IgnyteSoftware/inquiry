@@ -39,7 +39,7 @@ public class CancellationHelperBenchmarks
 
     [BenchmarkCategory("CompletedObject"), Benchmark]
     public async Task<object?> CompletedObject_Helper()
-        => await InquiryCancellation.AwaitEnforcingCallerToken(_completedObject, _token);
+        => await InquiryCancellation.AwaitExecutionAsync(_completedObject, _token);
 
     [BenchmarkCategory("PendingInt"), Benchmark(Baseline = true)]
     public async Task<int> PendingInt_Direct()
@@ -54,7 +54,7 @@ public class CancellationHelperBenchmarks
     public async Task<int> PendingInt_Helper()
     {
         var provider = new TaskCompletionSource<int>();
-        var pending = InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, _token);
+        var pending = InquiryCancellation.AwaitExecutionAsync(provider.Task, _token);
         provider.SetResult(_intValue);
         return await pending;
     }
@@ -72,7 +72,7 @@ public class CancellationHelperBenchmarks
     public async Task<object?> PendingObject_Helper()
     {
         var provider = new TaskCompletionSource<object?>();
-        var pending = InquiryCancellation.AwaitEnforcingCallerToken(provider.Task, _token);
+        var pending = InquiryCancellation.AwaitExecutionAsync(provider.Task, _token);
         provider.SetResult(_scalarValue);
         return await pending;
     }
