@@ -311,6 +311,15 @@ public sealed class InquiryGridReader : IAsyncDisposable
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return list;
         }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            // Generated paged results read through here (#403). Keep the caller's token, as the
+            // single-command list path does.
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
+        }
         catch (Exception exception)
         {
             await FailAsync(exception, cancellationToken).ConfigureAwait(false);
@@ -335,6 +344,13 @@ public sealed class InquiryGridReader : IAsyncDisposable
 
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return result!;
+        }
+        catch (OperationCanceledException exception)
+            when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
+        {
+            var normalized = InquiryCancellation.AssociateWithCallerToken(exception, cancellationToken);
+            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
+            throw normalized;
         }
         catch (Exception exception)
         {
