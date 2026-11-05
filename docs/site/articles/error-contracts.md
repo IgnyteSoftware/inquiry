@@ -17,7 +17,7 @@ replace every failure with a universal exception.
 | Invalid arguments or configuration | Argument exceptions or `InvalidOperationException`, depending on the API and failed guard. Generated methods do not promise uniform null validation for every input. |
 | Concurrency-token update/delete matches no row | Existing false/null result, or `InquiryConcurrencyException` when `ThrowOnConcurrencyConflict` is enabled. |
 | Database failure | The provider's exception and diagnostic fields, normally a `DbException` subtype. Preserve these when logging or classifying failures. |
-| Cancellation | `OperationCanceledException` (including `TaskCanceledException`) when cancellation is observed. A provider failure after caller cancellation can be wrapped with its original exception as the inner exception, even when its cause was not cancellation. Without caller cancellation, a provider timeout retains its provider identity. |
+| Cancellation | `OperationCanceledException` (including `TaskCanceledException`) when cancellation is observed. A provider failure after caller cancellation can be wrapped with its original exception as the inner exception, even when its cause was not cancellation. Without caller cancellation, a provider timeout retains its provider identity. If a grid read is cancelled and the grid's cleanup then also fails, the `OperationCanceledException` arrives as the first inner exception of an `AggregateException` (see [Cleanup failures](#cleanup-failures)). |
 | Disposed transaction/grid or invalid transaction/grid state | `ObjectDisposedException` or `InvalidOperationException` according to the state guard. |
 | Unsupported generated operation | Normally an `INQ039` build error. Deliberately configuring that diagnostic as warning/none project-wide emits a stub that throws `NotSupportedException` synchronously. Only methods that report `INQ039` get a stub. |
 | Rejected store declaration | Any other Inquiry error that rejects a store method or a whole store, such as an invalid entity or an unsupported method signature, fails the build. Suppressing or lowering it does not produce a stub or a working method: the rejected method has no generated implementation and reports CS8795. See [severity and suppression](diagnostics.md#severity-and-suppression). |
@@ -45,10 +45,14 @@ multiple failures produce `AggregateException`. On paths that capture both execu
 failures, the aggregate contains the original execution exception first, followed by cleanup failures.
 Inspect inner exceptions to retain provider error identity.
 
-A separately owned grid is different: a read failure and a later `DisposeAsync` failure are separate
-operations. C# `await using` can replace a pending read exception with the disposal exception. If both
-must be retained, capture the read failure and disposal failure separately in the caller. Do not assume
-every exception observed at the end of enumeration describes the database command itself.
+A grid keeps the first read failure. If a later `DisposeAsync` then fails, it throws
+`AggregateException` with the read failure first, followed by the cleanup failures, even when only one
+cleanup step failed. The read failure includes a cancellation: the `OperationCanceledException`, with the
+caller's token, is the first inner exception. This applies to every grid, including those that generated
+eager-load and `InquiryPagedResult<T>` methods dispose with `await using`, so a cleanup failure no longer
+replaces the read failure. A caller that catches `OperationCanceledException` around such a method must
+also inspect an `AggregateException` when cleanup can fail. Do not assume every exception observed at the
+end of enumeration describes the database command itself.
 
 ## Writes and uncertain outcomes
 
