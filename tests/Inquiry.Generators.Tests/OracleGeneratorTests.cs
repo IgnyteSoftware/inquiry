@@ -363,10 +363,11 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         Assert.Contains("WHERE LeadingOffset = :iq1$offset$87567ea371cd6f", text);
-        Assert.Contains("OFFSET :iq1$offset$f951564368e298 ROWS FETCH NEXT :iq1$limitx$d661ce51163918 ROWS ONLY", text);
+        // The entity maps a property named __offset, so the paging name moves to ___offset (#543).
+        Assert.Contains("OFFSET :iq1$offset$b7408137253127 ROWS FETCH NEXT :iq1$limitx$d661ce51163918 ROWS ONLY", text);
         Assert.DoesNotContain("OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY", text);
         Assert.Contains("_p0.ParameterName = \"iq1$offset$87567ea371cd6f\";", text);
-        Assert.Contains("_p0.ParameterName = \"iq1$offset$f951564368e298\";", text);
+        Assert.Contains("_p0.ParameterName = \"iq1$offset$b7408137253127\";", text);
         Assert.Contains("_p1.ParameterName = \"iq1$limitx$d661ce51163918\";", text);
     }
 

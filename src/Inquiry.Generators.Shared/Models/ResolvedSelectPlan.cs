@@ -25,4 +25,10 @@ internal sealed class ResolvedSelectPlan
     /// For keyset paging, the resolved cursor key columns (most-significant first). Empty otherwise.
     /// </summary>
     public IReadOnlyList<ColumnData> KeysetColumns { get; init; } = System.Array.Empty<ColumnData>();
+
+    /// <summary>For offset paging, the logical bind name of the offset. Null otherwise.</summary>
+    public string? OffsetParameterName { get; init; }
+
+    /// <summary>For offset paging, the logical bind name of the limit. Null otherwise.</summary>
+    public string? LimitParameterName { get; init; }
 }

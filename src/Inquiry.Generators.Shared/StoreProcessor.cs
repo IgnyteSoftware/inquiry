@@ -3219,6 +3219,8 @@ internal static class StoreProcessor
                     SqlFieldName = "_sql_" + method.MemberName,
                     OrderColumns = orderColumns,
                     Pagination = method.Pagination,
+                    OffsetParameterName = predicatePlan!.OffsetParameterName,
+                    LimitParameterName = predicatePlan.LimitParameterName,
                 };
             }
 
@@ -3468,11 +3470,14 @@ internal static class StoreProcessor
                 return false;
             }
 
+            var paged = method.Pagination == Pagination.Offset;
             selectPlan = new ResolvedSelectPlan
             {
                 SqlFieldName = "_sql_" + method.MemberName,
                 OrderColumns = orderColumns,
                 Pagination = method.Pagination,
+                OffsetParameterName = paged ? OffsetPagingParameterName(entity) : null,
+                LimitParameterName = paged ? LimitPagingParameterName(entity) : null,
             };
 
             return true;
@@ -3924,6 +3929,17 @@ internal static class StoreProcessor
                 !method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, reservedName, StringComparison.Ordinal))));
         }
 
+        // Paging names are reserved after the filter above, because a C# parameter may use one (#543).
+        string? offsetName = null;
+        string? limitName = null;
+        if (method.Operation == StoreOperation.SelectAllByPredicate && method.Pagination == Pagination.Offset)
+        {
+            offsetName = OffsetPagingParameterName(entity);
+            limitName = LimitPagingParameterName(entity);
+            reservedIgnoringCase.Add(offsetName);
+            reservedIgnoringCase.Add(limitName);
+        }
+
         foreach (var predicate in method.Predicates.AsImmutableArray())
         {
             if (predicate.OpenGroups < 0 || predicate.CloseGroups < 0)
@@ -4122,7 +4138,11 @@ internal static class StoreProcessor
             ReportPositionalSameType();
         }
 
-        plan = new ResolvedPredicatePlan(predicates, bindings, hasIn);
+        plan = new ResolvedPredicatePlan(predicates, bindings, hasIn)
+        {
+            OffsetParameterName = offsetName,
+            LimitParameterName = limitName,
+        };
         return true;
 
         bool TryResolveNamedParameters(PredicateData predicate, int arity, out int lower, out int upper)
@@ -4838,9 +4858,16 @@ internal static class StoreProcessor
     // Synthetic paging parameter LOGICAL names (no sigil). The SQL text takes the dialect sigil and any
     // dialect-specific safe-name transform via SqlBuilder.ParameterName; the generated paging binder emits
     // the matching '@__…' runtime parameter, which FinalizeCommand reconciles on Oracle.
-    private const string OffsetLogicalName = "__offset";
-    private const string LimitLogicalName = "__limit";
     private const string PageSizeLogicalName = "__pageSize";
+
+    // Offset and limit names avoid every mapped property name, so a field read or criterion on a property
+    // named __offset never shares a parameter with the page bounds (#543). Keyset methods bind no
+    // property-named value, so their names stay fixed.
+    private static string OffsetPagingParameterName(EntityData entity)
+        => SqlBuildContext.SyntheticParameterName(entity.Columns.AsImmutableArray(), "__offset");
+
+    private static string LimitPagingParameterName(EntityData entity)
+        => SqlBuildContext.SyntheticParameterName(entity.Columns.AsImmutableArray(), "__limit");
 
     private static string KeysetCursorLogicalName(int index) => "__cursor" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
@@ -4893,7 +4920,7 @@ internal static class StoreProcessor
         else
         {
             options = plan.Pagination == Pagination.Offset
-                ? new SqlSelectOptions(orderTerms, offsetParameter: sqlBuilder.ParameterName(OffsetLogicalName), limitParameter: sqlBuilder.ParameterName(LimitLogicalName))
+                ? new SqlSelectOptions(orderTerms, offsetParameter: sqlBuilder.ParameterName(plan.OffsetParameterName!), limitParameter: sqlBuilder.ParameterName(plan.LimitParameterName!))
                 : new SqlSelectOptions(orderTerms);
 
             if (predicatePlan is not null)
