@@ -61,7 +61,8 @@ Two invariants keep the comparison honest:
   per call (pooled underneath by the provider). EF Core therefore uses a **non-pooled**
   `DbContextFactory` (`AddDbContextFactory`, *not* `AddPooledDbContextFactory`) so it pays
   per-operation context construction instead of reusing warm context state the other three legs
-  never get.
+  never get. The one exception is the `_EfCoreTuned` legs of `ShipperReadCompetitorBenchmarks`, which
+  pool contexts on purpose (see below).
 
 **Gate:** in the in-process SQLite suite, no non-baseline leg should print a `Ratio` below
 ~1.00 (modulo noise). A wrapper under 1.00 means the baseline has drifted out of parity — fix
@@ -121,6 +122,47 @@ BenchmarkDotNet measures allocation on an extra call after the measured one.
 ```powershell
 dotnet run -c Release -f net8.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ColdStartBenchmarks*"
 ```
+
+### Tuned and source-generated competitors (`ShipperReadCompetitorBenchmarks`)
+
+`SelectAll` and `SelectByKey` on `Shippers` (1 000 and 100 000 rows) against every competitor, each in its
+plain and its tuned or source-generated form:
+
+| Leg | Configuration |
+| --- | --- |
+| `_AdoNet` | Baseline, the same reader code as `ShipperCrudBenchmarks` |
+| `_Dapper` | Reflection-based Dapper |
+| `_DapperAot` | [Dapper.AOT](https://aot.dapperlib.dev/): the same Dapper call, intercepted by the Dapper.AOT source generator |
+| `_EfCore` | Non-pooled context, LINQ query translated on each call |
+| `_EfCoreTuned` | `EF.CompileAsyncQuery`, a `PooledDbContextFactory` and the compiled model in `Ef/CompiledModels` |
+| `_LinqToDb` | linq2db LINQ query |
+| `_LinqToDbCompiled` | linq2db `CompiledQuery.Compile` |
+| `_RepoDb` | RepoDB |
+| `_Inquiry` | Generated `ShipperStore` |
+
+Every leg reads the same three columns, opens and disposes its own connection or context per call, and
+buffers `SelectAll` into a list. `GlobalSetup` checks that every leg returns the same row count and the same
+point-read row, and throws if one does not. The class is not in the regression-gate inventory.
+
+Dapper.AOT intercepts only methods marked `[DapperAot]`, so the plain `_Dapper` legs in this and every other
+class stay reflection-based. The project enables the interceptors with
+`<InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>`.
+
+The compiled model is generated code. Regenerate it when `NorthwindDbContext` changes:
+
+```powershell
+dotnet tool restore
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks --framework net8.0 --configuration Release --context Inquiry.Benchmarks.Ef.NorthwindDbContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.Ef.CompiledModels
+```
+
+```powershell
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ShipperReadCompetitorBenchmarks*"
+```
+
+linq2db's async methods (`FirstOrDefaultAsync`, `ToListAsync`, `CountAsync` and the others) are in
+`LinqToDB.Async.AsyncExtensions`. Every file here also imports `Microsoft.EntityFrameworkCore`, whose
+methods of the same names bind first and throw for linq2db queries. The linq2db legs therefore call them
+through the alias `L2Async`, for example `L2Async.FirstOrDefaultAsync(dc.GetTable<L2Shipper>(), predicate)`.
 
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
 

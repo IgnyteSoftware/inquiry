@@ -9,6 +9,7 @@
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Dapper" Version="2.1.89" />
+    <PackageVersion Include="Dapper.AOT" Version="1.1.0" />
     <!-- The schema evolution sample uses DbUp. dbup-core is pinned so the API the guide cites is the one restored. -->
     <PackageVersion Include="dbup-core" Version="6.1.1" />
     <PackageVersion Include="dbup-sqlserver" Version="7.2.0" />
@@ -20,6 +21,7 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.3" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="8.0.30" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.30" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.30" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.30" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
@@ -72,6 +74,11 @@
   <!-- The benchmarks build against a newer Roslyn than the generator's compatibility floor. -->
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Contracts' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MariaDb' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.MySql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Oracle' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.PostgreSql' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.SqlServer'">
     <PackageVersion Update="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+  <!-- EF Core Design 8.0.30 brings Roslyn Workspaces 4.5.0, which conflicts with the benchmark Roslyn 4.14.0 above. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks'">
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
   </ItemGroup>
 
   <!-- The provider benchmarks compare against the pinned EF Core 8 cohort. -->

@@ -673,6 +673,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
@@ -819,6 +820,12 @@
         "requested": "[2.1.89, )",
         "resolved": "2.1.89",
         "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+      },
+      "Dapper.AOT": {
+        "type": "CentralTransitive",
+        "requested": "[1.1.0, )",
+        "resolved": "1.1.0",
+        "contentHash": "xcvzWs28jBBmQk4VB9fmTbIN3AztSb3KwuUXoWZJfcl5YtKnrN3N+GvXOOLkzZbNKGIcq0tQLch7pWPKUsjSyQ=="
       },
       "JsonSchema.Net": {
         "type": "CentralTransitive",
@@ -1671,8 +1678,8 @@
       },
       "System.Collections.Immutable": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "gpKPycgDFS2oAPr0yaqwBmShE1ya4yMMkn3lxBPcXrsCI4KL10xSu0cSUzeajQ7LKjb3EsUAgjhBiPGrGU6vSQ=="
+        "resolved": "10.0.8",
+        "contentHash": "rvMGYko6bcE/ZTpj1Q/EM22rcZNiQyjH+71capjjfmqG+DDncVE4kSaE5ysCv2vEFIHt8+zALWYXgIETFvcFzw=="
       },
       "System.Diagnostics.DiagnosticSource": {
         "type": "Transitive",
@@ -1895,6 +1902,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
@@ -2041,6 +2049,15 @@
         "requested": "[2.1.89, )",
         "resolved": "2.1.89",
         "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+      },
+      "Dapper.AOT": {
+        "type": "CentralTransitive",
+        "requested": "[1.1.0, )",
+        "resolved": "1.1.0",
+        "contentHash": "xcvzWs28jBBmQk4VB9fmTbIN3AztSb3KwuUXoWZJfcl5YtKnrN3N+GvXOOLkzZbNKGIcq0tQLch7pWPKUsjSyQ==",
+        "dependencies": {
+          "System.Collections.Immutable": "10.0.8"
+        }
       },
       "JsonSchema.Net": {
         "type": "CentralTransitive",
