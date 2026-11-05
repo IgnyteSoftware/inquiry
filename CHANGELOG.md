@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The migrations recipe now has a runnable DbUp sample for SQL Server, `samples/Inquiry.SchemaEvolution`. It deploys a new database, baselines an existing one without rerunning its first script, widens a column, runs the old and new application versions side by side while both table types exist, and then retires the old type in a later release. The guide adds the deployment order, separate deployment and application permissions, failure recovery and the limits of each provider. The application principal needs `EXECUTE` and `REFERENCES` on each generated table type. The guide used to name only `REFERENCES`, which SQL Server rejects with error 229.
+
 ### Changed
 
 - **Breaking:** Every `Ignyte.Inquiry*` package now depends on `Ignyte.Inquiry`, and on any other Inquiry package it uses, at exactly its own version, such as `[1.0.0]`. Before, the dependency was a minimum, so a provider could restore with a different `Ignyte.Inquiry`. The provider's generator then read attributes from another release and reported unhelpful mapping errors. Now NuGet rejects the mix at restore. Two Inquiry packages at different versions fail with `NU1107`. A direct `Ignyte.Inquiry` reference older than the provider fails with `NU1605`. A direct reference newer than the provider warns `NU1608`, which fails restore only under `TreatWarningsAsErrors`. To upgrade, set every `Ignyte.Inquiry*` reference to the same version, and update them together. Packages that were published before this change keep their minimum ranges.

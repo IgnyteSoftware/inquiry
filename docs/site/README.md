@@ -38,6 +38,10 @@ executable recipe. The package consumer runner extracts these files, builds them
 candidate packages, and runs them; see [Contributing](develop/contributing.md#clean-package-consumers).
 Keep each comment on the line immediately above its fence.
 
+A sample with several projects, such as `samples/Inquiry.SchemaEvolution`, is published with DocFX code
+includes (`[!code-csharp[](../../../../samples/...)]`) instead, so the page shows the files that run.
+A moved or deleted file fails the `--warningsAsErrors` build.
+
 ## What's in here
 
 - **`docfx.json`** — the build config. Lists the public packages whose XML doc comments become the API reference.
