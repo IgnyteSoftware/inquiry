@@ -55,6 +55,11 @@ public partial Task<IReadOnlyList<Product>> SelectPagedAsync(int offset, int lim
 
 Generated offset methods validate their arguments before touching the database: `offset` must be `>= 0` and `limit` must be `> 0`, otherwise the method throws `ArgumentOutOfRangeException`.
 
+If the entity maps a property named `__offset` or `__limit`, ignoring case, the generator adds leading
+underscores to that paging parameter until the name is free, for example `@___offset`. This applies to every
+offset-paged method on the entity. A criterion or JSON-path value whose name equals a paging parameter binds
+under a numbered name instead, such as `@__limit2`. Hover text and logged SQL show the generated names.
+
 ## Page with a total
 
 Return `Task<InquiryPagedResult<T>>` instead of a list to get the page and the number of rows that match the query, for "page 3 of 12" displays. The return type alone turns on offset paging, so `Paged = true` is optional. The method still needs `OrderBy` (otherwise INQ020) and the trailing `int offset, int limit` parameters.
