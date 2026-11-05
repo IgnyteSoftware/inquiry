@@ -16,7 +16,13 @@ public sealed class ReleaseManifestTests
     [InlineData("extra")]
     [InlineData("duplicate")]
     [InlineData("version")]
-    [InlineData("dependency")]
+    [InlineData("self-dependency")]
+    [InlineData("bare-family-dependency")]
+    [InlineData("open-family-range")]
+    [InlineData("wrong-family-version")]
+    [InlineData("preview-family-version")]
+    [InlineData("bare-provider-dependency")]
+    [InlineData("pruned-family-dependency")]
     [InlineData("tfm")]
     [InlineData("project")]
     [InlineData("unknown")]
@@ -31,6 +37,23 @@ public sealed class ReleaseManifestTests
         try
         {
             Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyManifest(RepositoryFixture.Root, path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Family_dependency_reports_exact_range_contract()
+    {
+        var path = MutatedManifest("bare-family-dependency");
+        try
+        {
+            var exception = Assert.Throws<ReleaseVerificationException>(() =>
+                PackageVerifier.VerifyManifest(RepositoryFixture.Root, path));
+
+            Assert.Contains("Ignyte.Inquiry.Aspire dependency Ignyte.Inquiry must be [1.0.0]", exception.Message, StringComparison.Ordinal);
         }
         finally
         {
@@ -343,8 +366,26 @@ public sealed class ReleaseManifestTests
             case "version":
                 root["packageVersion"] = "1.0.1";
                 break;
-            case "dependency":
-                packages[0]!["dependencies"]!["Ignyte.Inquiry"] = "1.0.0";
+            case "self-dependency":
+                packages[0]!["dependencies"]!["Ignyte.Inquiry"] = "[1.0.0]";
+                break;
+            case "bare-family-dependency":
+                packages[1]!["dependencies"]!["Ignyte.Inquiry"] = "1.0.0";
+                break;
+            case "open-family-range":
+                packages[1]!["dependencies"]!["Ignyte.Inquiry"] = "[1.0.0, )";
+                break;
+            case "wrong-family-version":
+                packages[1]!["dependencies"]!["Ignyte.Inquiry"] = "[1.0.1]";
+                break;
+            case "preview-family-version":
+                packages[1]!["dependencies"]!["Ignyte.Inquiry"] = "[1.0.0-preview.1]";
+                break;
+            case "bare-provider-dependency":
+                packages[1]!["dependencies"]!["Ignyte.Inquiry.Sqlite"] = "1.0.0";
+                break;
+            case "pruned-family-dependency":
+                packages[2]!["prunedDependencies"]!["net10.0"]!.AsArray().Add("Ignyte.Inquiry");
                 break;
             case "tfm":
                 packages[0]!["libTfms"]!.AsArray().RemoveAt(0);

@@ -105,6 +105,8 @@ dotnet add package Ignyte.Inquiry.Testing --prerelease     # optional test helpe
 dotnet add package Ignyte.Inquiry.Sqlite.Testing --prerelease # optional SQLite fixture
 ```
 
+Use one version for every `Ignyte.Inquiry*` package and update them together. Each package depends on the others at exactly its own version, so NuGet rejects a mixed set at restore. A direct reference to a newer `Ignyte.Inquiry` than the provider only warns (`NU1608`); see [restore errors](docs/site/articles/getting-started.md#troubleshooting-restore-errors-nu1107-nu1605-and-nu1608).
+
 ## Contributing and releasing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. In short: feature branches PR into `main` (trunk-based); releases are tag-driven — a maintainer pushes `vX.Y.Z` for a stable or `vX.Y.Z-preview.N` for a preview, and [`release.yml`](.github/workflows/release.yml) packs, verifies, and publishes to nuget.org. The tag must match the version in [`eng/release-manifest.json`](eng/release-manifest.json), so every release starts with a reviewed manifest-bump PR. See [Contributing — Releasing](docs/site/develop/contributing.md#releasing) for the package verifier details. The release body is the tag's section of [CHANGELOG.md](CHANGELOG.md), printed by `scripts/release-notes.sh`, followed by GitHub's list of merged pull requests.

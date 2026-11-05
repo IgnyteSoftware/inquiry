@@ -42,7 +42,7 @@ single source of truth:
 - The tag version must match the manifest (`X.Y.Z` exactly, or `-preview.N` of it) and the
   tagged commit must be on `main`, or the release fails closed. Cutting a new version
   therefore starts with a reviewed PR that **bumps `packageVersion`** (plus the manifest's
-  `tag` and inter-package dependency versions).
+  `tag` and the exact `[X.Y.Z]` inter-package dependency ranges).
 
 Creating `v*` tags is restricted to organization admins by ruleset, and release tags can
 never be updated or deleted — a release tag is the immutable record of what shipped.

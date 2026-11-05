@@ -136,4 +136,13 @@
       <Analyzer Include="$(_InquiryOracleSharedPath)" Condition="'@(_InquiryOracleProjectReference)' != '' and Exists('$(_InquiryOracleSharedPath)')" />
     </ItemGroup>
   </Target>
+
+  <!-- The attributes ship in Ignyte.Inquiry and the generators in the provider packages, so a mixed set
+       breaks generation (#273). NuGet pack has no setting for exact project-reference ranges, so this
+       hooks its private item and pins every sibling dependency to this package's own version. -->
+  <Target Name="PinInquiryProjectReferenceVersions" AfterTargets="_GetProjectReferenceVersions" Condition="'$(IsPackable)' != 'false'">
+    <ItemGroup>
+      <_ProjectReferencesWithVersions Update="@(_ProjectReferencesWithVersions)" ProjectVersion="[$(PackageVersion)]" />
+    </ItemGroup>
+  </Target>
 </Project>

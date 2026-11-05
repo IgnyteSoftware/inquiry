@@ -29,12 +29,14 @@ function Invoke-Dotnet([string[]] $Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "dotnet $($Arguments -join ' ') failed ($LASTEXITCODE)." }
 }
 
-function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [string[]] $Sources, [switch] $AspNetCore) {
+# A package entry is an ID, or ID=Version to reference a version other than the candidate's.
+function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [string[]] $Sources, [switch] $AspNetCore, [bool] $WarningsAsErrors = $true) {
     $directory = Join-Path $workRoot $Name
     New-Item -ItemType Directory -Path $directory | Out-Null
     foreach ($source in $Sources) { Copy-Item -LiteralPath $source -Destination $directory }
-    $references = foreach ($id in $Packages) {
-        '<PackageReference Include="' + $id + '" Version="' + $PackageVersion + '" />'
+    $references = foreach ($package in $Packages) {
+        $id, $version = $package -split '=', 2
+        '<PackageReference Include="' + $id + '" Version="' + $(if ($version) { $version } else { $PackageVersion }) + '" />'
     }
     $core = $manifest.packages | Where-Object id -CEQ 'Ignyte.Inquiry'
     $diVersion = $core.dependencies.'Microsoft.Extensions.DependencyInjection.Abstractions'
@@ -49,7 +51,7 @@ function New-Consumer([string] $Name, [string] $Tfm, [string[]] $Packages, [stri
     <TargetFramework>$Tfm</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TreatWarningsAsErrors>$($WarningsAsErrors.ToString().ToLowerInvariant())</TreatWarningsAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>$($references -join "`n")</ItemGroup>
@@ -91,6 +93,37 @@ function Invoke-Recipe([string] $Recipe, [string[]] $ExpectedFiles, [string[]] $
     $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if ($exitCode -ne 0) { throw "Documentation recipe '$Recipe' failed ($exitCode)." }
     return $output
+}
+
+# Restore reads only the nuspec, so a candidate copy with a rewritten version stands in for another release.
+function New-ProbePackage([string] $Id, [string] $Version) {
+    $path = Join-Path $probeFeed "$Id.$Version.nupkg"
+    Copy-Item -LiteralPath (Join-Path $bundle "$Id.$PackageVersion.nupkg") -Destination $path
+    $archive = [System.IO.Compression.ZipFile]::Open($path, [System.IO.Compression.ZipArchiveMode]::Update)
+    try {
+        $entry = $archive.GetEntry("$Id.nuspec")
+        $reader = [System.IO.StreamReader]::new($entry.Open())
+        try { $nuspec = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        $updated = $nuspec.Replace("<version>$PackageVersion</version>", "<version>$Version</version>").Replace("version=`"[$PackageVersion]`"", "version=`"[$Version]`"")
+        if (-not $updated.Contains("<version>$Version</version>")) { throw "Could not set the probe version of $Id to $Version." }
+        $entry.Delete()
+        $writer = [System.IO.StreamWriter]::new($archive.CreateEntry("$Id.nuspec").Open(), [System.Text.UTF8Encoding]::new($false))
+        try { $writer.Write($updated) } finally { $writer.Dispose() }
+    }
+    finally {
+        $archive.Dispose()
+    }
+}
+
+function Invoke-RestoreProbe([string] $Name, [string[]] $Packages, [bool] $WarningsAsErrors, [bool] $ShouldFail, [string] $Pattern) {
+    $project = New-Consumer "probe-$Name" 'net8.0' $Packages @() -WarningsAsErrors $WarningsAsErrors
+    $output = @(& dotnet restore $project --configfile $probeConfig --no-cache 2>&1 | ForEach-Object { "$_" })
+    $exitCode = $LASTEXITCODE
+    $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+    if (($exitCode -ne 0) -ne $ShouldFail) { throw "Restore probe '$Name' exited with $exitCode." }
+    if ($Pattern -and -not ($output -match $Pattern)) { throw "Restore probe '$Name' did not report /$Pattern/." }
+    if (-not $Pattern -and ($output -match '\bNU1\d{3}\b')) { throw "Restore probe '$Name' reported a NuGet diagnostic." }
+    $checks.Add("net8.0/version-mismatch/$Name")
 }
 
 try {
@@ -136,6 +169,34 @@ try {
         Invoke-Dotnet @('run', '--project', $project, '-c', 'Release', '--no-restore')
         $checks.Add("$tfm/companions")
     }
+    # Family packages pin each other exactly (#273), so NuGet must reject a mixed set at restore.
+    $probeFeed = Join-Path $workRoot 'probe-feed'
+    New-Item -ItemType Directory -Path $probeFeed | Out-Null
+    $stable = [version]$manifest.packageVersion
+    $older = '0.1.0'
+    $newer = "$($stable.Major).$($stable.Minor).$($stable.Build + 1)"
+    New-ProbePackage 'Ignyte.Inquiry' $older
+    New-ProbePackage 'Ignyte.Inquiry' $newer
+    New-ProbePackage 'Ignyte.Inquiry.Testing' $newer
+    $escapedProbeFeed = [System.Security.SecurityElement]::Escape($probeFeed)
+    $probeConfig = Join-Path $workRoot 'NuGet.probe.config'
+    @"
+<configuration>
+  <packageSources><clear /><add key="candidate" value="$escapedFeed" /><add key="probe" value="$escapedProbeFeed" /><add key="nuget.org" value="https://api.nuget.org/v3/index.json" /></packageSources>
+  <packageSourceMapping><clear /><packageSource key="candidate">$mapping</packageSource><packageSource key="probe">$mapping</packageSource><packageSource key="nuget.org"><package pattern="*" /></packageSource></packageSourceMapping>
+</configuration>
+"@ | Set-Content -LiteralPath $probeConfig -Encoding utf8
+    $provider = 'Ignyte.Inquiry.Sqlite'
+    $core = [regex]::Escape('Ignyte.Inquiry')
+    Invoke-RestoreProbe 'companion-newer-nu1107' @($provider, "Ignyte.Inquiry.Testing=$newer") $false $true "error NU1107: .*$core"
+    Invoke-RestoreProbe 'core-older-nu1605' @($provider, "Ignyte.Inquiry=$older") $false $true "error NU1605: .*$core"
+    # A newer direct reference wins NuGet resolution and breaks the provider's range only as warning NU1608.
+    Invoke-RestoreProbe 'core-newer-nu1608-warning' @($provider, "Ignyte.Inquiry=$newer") $false $false "warning NU1608: .*$core \(= $([regex]::Escape($PackageVersion))\)"
+    Invoke-RestoreProbe 'core-newer-nu1608-warnings-as-errors' @($provider, "Ignyte.Inquiry=$newer") $true $true "error NU1608: .*$core"
+    Invoke-RestoreProbe 'coordinated-restores' @($provider, 'Ignyte.Inquiry.Testing', 'Ignyte.Inquiry') $false $false $null
+    $assets = Get-Content -Raw (Join-Path $workRoot 'probe-coordinated-restores/obj/project.assets.json') | ConvertFrom-Json
+    if (-not $assets.libraries.PSObject.Properties["Ignyte.Inquiry/$PackageVersion"]) { throw 'The coordinated probe did not resolve the candidate Ignyte.Inquiry.' }
+
     $project = New-Consumer 'native' 'net10.0' @('Ignyte.Inquiry.Sqlite') @((Join-Path $sample 'Program.cs'), (Join-Path $sample 'Widget.cs'))
     $nativeOutput = Join-Path $workRoot 'native-out'
     Invoke-Dotnet @('publish', $project, '-c', 'Release', '-r', $RuntimeIdentifier, '-p:PublishAot=true', "-p:RestoreConfigFile=$config", '-o', $nativeOutput)
