@@ -336,9 +336,25 @@ public class CustomerCrudBenchmarks
 
     // ---- Update -------------------------------------------------------------------------
 
+    // Every update leg alternates two payloads, so each call changes the row. With constant values,
+    // EF Core finds no change and sends no UPDATE after the first call.
+    private static int _updateCount;
+
+    private static (string CompanyName, string ContactName, string Country, string City) NextUpdate()
+        => (Interlocked.Increment(ref _updateCount) & 1) == 0
+            ? ("Updated Co A", "Updated Contact A", "USA", "Updated City A")
+            : ("Updated Co B", "Updated Contact B", "Canada", "Updated City B");
+
+    private static int RequireOneRow(int rows)
+        => rows == 1 ? rows : throw new InvalidOperationException($"The update affected {rows} rows. Expected 1.");
+
+    private static bool RequireUpdated(bool updated)
+        => updated ? updated : throw new InvalidOperationException("The update affected no row. Expected 1.");
+
     [BenchmarkCategory("Update"), Benchmark(Baseline = true)]
     public async Task<int> Update_AdoNet()
     {
+        var (company, contact, country, city) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
@@ -346,75 +362,82 @@ public class CustomerCrudBenchmarks
             "UPDATE Customers SET CompanyName = $company, ContactName = $contact, " +
             "Country = $country, City = $city WHERE CustomerID = $id;";
         command.Parameters.Add("$id", SqliteType.Text).Value = TargetCustomerId;
-        command.Parameters.Add("$company", SqliteType.Text).Value = "Updated Co";
-        command.Parameters.Add("$contact", SqliteType.Text).Value = "Updated Contact";
-        command.Parameters.Add("$country", SqliteType.Text).Value = "USA";
-        command.Parameters.Add("$city", SqliteType.Text).Value = "Updated City";
-        return await command.ExecuteNonQueryAsync();
+        command.Parameters.Add("$company", SqliteType.Text).Value = company;
+        command.Parameters.Add("$contact", SqliteType.Text).Value = contact;
+        command.Parameters.Add("$country", SqliteType.Text).Value = country;
+        command.Parameters.Add("$city", SqliteType.Text).Value = city;
+        return RequireOneRow(await command.ExecuteNonQueryAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_Dapper()
     {
+        var (company, contact, country, city) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        return await connection.ExecuteAsync(
+        return RequireOneRow(await connection.ExecuteAsync(
             "UPDATE Customers SET CompanyName = @company, ContactName = @contact, " +
             "Country = @country, City = @city WHERE CustomerID = @id;",
-            new { id = TargetCustomerId, company = "Updated Co", contact = "Updated Contact", country = "USA", city = "Updated City" });
+            new { id = TargetCustomerId, company, contact, country, city }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_EfCore()
     {
+        var (company, contact, country, city) = NextUpdate();
         await using var ctx = await _db.DbContextFactory.CreateDbContextAsync();
         var entity = await ctx.Customers.FirstAsync(c => c.CustomerID == TargetCustomerId);
-        entity.CompanyName = "Updated Co";
-        entity.ContactName = "Updated Contact";
-        entity.Country = "USA";
-        entity.City = "Updated City";
-        return await ctx.SaveChangesAsync();
+        entity.CompanyName = company;
+        entity.ContactName = contact;
+        entity.Country = country;
+        entity.City = city;
+        return RequireOneRow(await ctx.SaveChangesAsync());
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_LinqToDb()
     {
+        var (company, contact, country, city) = NextUpdate();
         await using var dc = new DataConnection(_linqToDbOptions);
-        return await dc.UpdateAsync(new L2Customer
+        return RequireOneRow(await dc.UpdateAsync(new L2Customer
         {
             CustomerID = TargetCustomerId,
-            CompanyName = "Updated Co",
-            ContactName = "Updated Contact",
-            Country = "USA",
-            City = "Updated City",
-        });
+            CompanyName = company,
+            ContactName = contact,
+            Country = country,
+            City = city,
+        }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<int> Update_RepoDb()
     {
+        var (company, contact, country, city) = NextUpdate();
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        return await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdCustomer
+        return RequireOneRow(await RepoDb.DbConnectionExtension.UpdateAsync(connection, new RdCustomer
         {
             CustomerID = TargetCustomerId,
-            CompanyName = "Updated Co",
-            ContactName = "Updated Contact",
-            Country = "USA",
-            City = "Updated City",
-        });
+            CompanyName = company,
+            ContactName = contact,
+            Country = country,
+            City = city,
+        }));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
     public async Task<bool> Update_Inquiry()
-        => await _db.Customers.UpdateAsync(new Customer
+    {
+        var (company, contact, country, city) = NextUpdate();
+        return RequireUpdated(await _db.Customers.UpdateAsync(new Customer
         {
             CustomerID = TargetCustomerId,
-            CompanyName = "Updated Co",
-            ContactName = "Updated Contact",
-            Country = "USA",
-            City = "Updated City",
-        });
+            CompanyName = company,
+            ContactName = contact,
+            Country = country,
+            City = city,
+        }));
+    }
 
     // ---- Upsert (raw SQL for the non-Inquiry libraries) ---------------------------------
 
