@@ -11,6 +11,8 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     public override string DialectName => "Sqlite";
     public override string ProviderId => "sqlite";
+    // Measured for #509: scalar parameters beat json_each up to 4 values; json_each wins from 8.
+    public override int ScalarInListMaxLength => 4;
     // SQLite identifiers compare ASCII case-insensitively by default. Non-ASCII remains exact.
     public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
 

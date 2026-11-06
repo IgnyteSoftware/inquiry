@@ -47,7 +47,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("\\\"CategoryId\\\" IN (SELECT value FROM json_each(@CategoryId))", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
-        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", generatedText);
     }
 
     [Fact]
@@ -171,5 +171,122 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("\\\"Category\\\" = ANY(@Category)", text);
         Assert.Contains("global::Inquiry.Parameters.InquiryArrayParameter.Bind(_c, \"@Category\", _args.Arg0);", text);
+    }
+
+    [Fact]
+    public void SqliteSmallInListTriesScalarBucketsBeforeJsonArray()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // The const statement keeps the JSON transport; small lists swap only the IN fragment at run time.
+        Assert.Contains(
+            "private const string _sqlPredicate_InCategoriesAsync = \"SELECT \\\"Id\\\", \\\"ProductName\\\", \\\"UnitPrice\\\", \\\"UnitsInStock\\\", \\\"CategoryId\\\", \\\"Discontinued\\\" FROM \\\"Products\\\" WHERE \\\"CategoryId\\\" IN (SELECT value FROM json_each(@CategoryId))\";",
+            generatedText);
+        Assert.Contains(
+            "private static readonly string[] _inNames_InCategoriesAsync_0 = { \"@CategoryId_in0\", \"@CategoryId_in1\", \"@CategoryId_in2\", \"@CategoryId_in3\" };",
+            generatedText);
+        Assert.Contains(
+            "private static readonly string[] _inBuckets_InCategoriesAsync_0 = { \"\\\"CategoryId\\\" IN (@CategoryId_in0)\", \"\\\"CategoryId\\\" IN (@CategoryId_in0, @CategoryId_in1)\", \"\\\"CategoryId\\\" IN (@CategoryId_in0, @CategoryId_in1, @CategoryId_in2, @CategoryId_in3)\" };",
+            generatedText);
+        Assert.Contains(
+            "if (!global::Inquiry.Parameters.InquiryInExpansion.TryBindScalarList(_c, categoryIds, _args.MaxParameters, \"\\\"CategoryId\\\" IN (SELECT value FROM json_each(@CategoryId))\", _inBuckets_InCategoriesAsync_0, _inNames_InCategoriesAsync_0, static _e => (object?)_e ?? global::System.DBNull.Value, static _p => { _p.DbType = global::System.Data.DbType.Int32; }))",
+            generatedText);
+        Assert.Contains("    global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
+    }
+
+    [Fact]
+    public void PostgreSqlInListKeepsArrayParameterForEveryLength()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> InCategoriesAsync(IReadOnlyList<int> categoryIds, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: "PostgreSql");
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        Assert.DoesNotContain("TryBindScalarList", generatedText);
+        Assert.DoesNotContain("_inNames_", generatedText);
+    }
+
+    [Fact]
+    public void SmallInListIsNotTriedWhenTheMethodAlsoHasNotIn()
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("CategoryId", Compare.In)]
+                [InquiryWhere("UnitsInStock", Compare.NotIn)]
+                public partial Task<IReadOnlyList<Product>> MixedAsync(IReadOnlyList<int> categoryIds, IReadOnlyList<short> stock, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // NOT IN expansion picks its element names at run time, so fixed scalar names stay out of this method.
+        Assert.DoesNotContain("TryBindScalarList", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
+        Assert.Contains("global::Inquiry.Parameters.InquiryInExpansion.ExpandNotIn(_c, \"@UnitsInStock\", stock, _args.MaxParameters", generatedText);
+    }
+
+    [Fact]
+    public void SmallInListElementNamesMoveAwayFromOtherBindNames()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Item")]
+            public sealed class Item
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryColumn]
+                public int Code { get; set; }
+
+                [InquiryColumn]
+                public int Code_in0 { get; set; }
+            }
+
+            public partial class ItemStore : Inquiry.Stores.InquiryStore<Demo.Item>
+            {
+                [InquirySelectAllByPredicate]
+                [InquiryWhere("Code", Compare.In)]
+                [InquiryWhere("Code_in0", Compare.Equal)]
+                public partial Task<IReadOnlyList<Item>> FindAsync(IReadOnlyList<int> codes, int other, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ItemStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The criterion keeps its own name; the element name that would collide with it moves.
+        Assert.Contains("_p1.ParameterName = \"@Code_in0\";", text);
+        Assert.Contains("private static readonly string[] _inNames_FindAsync_0 = { \"@Code_in02\", \"@Code_in1\", ", text);
+        // The scalar criterion binds after the collection, so its parameter is reserved from the budget.
+        Assert.Contains("TryBindScalarList(_c, codes, _args.MaxParameters - 1, ", text);
     }
 }

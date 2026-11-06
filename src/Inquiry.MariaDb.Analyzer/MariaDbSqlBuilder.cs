@@ -24,6 +24,8 @@ internal sealed class MariaDbSqlBuilder : MySqlFamilySqlBuilder
     }
     public override string DialectName => "MariaDb";
     public override string ProviderId => "mariadb";
+    // Measured for #509: scalar parameters beat JSON_TABLE up to 8-10 values; 16 was too close to call.
+    public override int ScalarInListMaxLength => 8;
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

@@ -22,6 +22,8 @@ internal sealed class MySqlSqlBuilder : MySqlFamilySqlBuilder
     }
     public override string DialectName => "MySql";
     public override string ProviderId => "mysql";
+    // Measured for #509: scalar parameters beat JSON_TABLE up to 16 values; 32 was too close to call.
+    public override int ScalarInListMaxLength => 16;
 
     public override CyclicForeignKeyStrategy CyclicForeignKeyStrategy => CyclicForeignKeyStrategy.AlterTable;
     public override bool SupportsCheckConstraints => true;

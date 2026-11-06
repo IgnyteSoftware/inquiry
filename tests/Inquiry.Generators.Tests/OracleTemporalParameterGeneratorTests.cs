@@ -195,7 +195,9 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("after.HasValue ?", convertedKeyset);
 
         var collection = Method(text, "InDatesAsync");
-        Assert.DoesNotContain(".ToDateTime(global::System.TimeOnly.MinValue)", collection);
+        // The JSON transport serializes DateOnly as text; short lists bind like the scalar criterion, which bridges it.
+        Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$EventD$e6f05f4ebc3535\", dates);", collection);
+        Assert.Contains("static _e => (object)_e.ToDateTime(global::System.TimeOnly.MinValue)", collection);
     }
 
     [Theory]

@@ -1889,7 +1889,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
-        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", generatedText);
     }
 
     [Fact]
@@ -1909,7 +1909,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("WHERE `CategoryId` IN (SELECT jt.val FROM JSON_TABLE(@CategoryId, '$[*]' COLUMNS(val INT PATH '$')) jt)\"", generatedText);
         Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@CategoryId\", categoryIds);", generatedText);
-        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", generatedText);
     }
 
     [Theory]

@@ -1378,11 +1378,7 @@ public abstract class SqlBuilder
     /// <summary>Renders a single criterion. Dispatches LIKE and IN to overridable hooks.</summary>
     protected string RenderPredicate(SqlPredicate predicate)
     {
-        // A JSON-path criterion compares the dialect's extraction of the path inside the JSON column
-        // ([InquiryWhere.JsonPath]); an ordinary criterion compares the bare quoted column.
-        var column = predicate.JsonPath is { } jsonPath
-            ? RenderJsonPathExtract(QuoteIdentifier(predicate.Column.ColumnName), jsonPath)
-            : QuoteIdentifier(predicate.Column.ColumnName);
+        var column = RenderPredicateColumn(predicate);
         var rendered = predicate.Op switch
         {
             // SqlPredicate carries the bare logical parameter name; apply the dialect sigil here
@@ -1414,6 +1410,27 @@ public abstract class SqlBuilder
             ? "(" + ParameterName(predicate.ParameterName!) + " IS NULL OR " + rendered + ")"
             : rendered;
     }
+
+    // A JSON-path criterion compares the dialect's extraction of the path inside the JSON column
+    // ([InquiryWhere.JsonPath]); an ordinary criterion compares the bare quoted column.
+    private string RenderPredicateColumn(SqlPredicate predicate)
+        => predicate.JsonPath is { } jsonPath
+            ? RenderJsonPathExtract(QuoteIdentifier(predicate.Column.ColumnName), jsonPath)
+            : QuoteIdentifier(predicate.Column.ColumnName);
+
+    /// <summary>
+    /// Largest <c>IN</c> list that binds as scalar parameters instead of the collection transport. A power
+    /// of two, chosen from measurements per provider; 0 keeps the transport for every list length.
+    /// </summary>
+    public virtual int ScalarInListMaxLength => 0;
+
+    /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
+    public string RenderInCollectionFragment(SqlPredicate predicate)
+        => RenderIn(RenderPredicateColumn(predicate), ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
+
+    /// <summary>The positive <c>IN</c> criterion over scalar placeholders (already dialect-named).</summary>
+    public string RenderInScalarFragment(SqlPredicate predicate, IEnumerable<string> sqlParameterNames)
+        => RenderPredicateColumn(predicate) + " IN (" + string.Join(", ", sqlParameterNames) + ")";
 
     /// <summary>
     /// Renders a LIKE criterion. The parameter value carries the pattern (callers escape <c>%</c>/<c>_</c>);

@@ -54,7 +54,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {projected}{typeName});", store);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", store);
         Assert.Contains("static _e =>", store);
-        Assert.Single(StrongIdToProviderRegex().Matches(store).Cast<global::System.Text.RegularExpressions.Match>());
+        // One projection for the transport, plus one scalar conversion where short lists bind as scalars.
+        Assert.Equal(dialect == "PostgreSql" ? 1 : 2, StrongIdToProviderRegex().Count(store));
         Assert.DoesNotContain(".ToArray()", store);
         Assert.DoesNotContain(".ToList()", store);
     }
@@ -122,8 +123,13 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains($"{binder}.Bind(_c, \"{parameterName}\", {referenceProjection}{referenceTypeName});", reference);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", nullableValue);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", reference);
-        Assert.Single(StrongIdToProviderRegex().Matches(nullableValue).Cast<global::System.Text.RegularExpressions.Match>());
-        Assert.Single(RefIdToProviderRegex().Matches(reference).Cast<global::System.Text.RegularExpressions.Match>());
+        Assert.Equal(dialect == "PostgreSql" ? 1 : 2, StrongIdToProviderRegex().Count(nullableValue));
+        Assert.Equal(dialect == "PostgreSql" ? 1 : 2, RefIdToProviderRegex().Count(reference));
+        if (dialect != "PostgreSql")
+        {
+            Assert.Contains("static _e => _e is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value)", nullableValue);
+            Assert.Contains("static _e => _e is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e!)", reference);
+        }
     }
 
     [Fact]

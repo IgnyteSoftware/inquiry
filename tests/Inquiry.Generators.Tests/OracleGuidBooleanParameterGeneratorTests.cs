@@ -328,9 +328,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("Enabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:iq1$Enable$f77dd1731be3f8, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", directInSql.Declaration);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Idxxxx$30d4cf864d6e68\", ids);", directIn);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Enable$f77dd1731be3f8\", enabled);", directIn);
-        Assert.DoesNotContain("InquiryInExpansion", directIn);
-        Assert.DoesNotContain("DbType.Binary", directIn);
-        Assert.DoesNotContain("DbType.Int32", directIn);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", directIn);
+        // The JSON transport carries no element metadata; short lists bind like the scalar criterion (RAW(16)/NUMBER(1)).
+        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.Binary; }", directIn);
+        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.Int32; }", directIn);
 
         var convertedIn = Method(text, "InConvertedAsync");
         var convertedGuidSql = $"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:iq1$Conver$a66c43bcfcaa30, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";
@@ -339,7 +340,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("ConvertedEnabled IN (SELECT CASE jt.val WHEN 'true' THEN 1 WHEN 'false' THEN 0 END FROM JSON_TABLE(:iq1$Conver$59f8aef3bdc996, '$[*]' COLUMNS(val VARCHAR2(5) PATH '$')) jt)", convertedInSql.Declaration);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Conver$a66c43bcfcaa30\", tokens is null ? null : global::System.Linq.Enumerable.Select(tokens, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ExternalIdConverter>.Instance.ToProvider(_e)));", convertedIn);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Conver$59f8aef3bdc996\", enabled is null ? null : global::System.Linq.Enumerable.Select(enabled, static _e => global::Inquiry.Entities.InquiryConverterCache<global::Demo.ToggleConverter>.Instance.ToProvider(_e)));", convertedIn);
-        Assert.DoesNotContain("InquiryInExpansion", convertedIn);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", convertedIn);
 
         var directNotIn = Method(text, "NotInDirectAsync");
         Assert.Contains("InquiryInExpansion.ExpandNotIn(_c, \":iq1$Idxxxx$30d4cf864d6e68\", ids, _args.MaxParameters, dbType: global::System.Data.DbType.Binary);", directNotIn);

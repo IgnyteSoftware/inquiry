@@ -52,7 +52,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("static _e => unchecked((global::System.Int32)(_e))", generated);
         Assert.Contains("static _e => unchecked((global::System.Int64)(_e))", generated);
         Assert.Contains("StrongConverter>.Instance.ToProvider(_e)", generated);
-        Assert.True(StrongToProviderRegex().Count(generated) == 3);
+        // SQL Server adds one scalar conversion for each positive IN method that can bind short lists as scalars.
+        Assert.Equal(dialect == "SqlServer" ? 5 : 3, StrongToProviderRegex().Count(generated));
         Assert.Contains(binder, generated);
         Assert.DoesNotContain("BindUnsupported", generated);
         Assert.DoesNotContain("Convert.ChangeType", generated);

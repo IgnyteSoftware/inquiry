@@ -26,6 +26,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string DialectName => "SqlServer";
     public override string ProviderId => "sqlserver";
+    // Measured for #509: scalar parameters beat the TVP clearly up to 16 values; the TVP wins at large lists.
+    public override int ScalarInListMaxLength => 16;
     // Stable conservative envelope for the commonly case-insensitive SQL Server collations.
     public override string GetPhysicalIdentifierSortKey(string identifier) => FoldAscii(identifier, upper: true);
     public override string GetProviderArtifactKind(CollectionParameterArtifact artifact) => "tvp";
