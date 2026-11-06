@@ -728,13 +728,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "MySqlConnector": "[2.6.2, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "Testcontainers.MariaDb": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.MySqlConnector": "[1.16.0, )",
+          "Testcontainers.MariaDb": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.mysql": {
@@ -742,13 +746,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "MySqlConnector": "[2.6.2, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "Testcontainers.MySql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.MySqlConnector": "[1.16.0, )",
+          "Testcontainers.MySql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.oracle": {
@@ -1080,6 +1088,16 @@
         "dependencies": {
           "System.ComponentModel.Annotations": "5.0.0",
           "System.Reflection.TypeExtensions": "4.7.0"
+        }
+      },
+      "RepoDb.MySqlConnector": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "w2IRQKgNmGfg0oD+tnml/m1/Xmuu89iU28zNokh5uUj6a8eno7qjMVlflw6MGOL6gwSSiGdTrOPp1zZpp3XEkQ==",
+        "dependencies": {
+          "MySqlConnector": "2.6.1",
+          "RepoDb": "1.16.0"
         }
       },
       "RepoDb.PostgreSql": {
@@ -1989,13 +2007,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "MySqlConnector": "[2.6.2, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "Testcontainers.MariaDb": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.MySqlConnector": "[1.16.0, )",
+          "Testcontainers.MariaDb": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.mysql": {
@@ -2003,13 +2025,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.MySql": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "MySqlConnector": "[2.6.2, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "Testcontainers.MySql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.MySqlConnector": "[1.16.0, )",
+          "Testcontainers.MySql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.oracle": {
@@ -2351,6 +2377,16 @@
         "dependencies": {
           "System.Collections.Immutable": "10.0.11",
           "System.Linq.Async": "7.0.1"
+        }
+      },
+      "RepoDb.MySqlConnector": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "w2IRQKgNmGfg0oD+tnml/m1/Xmuu89iU28zNokh5uUj6a8eno7qjMVlflw6MGOL6gwSSiGdTrOPp1zZpp3XEkQ==",
+        "dependencies": {
+          "MySqlConnector": "2.6.1",
+          "RepoDb": "1.16.0"
         }
       },
       "RepoDb.PostgreSql": {
