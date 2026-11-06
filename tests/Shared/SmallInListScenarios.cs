@@ -44,6 +44,10 @@ public partial class SmallInItemStore : InquiryStore<SmallInItem>
     [InquiryWhere("Code", Compare.In)]
     public partial Task<IReadOnlyList<SmallInItem>> InCodesAsync(IReadOnlyList<string> codes, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate(OrderBy = "Id ASC")]
+    [InquiryWhere("Code", Compare.In, Not = true)]
+    public partial Task<IReadOnlyList<SmallInItem>> OutsideCodesAsync(IReadOnlyList<string> codes, CancellationToken cancellationToken = default);
+
     [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken = default);
 }
@@ -138,21 +142,42 @@ internal static class SmallInListScenarios
     }
 
     /// <summary>
-    /// A string list returns the same rows as scalars and through the transport, including values that differ
-    /// only in case or trailing spaces, which each provider's collation decides.
+    /// A short string list keeps the collection transport, because each transport converts a string to its own
+    /// SQL type, width and collation. Short and long lists therefore return the same rows, including values that
+    /// differ only in case or trailing spaces.
     /// </summary>
-    internal static async Task StringListsMatchOnBothPathsAsync(SmallInItemStore store, int scalarLimit)
+    internal static async Task ShortStringListsKeepTheTransportAsync(SmallInItemStore store, RecordingCommandInterceptor recorder, int scalarLimit, string transportMarker)
     {
         await SeedAsync(store);
 
         foreach (var codes in new[] { new List<string> { "alpha" }, ["ALPHA", "beta"], ["gamma ", "Delta"], ["missing"] })
         {
+            recorder.Clear();
             var shortIds = (await store.InCodesAsync(codes)).Select(static row => row.Id).ToList();
+            var command = Assert.Single(recorder.Commands);
+            Assert.Contains(transportMarker, command.CommandText, StringComparison.Ordinal);
+            Assert.Single(command.Parameters);
+
             var longIds = (await store.InCodesAsync(WithFillerCodes(codes, scalarLimit + 1))).Select(static row => row.Id).ToList();
             Assert.Equal(longIds, shortIds);
         }
 
         Assert.Equal([1], (await store.InCodesAsync(["alpha"])).Select(static row => row.Id));
+    }
+
+    /// <summary>
+    /// Sol review round 3 (#509): a string longer than the transport's text width must not change a negated IN
+    /// result with list length. A 1-value and a 33-value list holding the same oversized value return the same rows.
+    /// </summary>
+    internal static async Task OversizedStringOutsideListMatchesOnBothLengthsAsync(SmallInItemStore store)
+    {
+        await SeedAsync(store);
+        var oversized = new string('x', 4001);
+
+        var oneValue = (await store.OutsideCodesAsync([oversized])).Select(static row => row.Id).ToList();
+        var manyValues = (await store.OutsideCodesAsync(WithFillerCodes([oversized], 33))).Select(static row => row.Id).ToList();
+
+        Assert.Equal(manyValues, oneValue);
     }
 
     /// <summary>A delete by a short list and by a long list each remove exactly the listed rows.</summary>

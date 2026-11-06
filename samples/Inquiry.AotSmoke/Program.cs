@@ -32,19 +32,19 @@ using var scope = provider.CreateScope();
 
 var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
 await inquiry.ExecuteAsync(new InquiryCommand(
-    "CREATE TABLE \"TWidget\" (\"Key\" TEXT NOT NULL PRIMARY KEY, \"Name\" TEXT NOT NULL, \"IsActive\" INTEGER NOT NULL)"));
+    "CREATE TABLE \"TWidget\" (\"Key\" TEXT NOT NULL PRIMARY KEY, \"Name\" TEXT NOT NULL, \"IsActive\" INTEGER NOT NULL, \"Rank\" INTEGER NOT NULL)"));
 
 var store = scope.ServiceProvider.GetRequiredService<WidgetStore>();
 
-var widget = new Widget { Name = "Anvil", IsActive = true };
+var widget = new Widget { Name = "Anvil", IsActive = true, Rank = 7 };
 var inserted = await store.InsertAsync(widget);
 var loaded = await store.SelectByKeyAsync(widget.Key);
 widget.Name = "Sprocket";
 var updated = await store.UpdateAsync(widget);
 var all = await store.SelectAllAsync();
-// A short IN list binds as scalar parameters; a longer one binds one JSON array parameter.
-var shortIn = await store.SelectByNamesAsync(["Sprocket", "Gear"]);
-var longIn = await store.SelectByNamesAsync(["Sprocket", "a", "b", "c", "d", "e", "f", "g", "h"]);
+// A short integer IN list binds as scalar parameters; a longer one binds one JSON array parameter.
+var shortIn = await store.SelectByRanksAsync([7, 8]);
+var longIn = await store.SelectByRanksAsync([7, 1, 2, 3, 4, 5, 6, 8, 9]);
 var deleted = await store.DeleteByKeyAsync(widget.Key);
 
 // JSON columns serialize through source-generated JsonSerializerContext metadata, not reflection.

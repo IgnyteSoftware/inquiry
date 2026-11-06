@@ -124,11 +124,12 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", nullableValue);
         Assert.DoesNotContain($"{binder}.Bind(_c, \"{parameterName}\", _args.Arg0);", reference);
         Assert.Equal(dialect == "PostgreSql" ? 1 : 2, StrongIdToProviderRegex().Count(nullableValue));
-        Assert.Equal(dialect == "PostgreSql" ? 1 : 2, RefIdToProviderRegex().Count(reference));
+        // A string provider type keeps the transport for every length, so its converter runs once, in the projection.
+        Assert.Single(RefIdToProviderRegex().Matches(reference).Cast<global::System.Text.RegularExpressions.Match>());
         if (dialect != "PostgreSql")
         {
             Assert.Contains("static _e => _e is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.StrongIdConverter>.Instance.ToProvider(_e.Value)", nullableValue);
-            Assert.Contains("static _e => _e is null ? global::System.DBNull.Value : (object)global::Inquiry.Entities.InquiryConverterCache<global::Demo.RefIdConverter>.Instance.ToProvider(_e!)", reference);
+            Assert.DoesNotContain("TryBindScalarList", reference);
         }
     }
 

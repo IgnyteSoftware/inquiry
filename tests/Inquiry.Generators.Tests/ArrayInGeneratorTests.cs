@@ -342,18 +342,41 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ReadingStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        // Integers and plain strings compare the same as a scalar and as a TVP row.
+        // Only integers compare the same as a scalar and as a TVP row.
         Assert.Contains("TryBindScalarList(_c, codes, ", text);
-        Assert.Contains("TryBindScalarList(_c, names, ", text);
-        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.String; _p.Size = 20; }", text);
-        // The TVP rounds decimals to DECIMAL(18,2) and times to DATETIMEOFFSET(3), and an explicit SqlType sets
-        // its own column type, so those lists keep the TVP for every length.
+        // The TVP sets each string's width, rounds decimals to DECIMAL(18,2) and times to DATETIMEOFFSET(3), and
+        // an explicit SqlType sets its own column type, so those lists keep the TVP for every length.
+        Assert.DoesNotContain("TryBindScalarList(_c, names, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, tags, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, amounts, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, times, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, tokens, ", text);
-        // A char binds as a fixed-length string, which compares with blank padding that the TVP's text does not.
         Assert.DoesNotContain("TryBindScalarList(_c, grades, ", text);
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Amount\", amounts, ", text);
+    }
+
+    [Theory]
+    [InlineData("Sqlite")]
+    [InlineData("PostgreSql")]
+    [InlineData("SqlServer")]
+    [InlineData("MySql")]
+    [InlineData("MariaDb")]
+    [InlineData("Oracle")]
+    public void ShortStringInListKeepsTheCollectionTransportOnEveryProvider(string dialect)
+    {
+        var source = PredicateSource("""
+            [InquirySelectAllByPredicate]
+                [InquiryWhere("ProductName", Compare.In)]
+                public partial Task<IReadOnlyList<Product>> ByNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source, dialect: dialect);
+        Assert.Empty(result.RunResult.Diagnostics);
+
+        var generatedText = GeneratedProductStoreText(result);
+
+        // Each transport converts a string to its own SQL type, width and collation, so only integers bind as scalars (#509).
+        Assert.DoesNotContain("TryBindScalarList", generatedText);
+        Assert.DoesNotContain("_inNames_", generatedText);
     }
 }

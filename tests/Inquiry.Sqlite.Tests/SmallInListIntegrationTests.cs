@@ -57,12 +57,12 @@ public sealed class SmallInListIntegrationTests
     }
 
     [Fact]
-    public async Task StringListsMatchOnBothPaths()
+    public async Task ShortStringListsKeepTheTransport()
     {
         var recorder = new RecordingCommandInterceptor();
         await using var harness = await CreateAsync(recorder);
         var store = harness.GetRequiredService<SmallInItemStore>();
-        await SmallInListScenarios.StringListsMatchOnBothPathsAsync(store, ScalarLimit);
+        await SmallInListScenarios.ShortStringListsKeepTheTransportAsync(store, recorder, ScalarLimit, TransportMarker);
     }
 
     [Fact]

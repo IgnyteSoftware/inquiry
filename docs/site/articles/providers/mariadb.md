@@ -37,7 +37,7 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
 | Upsert-returning | Native `INSERT … ON DUPLICATE KEY UPDATE … RETURNING` |
 | Delete-returning | Native `DELETE … RETURNING` when `[InquiryDelete]` returns `Task<TEntity?>` |
 | Update-returning | Emulated two-statement batch (`UPDATE …; SELECT …`) — MariaDB lacks `UPDATE…RETURNING` |
-| IN binding | `JSON_TABLE` subquery (MariaDB 10.6+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter; integer and string lists of up to 8 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `JSON_TABLE` subquery (MariaDB 10.6+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter; integer lists of up to 8 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |

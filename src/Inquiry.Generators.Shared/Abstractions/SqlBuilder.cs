@@ -1426,16 +1426,12 @@ public abstract class SqlBuilder
 
     /// <summary>
     /// True when a short <c>IN</c> list over <paramref name="column"/> may bind as scalar parameters. The
-    /// collection transport converts each element to its own SQL type (JSON text, a TVP column), so only
-    /// types that compare the same both ways qualify; otherwise the result could change with list length.
+    /// collection transport converts each element to its own SQL type (JSON text, a TVP column). Strings,
+    /// temporal, decimal and other values can then compare differently, so the result could change with list
+    /// length. Only integers, including numeric enums, compare the same both ways.
     /// </summary>
     public virtual bool CanBindInListAsScalars(IColumn column)
-        => column.TypeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64
-            || (column.TypeClass == DbTypeClass.String && !IsCharProvider(column.ProviderClrTypeName));
-
-    // A char binds as a fixed-length string, which blank-pads comparisons that the variable-length transport does not.
-    private static bool IsCharProvider(string providerClrTypeName)
-        => providerClrTypeName is "char" or "global::System.Char" or "System.Char";
+        => column.TypeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64;
 
     /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
     public string RenderInCollectionFragment(SqlPredicate predicate)

@@ -35,7 +35,7 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 | String | `VARCHAR2(N)` (bounded) or `CLOB` (unbounded) — `NVARCHAR2(N)` only via an explicit `[InquiryColumn(SqlType = "NVARCHAR2(N)")]` override |
 | JSON (`[InquiryJson]`) | Stored as text — `VARCHAR2(N)` (or `CLOB` when unbounded); no native `JSON` type or `IS JSON` check. JSON-path *querying* renders `JSON_VALUE("col", '$.path')` against the text column. |
 | Soft-delete literal | `IsDeleted = 0` (identifier emitted unquoted, in its original case) |
-| IN binding | `col IN (SELECT jt.val FROM JSON_TABLE(:param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` (Oracle 12c R2+); integer and string lists of up to 32 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `col IN (SELECT jt.val FROM JSON_TABLE(:param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` (Oracle 12c R2+); integer lists of up to 32 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Update-returning | Anonymous PL/SQL block (same ref-cursor mechanism as insert-returning) |
 | Upsert-returning | Not separately supported — upsert uses `MERGE`, which does not compose with the PL/SQL returning block |
 

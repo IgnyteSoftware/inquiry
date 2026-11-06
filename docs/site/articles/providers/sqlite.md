@@ -34,7 +34,7 @@ services.AddInquirySqlite("Data Source=app.db");
 | String | `TEXT` |
 | Soft-delete literal | `IsDeleted = 0` |
 | JSON (`[InquiryJson]`) | Stored as `TEXT` (serialized text); JSON-path querying renders `json_extract("col", '$.path')` |
-| IN binding | `col IN (SELECT value FROM json_each(@param))` (SQLite 3.38+); integer and string lists of up to 4 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `col IN (SELECT value FROM json_each(@param))` (SQLite 3.38+); integer lists of up to 4 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Full-text-search | Not supported — `[InquiryFullTextSearch]` is a compile-time error (`INQ035`) |
 | Update-returning | `UPDATE … RETURNING …` (SQLite 3.35+) |
 | Upsert-returning | `INSERT … ON CONFLICT (…) DO UPDATE SET … RETURNING …` |
