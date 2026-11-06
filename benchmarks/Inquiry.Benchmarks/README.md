@@ -148,7 +148,10 @@ Dapper.AOT intercepts only methods marked `[DapperAot]`, so the plain `_Dapper` 
 class stay reflection-based. The project enables the interceptors with
 `<InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>`.
 
-The compiled model is generated code. Regenerate it when `NorthwindDbContext` changes:
+The compiled model is generated code. Regenerate it when `NorthwindDbContext` or the EF Core version
+changes. The command also writes `NorthwindDbContextAssemblyAttributes.cs`, whose `[assembly: DbContextModel]`
+attribute would make the plain EF Core legs use the compiled model too. The project file excludes it from
+compilation, so only the tuned legs use the model, through `UseModel`:
 
 ```powershell
 dotnet tool restore

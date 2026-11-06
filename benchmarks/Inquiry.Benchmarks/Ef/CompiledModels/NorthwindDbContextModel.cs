@@ -34,7 +34,7 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
             }
 
             model.Customize();
-            _instance = model;
+            _instance = (NorthwindDbContextModel)model.FinalizeModel();
         }
 
         private static NorthwindDbContextModel _instance;
