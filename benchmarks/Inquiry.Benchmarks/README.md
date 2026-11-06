@@ -187,7 +187,7 @@ does not return a failure exit code, so check the JSON report for cases without 
 
 ```powershell
 dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
-dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
 ```
 
 Regenerate the compiled model from a Release build:
