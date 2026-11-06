@@ -12,15 +12,23 @@
     <!-- pass `-c Release` when running. -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
+    <!-- Source-generated Dapper. Only methods marked [DapperAot] are intercepted. -->
+    <PackageReference Include="Dapper.AOT" />
+    <PackageReference Include="linq2db" />
+    <PackageReference Include="RepoDb" />
+    <PackageReference Include="RepoDb.MySqlConnector" />
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <!-- Design-time only: `dotnet ef dbcontext optimize` generates the compiled model under Ef/CompiledModels. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Testcontainers.MySql" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
@@ -38,6 +46,12 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
     <Compile Include="..\Inquiry.Benchmarks.MySqlFamily\MySqlBatchMutationStrategyRunner.cs" Link="Batch\MySqlBatchMutationStrategyRunner.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EF Core 9 generates this [assembly: DbContextModel] file, which makes every MySqlShipperContext use the
+         compiled model. Only the tuned legs may use it, through UseModel, so the plain legs stay plain. -->
+    <Compile Remove="Ef\CompiledModels\MySqlShipperContextAssemblyAttributes.cs" />
   </ItemGroup>
 
   <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />

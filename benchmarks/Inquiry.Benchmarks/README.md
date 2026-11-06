@@ -170,7 +170,8 @@ through the alias `L2Async`, for example `L2Async.FirstOrDefaultAsync(dc.GetTabl
 #### On PostgreSQL
 
 `benchmarks/Inquiry.Benchmarks.PostgreSql` has a `ShipperReadCompetitorBenchmarks` class with the same legs and
-the same `GlobalSetup` check. Other providers follow in later changes. It differs from the SQLite class in
+the same `GlobalSetup` check. MySQL and MariaDB have it too (see below); SQL Server and Oracle follow in later
+changes. It differs from the SQLite class in
 these ways:
 
 - It has one row tier, `Rows = 1000`. The PostgreSQL container is shared by the whole process and seeded once
@@ -195,6 +196,39 @@ Regenerate the compiled model from a Release build:
 ```powershell
 dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release -f net8.0
 dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.PostgreSql --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.PostgreSql.Ef.PgShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.PostgreSql.Ef.CompiledModels
+```
+
+#### On MySQL and MariaDB
+
+`benchmarks/Inquiry.Benchmarks.MySql` and `benchmarks/Inquiry.Benchmarks.MariaDb` each have a
+`ShipperReadCompetitorBenchmarks` class with the same legs and the same `GlobalSetup` check as the PostgreSQL
+class. The PostgreSQL notes apply: one row tier, `Rows = 1000`, and under `--inProcess` run the class with its
+own filter. Here the other classes seed 1000 rows too, but `ShipperBenchmarks` inserts rows, so the setup check
+throws after it. These parts differ:
+
+| | MySQL (`mysql:8.0`) | MariaDB (`mariadb:11.4`) |
+|---|---|---|
+| Tuned EF Core | `MySqlShipperContext`, Pomelo with `MySqlServerVersion(8.0.0)` | `MariaDbShipperContext`, Pomelo with `MariaDbServerVersion(11.4.0)` |
+| linq2db | `UseMySql(connectionString, MySqlVersion.MySql80, MySqlProvider.MySqlConnector)` | `UseMySql(connectionString, MySqlVersion.MariaDB10, MySqlProvider.MySqlConnector)` |
+| RepoDB | `RepoDb.MySqlConnector` | `RepoDb.MySqlConnector` (RepoDB has no MariaDB package) |
+
+Each compiled model is in the project's `Ef/CompiledModels`, and each project file excludes the generated
+`*ContextAssemblyAttributes.cs`. Run and check them as for PostgreSQL:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.MySql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.MySql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release
+dotnet benchmarks/Inquiry.Benchmarks.MariaDb/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.MariaDb.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+```
+
+Regenerate the compiled models from a Release build:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release -f net8.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MySql --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.MySql.Ef.MySqlShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MySql.Ef.CompiledModels
+dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release -f net8.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MariaDb --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.MariaDb.Ef.MariaDbShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MariaDb.Ef.CompiledModels
 ```
 
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
