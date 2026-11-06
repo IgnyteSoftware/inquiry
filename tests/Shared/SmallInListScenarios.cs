@@ -166,7 +166,7 @@ internal static class SmallInListScenarios
     }
 
     /// <summary>
-    /// Sol review round 3 (#509): a string longer than the transport's text width must not change a negated IN
+    /// #509: a string longer than the transport's text width must not change a negated IN
     /// result with list length. A 1-value and a 33-value list holding the same oversized value return the same rows.
     /// </summary>
     internal static async Task OversizedStringOutsideListMatchesOnBothLengthsAsync(SmallInItemStore store)
