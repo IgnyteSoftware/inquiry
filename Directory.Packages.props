@@ -14,8 +14,10 @@
     <PackageVersion Include="dbup-core" Version="6.1.1" />
     <PackageVersion Include="dbup-sqlserver" Version="7.2.0" />
     <PackageVersion Include="linq2db" Version="6.5.0" />
-    <PackageVersion Include="RepoDb" Version="1.15.1" />
-    <PackageVersion Include="RepoDb.Sqlite.Microsoft" Version="1.15.0" />
+    <!-- RepoDB packages share one version. RepoDb.Oracle needs RepoDb 1.16.0, and the 1.16 adapters fit the driver pins below. -->
+    <PackageVersion Include="RepoDb" Version="1.16.0" />
+    <PackageVersion Include="RepoDb.PostgreSql" Version="1.16.0" />
+    <PackageVersion Include="RepoDb.Sqlite.Microsoft" Version="1.16.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.3" />
@@ -78,7 +80,7 @@
 
   <!-- EF Core Design 9.0.22 brings Roslyn Workspaces 4.8.0, which conflicts with the benchmark Roslyn 4.14.0 above.
        Workspaces.MSBuild 4.14.0 then brings Microsoft.Build.Tasks.Core 17.7.2 (GHSA-h4j7-5rxr-p4wc). -->
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks'">
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks' or '$(MSBuildProjectName)' == 'Inquiry.Benchmarks.PostgreSql'">
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
     <PackageVersion Include="Microsoft.Build.Tasks.Core" Version="17.8.43" />
