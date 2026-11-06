@@ -42,6 +42,9 @@ var loaded = await store.SelectByKeyAsync(widget.Key);
 widget.Name = "Sprocket";
 var updated = await store.UpdateAsync(widget);
 var all = await store.SelectAllAsync();
+// A short IN list binds as scalar parameters; a longer one binds one JSON array parameter.
+var shortIn = await store.SelectByNamesAsync(["Sprocket", "Gear"]);
+var longIn = await store.SelectByNamesAsync(["Sprocket", "a", "b", "c", "d", "e", "f", "g", "h"]);
 var deleted = await store.DeleteByKeyAsync(widget.Key);
 
 // JSON columns serialize through source-generated JsonSerializerContext metadata, not reflection.
@@ -65,7 +68,7 @@ var jsonOk = jsonInserted == 2 && camelCaseRows == 1 &&
     fullLoaded.Tags.Count == 1 && fullLoaded.Tags["finish"] == "matte" &&
     emptyLoaded is { Spec: null, Tags.Count: 0 };
 
-if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || !deleted || !jsonOk)
+if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || shortIn.Count != 1 || longIn.Count != 1 || !deleted || !jsonOk)
 {
     await Console.Error.WriteLineAsync("AOT-SMOKE-FAILED");
     return 1;

@@ -167,14 +167,19 @@ public static class SchemaEvolution
     private static async Task<IReadOnlyList<V1.CatalogItem>> V1FindAsync(ServiceProvider app, params string[] codes)
     {
         await using var scope = app.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<V1.CatalogItemStore>().ByCodesAsync(codes);
+        return await scope.ServiceProvider.GetRequiredService<V1.CatalogItemStore>().ByCodesAsync(PastScalarLimit(codes));
     }
 
     private static async Task<IReadOnlyList<V2.CatalogItem>> V2FindAsync(ServiceProvider app, params string[] codes)
     {
         await using var scope = app.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<V2.CatalogItemStore>().ByCodesAsync(codes);
+        return await scope.ServiceProvider.GetRequiredService<V2.CatalogItemStore>().ByCodesAsync(PastScalarLimit(codes));
     }
+
+    // SQL Server binds a list of up to 16 codes as scalar parameters and only a longer list through the table
+    // type. Codes that match no row make every lookup use the type that the scripts create and drop.
+    private static string[] PastScalarLimit(string[] codes)
+        => [.. codes, .. Enumerable.Range(0, 17).Select(static i => "unused-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))];
 
     // Runs each version's ProviderArtifactsValidationSql. No rows means every artifact it needs exists.
     private static async Task<string> ValidationAsync(string db)

@@ -27,6 +27,10 @@ public partial class WidgetStore : InquiryStore<Widget>
     [InquirySelectOneByKey]
     public partial Task<Widget?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("Name", Compare.In)]
+    public partial Task<IReadOnlyList<Widget>> SelectByNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
+
     [InquiryInsert]
     public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);
 

@@ -62,7 +62,9 @@ public sealed class BatchChunkArrayBindingIntegrationTests
         AssertRows(updated, await ReadAllAsync(context.Harness.ConnectionString));
 
         context.Probe.Reset();
-        var ids = updated.Select(static item => item.Id).ToArray();
+        // Ids 1-5 plus ids that match no row, so the list is longer than the 32-value scalar limit (#509) and
+        // binds the collection transport this test checks.
+        var ids = updated.Select(static item => item.Id).Concat(Enumerable.Range(1001, 28)).ToArray();
         Assert.Equal(5, await context.Store.DeleteAllAsync(ids));
         Assert.Empty(context.Probe.InitializedChunkSizes);
         var deleteCommand = Assert.Single(context.Probe.FinalizedCommands);

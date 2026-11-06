@@ -43,7 +43,9 @@ public sealed class BatchChunkingIntegrationTests
         Assert.Empty(probe.FinalizedCommands);
 
         probe.Reset();
-        Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
+        // Ids 1-5 plus ids that match no row, so the list is longer than the 16-value scalar limit (#509) and
+        // binds the collection transport this test checks.
+        Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5).Concat(Enumerable.Range(1001, 12)).ToList()));
         Assert.Empty(probe.InitializedChunkSizes);
         var command = Assert.Single(probe.FinalizedCommands);
         Assert.Contains("IN (SELECT [Value] FROM @Id)", command.CommandText, StringComparison.OrdinalIgnoreCase);
