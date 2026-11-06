@@ -29,7 +29,7 @@ public class InListThresholdBenchmarks
     private string[] _names = null!;
     private string _scalarSql = null!;
 
-    [Params(1, 3, 8, 10, 16, 32, 100, 1000)]
+    [Params(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 16, 17, 32, 33, 100, 1000)]
     public int ListSize { get; set; }
 
     [GlobalSetup]
@@ -38,7 +38,9 @@ public class InListThresholdBenchmarks
         _db = MariaDbBenchmarkDatabase.CreateAsync(1000).GetAwaiter().GetResult();
         _store = new InListShipperStore(_db.Inquiry);
         _ids = Enumerable.Range(0, ListSize).Select(static i => (i * 7 % 1000) + 1).ToArray();
-        _names = Enumerable.Range(0, ListSize).Select(static i => "p" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        // The scalar leg sends the padded shape Inquiry sends below its threshold: the next power of two, up to 64.
+        var scalarCount = ListSize <= 64 ? (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)ListSize) : ListSize;
+        _names = Enumerable.Range(0, scalarCount).Select(static i => "p" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
         _scalarSql = SelectSql + " WHERE `ShipperID` IN (" + string.Join(", ", _names.Select(static name => "@" + name)) + ")";
     }
 
@@ -67,7 +69,7 @@ public class InListThresholdBenchmarks
 
     private static string Json(int[] ids) => "[" + string.Join(",", ids) + "]";
 
-    /// <summary>One scalar parameter per element, the shape Dapper sends.</summary>
+    /// <summary>One scalar parameter per element, padded by repeating the last value as Inquiry pads short lists.</summary>
     [BenchmarkCategory("InList"), Benchmark(Baseline = true)]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "S2077", Justification = "The IN list holds generated parameter names only; the values are bound as parameters.")]
     public async Task<int> Scalar_AdoNet()
@@ -76,9 +78,9 @@ public class InListThresholdBenchmarks
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = _scalarSql;
-        for (var i = 0; i < _ids.Length; i++)
+        for (var i = 0; i < _names.Length; i++)
         {
-            command.Parameters.Add(new MySqlParameter(_names[i], MySqlDbType.Int32) { Value = _ids[i] });
+            command.Parameters.Add(new MySqlParameter(_names[i], MySqlDbType.Int32) { Value = _ids[Math.Min(i, _ids.Length - 1)] });
         }
 
         return await ReadAllAsync(command);
