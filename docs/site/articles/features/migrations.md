@@ -9,7 +9,7 @@ Inquiry deliberately does **not** ship a migration engine. It emits the full `CR
 - `Ddl` describes the schema that the current entities expect. It is a reference, not a migration. Take a copy of it once as your first migration script and never regenerate that script.
 - Write every later change as a new script. Inquiry does not generate `ALTER` statements.
 - DbUp records script names, not script contents. After any database has run a script, never rename or edit it.
-- On SQL Server, a `Compare.In` method binds a table-valued parameter whose type name comes from the column's exact type, facets and nullability. When those change, the new application version needs a new type. Add it in the same migration as the column change, and drop the old type in a later release.
+- On SQL Server, a `Compare.In` method binds a table-valued parameter whose type name comes from the column's exact type, facets and nullability. When those change, the new application version needs a new type. Add it in the same migration as the column change, and drop the old type in a later release. A list of up to 16 values binds as scalar parameters and does not use the type, so a missing type or a missing permission fails only a call with more values. Run `ProviderArtifactsValidationSql` during deployment instead of relying on calls to find it.
 
 ## The runnable sample
 
@@ -79,7 +79,7 @@ Never drop an old table type in the same migration that creates its replacement.
 
 After release 2, the sample runs version 1 and version 2 of the application against the same database. Each version binds its own table type: `nvarchar(32)` for version 1 and `nvarchar(64)` for version 2. Version 2 reads a row that version 1 wrote, and version 1 reads a row that version 2 wrote. Only after version 1 stops does version 2 store a 48-character code.
 
-Release 3 then drops version 1's type. Version 1's validation now reports `missing`, and a version 1 call fails with a `SqlException` that names the type. Version 2 is not affected. Inquiry binds table types without any catalog query or DDL, so a missing type always fails visibly at the call and never at startup.
+Release 3 then drops version 1's type. Version 1's validation now reports `missing`, and a version 1 call with more than 16 values fails with a `SqlException` that names the type. Version 2 is not affected. Inquiry binds table types without any catalog query or DDL, so a missing type always fails visibly at the call and never at startup.
 
 ## Permissions
 
@@ -90,7 +90,7 @@ Use separate principals for deployment and for the application.
 | Deployment | `CREATE TABLE`, `CREATE TYPE` and `ALTER` on the target schema ([`CREATE TYPE` permissions](https://learn.microsoft.com/sql/t-sql/statements/create-type-transact-sql#permissions)); permission to create and write DbUp's `dbo.SchemaVersions` table; and `VIEW DEFINITION` on the schema or database, so the validation query can see type metadata. |
 | Application | The table permissions its stores use, plus `EXECUTE` and `REFERENCES` on each generated table type it binds, or on the schema that owns them ([table-valued parameter permissions](https://learn.microsoft.com/sql/relational-databases/tables/use-table-valued-parameters-database-engine#permissions)). No `CREATE` or `ALTER` permission and no access to the journal. |
 
-`REFERENCES` alone is not enough. When the application principal has no `EXECUTE` permission on the type, SQL Server rejects the call with error 229, "The EXECUTE permission was denied on the object". The sample creates an application login with `SELECT` and `INSERT` on the table. Its first call fails with error 229. After `GRANT EXECUTE, REFERENCES ON TYPE::…`, the same call succeeds. The sample deploys as a server administrator, so it does not prove the minimum deployment permissions.
+`REFERENCES` alone is not enough. When the application principal has no `EXECUTE` permission on the type, SQL Server rejects the call with error 229, "The EXECUTE permission was denied on the object". The sample creates an application login with `SELECT` and `INSERT` on the table. Its first call fails with error 229. The sample pads every lookup past 16 codes with codes that match no row, so each call uses the table type. After `GRANT EXECUTE, REFERENCES ON TYPE::…`, the same call succeeds. The sample deploys as a server administrator, so it does not prove the minimum deployment permissions.
 
 When a type is not visible to the principal and it has no `VIEW DEFINITION` on the schema or database, the validation query reports `metadata-invisible` instead of claiming the type is missing. Run validation as the deployment principal.
 

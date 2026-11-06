@@ -123,9 +123,20 @@ Independently of the mode, the generator emits an explicit `DbType` on each gene
 
 ## Caveats
 
-SQL Server positive `Compare.In` predicates keep constant SQL and a constant parameter signature by binding one compile-time-named TVP (`col IN (SELECT [Value] FROM @ids)`), regardless of collection length. The type name is stable for one exact provider type/facet/nullability signature, so short and long values do not split the command signature while physically different columns do not share an unsafe coarse type. The required type comes from `InquiryGeneratedSchema.ProviderArtifactsDdl`; binding performs no schema I/O. PostgreSQL native arrays have the same constant-shape property. Dialects that use variadic expansion retain power-of-two bucketing, and negative `NOT IN` retains expansion semantics.
+Positive `Compare.In` predicates bind the whole collection as one parameter: a native array on PostgreSQL (`col = ANY(@ids)`), a table-valued parameter on SQL Server (`col IN (SELECT [Value] FROM @ids)`), and a JSON array on SQLite (`json_each`), MySQL, MariaDB and Oracle (`JSON_TABLE`). The SQL text and the parameter signature are the same for every list length. On SQL Server the TVP type name is stable for one exact provider type/facet/nullability signature, so short and long values do not split the command signature while physically different columns do not share an unsafe coarse type. The required type comes from `InquiryGeneratedSchema.ProviderArtifactsDdl`; binding performs no schema I/O. Negative `NOT IN` keeps runtime expansion with power-of-two padding, so an empty list behaves the same on every provider.
 
-- **`Compare.In` plan-cache behavior is best on PostgreSQL, bucketed elsewhere.** On PostgreSQL, `Compare.In` renders constant `col = ANY(@ids)` SQL and binds the whole collection as one native array parameter, so the statement stays preparable across every list length (and the per-element parameter cap doesn't apply to IN lists there). On the other dialects, variadic `IN` expansion rewrites the command text, but the expanded list is **padded up to the next power-of-two length** (by repeating an element), so every list length within a bucket renders identical SQL text — bounding distinct cached plans to ~`log2` of the parameter limit instead of one per cardinality. The text still isn't constant across buckets, so an explicit prepared statement isn't reused across bucket boundaries, but the server-side plan cache (e.g. SQL Server's `sp_executesql` cache) sees far fewer distinct entries. Padding is skipped when it would exceed the parameter cap or the dialect IN-list ceiling (Oracle's 1000-entry `ORA-01795` limit). (Bucketing lives in the runtime `InquiryInExpansion` helper.)
+- **Short `IN` lists bind as scalar parameters.** For a few values, scalar parameters cost less than the collection parameter, so a list of up to the provider's limit binds as `col IN (@ids_in0, @ids_in1, …)` instead. The list pads to the next power of two (1, 2, 4, …) by repeating its last value, which does not change the result. Each `IN` criterion then has at most one statement text per bucket plus the collection text: four on SQLite, six on SQL Server and MySQL, five on MariaDB and seven on Oracle. The limits come from measurements of the two bindings:
+
+  | Provider | Largest list bound as scalars |
+  |---|---|
+  | SQLite | 4 |
+  | PostgreSQL | none (the array is never slower) |
+  | SQL Server | 16 |
+  | MySQL | 16 |
+  | MariaDB | 8 |
+  | Oracle | 32 |
+
+  The collection parameter is still used when the list is longer, empty or `null`, when its count is not known without enumerating it (for example a LINQ iterator that is not a `Select` over a list or array), when the padded bucket would exceed `InquiryOptions.MaxParametersPerCommand`, and in a method that also has a `NOT IN` criterion. Interceptors and logs see the scalar text for short lists.
 - **Connection lifecycle is the crux.** Inquiry opens and disposes a connection per operation, so only Npgsql's pool-level prepared-statement cache and the *transacted* pipeline (which holds one connection across the transaction) see real reuse.
 
 ## Stored procedures are skipped
