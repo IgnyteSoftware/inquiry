@@ -208,9 +208,9 @@
       },
       "RepoDb": {
         "type": "Direct",
-        "requested": "[1.15.1, )",
-        "resolved": "1.15.1",
-        "contentHash": "mXAwxoGPOZg2432MOgJqt2cDbeD8TF4cvj8nBenqQUBtYNtWoYc5W2Cj0BqZbq0IG1t166ZTsmUhG7T7HsPV6A==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "lx+wZl40YYrL9bJ9M/B4Na446hXM8xGPzweejkeYH2YEmIGZx7A1aJq+ef7tqv27xLX857OA4SdHCax3CGkKMA==",
         "dependencies": {
           "System.ComponentModel.Annotations": "5.0.0",
           "System.Reflection.TypeExtensions": "4.7.0"
@@ -218,12 +218,12 @@
       },
       "RepoDb.Sqlite.Microsoft": {
         "type": "Direct",
-        "requested": "[1.15.0, )",
-        "resolved": "1.15.0",
-        "contentHash": "LS1y8a9PqwbM1wAG5xxB3PZLLa5qN5d/VWOakF1rZSAcNXBUvuDTaOaagNLEF6hDZZOu6F1x+DQ/Kieey3YDaA==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "10.0.9",
-          "RepoDb": "1.15.0"
+          "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
         }
       },
       "SonarAnalyzer.CSharp": {
@@ -1414,21 +1414,22 @@
       },
       "RepoDb": {
         "type": "Direct",
-        "requested": "[1.15.1, )",
-        "resolved": "1.15.1",
-        "contentHash": "mXAwxoGPOZg2432MOgJqt2cDbeD8TF4cvj8nBenqQUBtYNtWoYc5W2Cj0BqZbq0IG1t166ZTsmUhG7T7HsPV6A==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "lx+wZl40YYrL9bJ9M/B4Na446hXM8xGPzweejkeYH2YEmIGZx7A1aJq+ef7tqv27xLX857OA4SdHCax3CGkKMA==",
         "dependencies": {
+          "System.Collections.Immutable": "10.0.11",
           "System.Linq.Async": "7.0.1"
         }
       },
       "RepoDb.Sqlite.Microsoft": {
         "type": "Direct",
-        "requested": "[1.15.0, )",
-        "resolved": "1.15.0",
-        "contentHash": "LS1y8a9PqwbM1wAG5xxB3PZLLa5qN5d/VWOakF1rZSAcNXBUvuDTaOaagNLEF6hDZZOu6F1x+DQ/Kieey3YDaA==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "10.0.9",
-          "RepoDb": "1.15.0"
+          "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
         }
       },
       "SonarAnalyzer.CSharp": {
@@ -1954,8 +1955,8 @@
       },
       "System.Collections.Immutable": {
         "type": "Transitive",
-        "resolved": "10.0.8",
-        "contentHash": "rvMGYko6bcE/ZTpj1Q/EM22rcZNiQyjH+71capjjfmqG+DDncVE4kSaE5ysCv2vEFIHt8+zALWYXgIETFvcFzw=="
+        "resolved": "10.0.11",
+        "contentHash": "BQY956wwWSjRDoOspL6L1JscbFoSgJK606mO3PYalBHIZRV+Sc2xokvR/NHLlpUEfju6EbW5GbKbNpVYQ65cLw=="
       },
       "System.Composition": {
         "type": "Transitive",

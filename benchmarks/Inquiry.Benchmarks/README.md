@@ -167,6 +167,36 @@ linq2db's async methods (`FirstOrDefaultAsync`, `ToListAsync`, `CountAsync` and 
 methods of the same names bind first and throw for linq2db queries. The linq2db legs therefore call them
 through the alias `L2Async`, for example `L2Async.FirstOrDefaultAsync(dc.GetTable<L2Shipper>(), predicate)`.
 
+#### On PostgreSQL
+
+`benchmarks/Inquiry.Benchmarks.PostgreSql` has a `ShipperReadCompetitorBenchmarks` class with the same legs and
+the same `GlobalSetup` check. Other providers follow in later changes. It differs from the SQLite class in
+these ways:
+
+- It has one row tier, `Rows = 1000`. The PostgreSQL container is shared by the whole process and seeded once
+  by the first class that starts it.
+- For the same reason, run it with its own filter when you use `--inProcess`. Other classes in the project seed
+  one row or insert rows, and the setup check then throws, because the table does not hold `Rows` rows.
+- The tuned EF Core legs use `PgShipperContext` with the compiled model in
+  `benchmarks/Inquiry.Benchmarks.PostgreSql/Ef/CompiledModels`. The project file excludes
+  `PgShipperContextAssemblyAttributes.cs` for the same reason as above.
+- linq2db uses `UsePostgreSQL(connectionString, PostgreSQLVersion.v15)`, and RepoDB uses `RepoDb.PostgreSql`.
+
+The project pins the `linux-x64` runtime. On Windows, build it and run the managed DLL. The provider `Program.cs`
+does not return a failure exit code, so check the JSON report for cases without statistics:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess
+```
+
+Regenerate the compiled model from a Release build:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release -f net8.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.PostgreSql --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.PostgreSql.Ef.PgShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.PostgreSql.Ef.CompiledModels
+```
+
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
 
 Beyond CRUD, these classes cover the higher-level store features. Each follows the same

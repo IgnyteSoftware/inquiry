@@ -697,8 +697,8 @@
           "Npgsql": "[10.0.3, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "RepoDb": "[1.15.1, )",
-          "RepoDb.Sqlite.Microsoft": "[1.15.0, )",
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.Sqlite.Microsoft": "[1.16.0, )",
           "Testcontainers.MsSql": "[4.14.0, )",
           "Testcontainers.MySql": "[4.14.0, )",
           "Testcontainers.PostgreSql": "[4.14.0, )",
@@ -770,6 +770,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -777,7 +778,10 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Npgsql": "[10.0.3, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
-          "Testcontainers.PostgreSql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.PostgreSql": "[1.16.0, )",
+          "Testcontainers.PostgreSql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.sqlserver": {
@@ -1070,22 +1074,32 @@
       },
       "RepoDb": {
         "type": "CentralTransitive",
-        "requested": "[1.15.1, )",
-        "resolved": "1.15.1",
-        "contentHash": "mXAwxoGPOZg2432MOgJqt2cDbeD8TF4cvj8nBenqQUBtYNtWoYc5W2Cj0BqZbq0IG1t166ZTsmUhG7T7HsPV6A==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "lx+wZl40YYrL9bJ9M/B4Na446hXM8xGPzweejkeYH2YEmIGZx7A1aJq+ef7tqv27xLX857OA4SdHCax3CGkKMA==",
         "dependencies": {
           "System.ComponentModel.Annotations": "5.0.0",
           "System.Reflection.TypeExtensions": "4.7.0"
         }
       },
+      "RepoDb.PostgreSql": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "Qn8cz/MvJ52ErtQPYFJ/yCYLthDKdVwc6MzeCoIGGkUobPQaSlIMKaFGGD7Xzowy2lsX7qfkhrz0cBWFB5IK0g==",
+        "dependencies": {
+          "Npgsql": "10.0.3",
+          "RepoDb": "1.16.0"
+        }
+      },
       "RepoDb.Sqlite.Microsoft": {
         "type": "CentralTransitive",
-        "requested": "[1.15.0, )",
-        "resolved": "1.15.0",
-        "contentHash": "LS1y8a9PqwbM1wAG5xxB3PZLLa5qN5d/VWOakF1rZSAcNXBUvuDTaOaagNLEF6hDZZOu6F1x+DQ/Kieey3YDaA==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "10.0.9",
-          "RepoDb": "1.15.0"
+          "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
         }
       },
       "SQLitePCLRaw.lib.e_sqlite3": {
@@ -1702,8 +1716,8 @@
       },
       "System.Collections.Immutable": {
         "type": "Transitive",
-        "resolved": "10.0.8",
-        "contentHash": "rvMGYko6bcE/ZTpj1Q/EM22rcZNiQyjH+71capjjfmqG+DDncVE4kSaE5ysCv2vEFIHt8+zALWYXgIETFvcFzw=="
+        "resolved": "10.0.11",
+        "contentHash": "BQY956wwWSjRDoOspL6L1JscbFoSgJK606mO3PYalBHIZRV+Sc2xokvR/NHLlpUEfju6EbW5GbKbNpVYQ65cLw=="
       },
       "System.Diagnostics.DiagnosticSource": {
         "type": "Transitive",
@@ -1944,8 +1958,8 @@
           "Npgsql": "[10.0.3, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
           "Pomelo.EntityFrameworkCore.MySql": "[9.0.0, )",
-          "RepoDb": "[1.15.1, )",
-          "RepoDb.Sqlite.Microsoft": "[1.15.0, )",
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.Sqlite.Microsoft": "[1.16.0, )",
           "Testcontainers.MsSql": "[4.14.0, )",
           "Testcontainers.MySql": "[4.14.0, )",
           "Testcontainers.PostgreSql": "[4.14.0, )",
@@ -2017,6 +2031,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -2024,7 +2039,10 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Npgsql": "[10.0.3, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.0.4, )",
-          "Testcontainers.PostgreSql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.PostgreSql": "[1.16.0, )",
+          "Testcontainers.PostgreSql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.sqlserver": {
@@ -2327,21 +2345,33 @@
       },
       "RepoDb": {
         "type": "CentralTransitive",
-        "requested": "[1.15.1, )",
-        "resolved": "1.15.1",
-        "contentHash": "mXAwxoGPOZg2432MOgJqt2cDbeD8TF4cvj8nBenqQUBtYNtWoYc5W2Cj0BqZbq0IG1t166ZTsmUhG7T7HsPV6A==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "lx+wZl40YYrL9bJ9M/B4Na446hXM8xGPzweejkeYH2YEmIGZx7A1aJq+ef7tqv27xLX857OA4SdHCax3CGkKMA==",
         "dependencies": {
+          "System.Collections.Immutable": "10.0.11",
           "System.Linq.Async": "7.0.1"
+        }
+      },
+      "RepoDb.PostgreSql": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "Qn8cz/MvJ52ErtQPYFJ/yCYLthDKdVwc6MzeCoIGGkUobPQaSlIMKaFGGD7Xzowy2lsX7qfkhrz0cBWFB5IK0g==",
+        "dependencies": {
+          "Npgsql": "10.0.3",
+          "RepoDb": "1.16.0",
+          "System.Text.Json": "10.0.9"
         }
       },
       "RepoDb.Sqlite.Microsoft": {
         "type": "CentralTransitive",
-        "requested": "[1.15.0, )",
-        "resolved": "1.15.0",
-        "contentHash": "LS1y8a9PqwbM1wAG5xxB3PZLLa5qN5d/VWOakF1rZSAcNXBUvuDTaOaagNLEF6hDZZOu6F1x+DQ/Kieey3YDaA==",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
-          "Microsoft.Data.Sqlite": "10.0.9",
-          "RepoDb": "1.15.0"
+          "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
         }
       },
       "SQLitePCLRaw.lib.e_sqlite3": {
