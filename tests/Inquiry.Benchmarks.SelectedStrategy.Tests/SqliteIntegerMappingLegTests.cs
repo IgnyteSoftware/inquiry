@@ -4,6 +4,8 @@ namespace Inquiry.Benchmarks.SelectedStrategy.Tests;
 
 // SQLite returns Discontinued and whole-number UnitPrice values as Int64. These legs map them through
 // RepoDB's and Dapper's own mappers, so they must read what the ADO.NET legs read (#556).
+// The update legs share one static counter with CrudUpdateLegTests, so the two classes must not run in parallel.
+[Collection(nameof(CrudUpdateLegTests))]
 public sealed class SqliteIntegerMappingLegTests
 {
     public static TheoryData<Type, string> IntegerMappedLegs() => new()

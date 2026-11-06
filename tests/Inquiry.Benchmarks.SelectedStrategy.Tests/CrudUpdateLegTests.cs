@@ -3,6 +3,7 @@ using BenchmarkDotNet.Attributes;
 
 namespace Inquiry.Benchmarks.SelectedStrategy.Tests;
 
+[Collection(nameof(CrudUpdateLegTests))]
 public sealed class CrudUpdateLegTests
 {
     public static TheoryData<Type> SqliteCrudClasses() => new()
