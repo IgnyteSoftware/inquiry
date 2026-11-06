@@ -428,8 +428,20 @@ public sealed partial class InquiryGeneratorTests
         var expected = fresh.GetRunResult().Results[0];
         var actual = reused.GetRunResult().Results[0];
         Assert.Equal(expected.GeneratedSources.Select(static source => source.HintName), actual.GeneratedSources.Select(static source => source.HintName));
-        Assert.Equal(expected.Diagnostics.Select(static diagnostic => diagnostic.ToString()), actual.Diagnostics.Select(static diagnostic => diagnostic.ToString()));
+        Assert.Equal(expected.Diagnostics.Select(DiagnosticSnapshot), actual.Diagnostics.Select(DiagnosticSnapshot));
     }
+
+    // ToString() shows only the line span, so it would accept a stale text span.
+    private static string DiagnosticSnapshot(Diagnostic diagnostic)
+        => string.Join("|",
+            diagnostic.Id,
+            diagnostic.Severity,
+            diagnostic.WarningLevel,
+            diagnostic.IsSuppressed,
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            string.Join(";", new[] { diagnostic.Location }.Concat(diagnostic.AdditionalLocations).Select(static location =>
+                $"{location.Kind}:{location.GetLineSpan().Path}:{location.SourceSpan}:{location.GetLineSpan().Span}")),
+            string.Join(";", diagnostic.Properties.OrderBy(static pair => pair.Key, StringComparer.Ordinal).Select(static pair => pair.Key + "=" + pair.Value)));
 
     private static Dictionary<string, string> Reasons(string[] labels, string letters)
     {
