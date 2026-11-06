@@ -54,7 +54,15 @@ public class ProjectionAggregateBenchmarks
     public void GlobalCleanup() => _db.DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     /// <summary>Mirror of <see cref="ProductSummary"/>'s columns for the ADO / Dapper side.</summary>
-    private sealed record ProductSummaryRow(int ProductID, string ProductName, decimal? UnitPrice);
+    private sealed record ProductSummaryRow(int ProductID, string ProductName, decimal? UnitPrice)
+    {
+        // Dapper binds a constructor only when each column type matches exactly, and SQLite returns
+        // ProductID and whole-number prices as Int64. With this constructor, Dapper sets the properties
+        // and converts the values itself.
+        public ProductSummaryRow() : this(0, "", null)
+        {
+        }
+    }
 
     // ---- Projection (3-column subset) ---------------------------------------------------
 

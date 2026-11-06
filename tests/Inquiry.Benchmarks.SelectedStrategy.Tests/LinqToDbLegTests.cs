@@ -93,7 +93,7 @@ public sealed class LinqToDbLegTests
         }
     }
 
-    private static object CreateAtSmallestParams(Type benchmarkType)
+    internal static object CreateAtSmallestParams(Type benchmarkType)
     {
         var benchmark = Activator.CreateInstance(benchmarkType)!;
         foreach (var property in benchmarkType.GetProperties())
@@ -107,20 +107,20 @@ public sealed class LinqToDbLegTests
         return benchmark;
     }
 
-    private static MethodInfo[] Legs(Type benchmarkType) => benchmarkType
+    internal static MethodInfo[] Legs(Type benchmarkType) => benchmarkType
         .GetMethods(BindingFlags.Public | BindingFlags.Instance)
         .Where(static method => method.GetCustomAttribute<BenchmarkAttribute>() is not null)
         .OrderBy(static method => method.Name, StringComparer.Ordinal)
         .ToArray();
 
-    private static string Category(MethodInfo leg)
+    internal static string Category(MethodInfo leg)
         => leg.GetCustomAttribute<BenchmarkCategoryAttribute>()!.Categories.Single();
 
     // Some categories have a Dapper baseline instead of an ADO.NET one.
-    private static MethodInfo BaselineLeg(Type benchmarkType, string category) => Legs(benchmarkType)
+    internal static MethodInfo BaselineLeg(Type benchmarkType, string category) => Legs(benchmarkType)
         .Where(leg => Category(leg) == category)
         .Single(static leg => leg.GetCustomAttribute<BenchmarkAttribute>()!.Baseline);
 
-    private static void Invoke(object benchmark, string methodName)
+    internal static void Invoke(object benchmark, string methodName)
         => benchmark.GetType().GetMethod(methodName)?.Invoke(benchmark, null);
 }
