@@ -32,7 +32,7 @@ internal static class AutoJunctionSynthesizer
     /// no entity declares one.
     /// </summary>
     public static ImmutableArray<EntityData> Synthesize(
-        SourceProductionContext context, ImmutableArray<EntityData> entities, SqlBuilder sqlBuilder)
+        EmissionCollector context, ImmutableArray<EntityData> entities, SqlBuilder sqlBuilder)
     {
         if (!entities.Any(static e => e.IsMapped && e.Relations.AsImmutableArray().Any(static r => r.IsAutoJunction)))
         {
@@ -178,7 +178,7 @@ internal static class AutoJunctionSynthesizer
     /// wrong rather than merely unhelpful.
     /// </summary>
     private static JunctionShape? TryBuildShape(
-        SourceProductionContext context,
+        EmissionCollector context,
         SqlBuilder sqlBuilder,
         Dictionary<string, EntityData> byName,
         Dictionary<string, List<string?>> claimedTables,
@@ -419,7 +419,7 @@ internal static class AutoJunctionSynthesizer
     private static string Qualified(string? schema, string table)
         => string.IsNullOrEmpty(schema) ? table : schema + "." + table;
 
-    private static void Report(SourceProductionContext context, EntityData entity, RelationData relation, string reason)
+    private static void Report(EmissionCollector context, EntityData entity, RelationData relation, string reason)
         => context.ReportDiagnostic(Diagnostic.Create(
             InquiryDiagnosticDescriptors.AutoJunctionInvalid, relation.Location?.ToLocation(),
             entity.Name, relation.PropertyName, reason));

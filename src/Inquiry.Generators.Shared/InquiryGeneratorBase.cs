@@ -167,15 +167,71 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             }
         });
 
-        // Junctions, relations, stores, schema and registration still share one output over the whole
-        // model, so any model edit re-runs all of them.
-        var model = collectedResolvedTables.Combine(collectedResolvedViews).Combine(collectedStores)
-            .Combine(collectedProjections).Combine(collectedAdHocs).Combine(ownership).Combine(gate)
-            .WithTrackingName(ModelOutputTrackingName);
+        // Two ownership facts that only stores or only the schema read, so a change to one reaches only its readers.
+        var storeOptions = ownership.Select(static (owner, _) => owner.EmitUnsupportedOperationStubs)
+            .WithTrackingName(StoreOptionsTrackingName);
+        var schemaOptions = ownership.Select(static (owner, _) => owner.ManifestMetadataCollisionKey)
+            .WithTrackingName(SchemaOptionsTrackingName);
 
-        context.RegisterSourceOutput(model, (spc, data) => Execute(spc,
-            data.Left.Left.Left.Left.Left.Left, data.Left.Left.Left.Left.Left.Right, data.Left.Left.Left.Left.Right,
-            data.Left.Left.Left.Right, data.Left.Left.Right, data.Left.Right, data.Right));
+        // One index over the resolved model: junction synthesis, the mapped lookup and computed-invalid names. It
+        // rebuilds on any entity edit, but it is cheap and compares by value, so each relation and store step
+        // below re-runs only when the entities it names change.
+        var index = collectedResolvedTables.Combine(collectedResolvedViews).Combine(gate)
+            .Select((all, cancellationToken) => EntityIndex.Build(all.Left.Left, all.Left.Right, all.Right, CreateSqlBuilder(), cancellationToken))
+            .WithTrackingName(EntityIndexTrackingName);
+        var projectionIndex = collectedProjections
+            .Select(static (all, _) => ProjectionIndex.Build(all))
+            .WithTrackingName(ProjectionIndexTrackingName);
+        var relationSlices = index
+            .SelectMany(static (all, _) => all.RelationSlices())
+            .WithTrackingName(RelationSlicesTrackingName);
+        var synthesizedJunctions = index
+            .Select(static (all, _) => all.SynthesizedJunctions())
+            .WithTrackingName(SynthesizedJunctionsTrackingName);
+        var duplicates = index.Combine(gate).Combine(projectionIndex).Combine(collectedAdHocs)
+            .Select(static (all, _) => DuplicateMaterializers.Build(all.Left.Left.Left, all.Left.Left.Right, all.Left.Right, all.Right))
+            .WithTrackingName(DuplicateMaterializersTrackingName);
+
+        // Each store reads only its slice of the model, so each store gets its own output.
+        var storeSlices = stores.Combine(index).Combine(projectionIndex).Combine(storeOptions)
+            .Select(static (all, _) => StoreSlice.Build(all.Left.Left.Left, all.Left.Left.Right, all.Left.Right, all.Right))
+            .WithTrackingName(StoreSlicesTrackingName);
+        var storeEmissions = storeSlices
+            .Select((slice, cancellationToken) => StoreEmission.Create(slice, CreateSqlBuilder(), cancellationToken))
+            .WithTrackingName(StoreEmissionsTrackingName);
+        var storeFacts = storeEmissions
+            .Select(static (emission, _) => emission.Facts)
+            .WithTrackingName(StoreFactsTrackingName)
+            .Collect();
+
+        var entityRegistrations = index
+            .Select(static (all, _) => all.Registrations())
+            .WithTrackingName(EntityRegistrationsTrackingName);
+        var projectionRegistrations = projectionIndex
+            .Select(static (all, _) => all.Registrations())
+            .WithTrackingName(ProjectionRegistrationsTrackingName);
+        var adHocRegistrations = collectedAdHocs
+            .Select(static (all, _) => DuplicateMaterializers.Registrations(all))
+            .WithTrackingName(AdHocRegistrationsTrackingName);
+
+        // These outputs continue in the order the single output stage reported diagnostics: junction synthesis,
+        // relations, duplicate materializers, rotating tokens, stores, schema, registration.
+        context.RegisterSourceOutput(index, static (spc, all) => EmissionCollector.Publish(spc, all.JunctionDiagnostics, EquatableArray<EmittedSource>.Empty));
+        context.RegisterSourceOutput(relationSlices, static (spc, slice) => ValidateRelations(spc, slice.Entity, slice.CreateLookup()));
+        context.RegisterSourceOutput(duplicates, (spc, set) => EmitDuplicateMaterializers(spc, set));
+        context.RegisterSourceOutput(resolvedTables.Combine(gate), (spc, pair) => ReportRotatingTokens(spc, pair.Left.Entity, pair.Right.Emit));
+        context.RegisterSourceOutput(resolvedViews.Combine(gate), (spc, pair) => ReportRotatingTokens(spc, pair.Left.Entity, pair.Right.Emit));
+        context.RegisterSourceOutput(synthesizedJunctions, (spc, junctions) => SchemaEmitter.ReportRotatingTokenStorageDiagnostics(spc, junctions.AsImmutableArray(), CreateSqlBuilder()));
+        context.RegisterSourceOutput(storeEmissions, static (spc, emission) => EmissionCollector.Publish(spc, emission.Diagnostics, emission.Sources));
+
+        var schemaInput = index.Combine(storeFacts).Combine(schemaOptions).Combine(projectionRegistrations).Combine(adHocRegistrations)
+            .WithTrackingName(SchemaInputTrackingName);
+        context.RegisterSourceOutput(schemaInput, (spc, all) => EmitSchema(spc,
+            all.Left.Left.Left.Left, all.Left.Left.Left.Right, all.Left.Left.Right, all.Left.Right.Count > 0 || all.Right.Count > 0));
+        var registrationInput = entityRegistrations.Combine(projectionRegistrations).Combine(adHocRegistrations).Combine(storeFacts).Combine(gate)
+            .WithTrackingName(RegistrationInputTrackingName);
+        context.RegisterSourceOutput(registrationInput, static (spc, all) => EmitRegistration(spc,
+            all.Left.Left.Left.Left, all.Left.Left.Left.Right, all.Left.Left.Right, all.Left.Right, all.Right.Emit));
     }
 
     internal const string EntitiesTrackingName = "InquiryEntities";
@@ -191,7 +247,21 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
     internal const string ViewMaterializersTrackingName = "InquiryViewMaterializers";
     internal const string ProjectionMaterializersTrackingName = "InquiryProjectionMaterializers";
     internal const string AdHocMaterializersTrackingName = "InquiryAdHocMaterializers";
-    internal const string ModelOutputTrackingName = "InquiryModelOutput";
+    internal const string StoreOptionsTrackingName = "InquiryStoreOptions";
+    internal const string SchemaOptionsTrackingName = "InquirySchemaOptions";
+    internal const string EntityIndexTrackingName = "InquiryEntityIndex";
+    internal const string ProjectionIndexTrackingName = "InquiryProjectionIndex";
+    internal const string RelationSlicesTrackingName = "InquiryRelationSlices";
+    internal const string SynthesizedJunctionsTrackingName = "InquirySynthesizedJunctions";
+    internal const string DuplicateMaterializersTrackingName = "InquiryDuplicateMaterializers";
+    internal const string StoreSlicesTrackingName = "InquiryStoreSlices";
+    internal const string StoreEmissionsTrackingName = "InquiryStoreEmissions";
+    internal const string StoreFactsTrackingName = "InquiryStoreFacts";
+    internal const string EntityRegistrationsTrackingName = "InquiryEntityRegistrations";
+    internal const string ProjectionRegistrationsTrackingName = "InquiryProjectionRegistrations";
+    internal const string AdHocRegistrationsTrackingName = "InquiryAdHocRegistrations";
+    internal const string SchemaInputTrackingName = "InquirySchemaInput";
+    internal const string RegistrationInputTrackingName = "InquiryRegistrationInput";
 
     private void EmitEntityMaterializer(SourceProductionContext context, EntityData? entity)
     {
@@ -274,238 +344,156 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         return StoreProcessor.Extract(storeSymbol, cancellationToken);
     }
 
-    private void Execute(
-        SourceProductionContext context,
-        ImmutableArray<ResolvedEntity> tables,
-        ImmutableArray<ResolvedEntity> views,
-        ImmutableArray<StoreData> stores,
-        ImmutableArray<ProjectionData> projections,
-        ImmutableArray<AdHocData> adHocs,
-        DialectOwnership ownership,
-        MaterializerGate gate)
+    private void EmitDuplicateMaterializers(SourceProductionContext context, DuplicateMaterializers duplicates)
     {
-        // Discovery, ownership and computed-expression diagnostics are reported by earlier outputs.
-        if (!gate.Emit)
-        {
-            return;
-        }
-
         var sqlBuilder = CreateSqlBuilder();
-        var computedInvalidEntityNames = new HashSet<string>(System.StringComparer.Ordinal);
-        var resolvedEntities = ImmutableArray.CreateBuilder<EntityData>(tables.Length + views.Length);
-        foreach (var resolved in tables.Concat(views))
+        foreach (var entity in duplicates.Entities)
         {
-            resolvedEntities.Add(resolved.Entity);
-            if (resolved.ComputedInvalid)
-            {
-                computedInvalidEntityNames.Add(resolved.Entity.FullyQualifiedName);
-            }
+            EntityProcessor.EmitMaterializer(context, entity, sqlBuilder);
         }
 
-        var entities = resolvedEntities.MoveToImmutable();
-
-        // Auto-managed [InquiryManyToMany] junctions become real entities here, before anything looks at
-        // the entity set. Each declaring relation is rewritten to name the synthesized junction, so
-        // relation validation, the SQL builders, and the schema emitter all see the shape an explicitly
-        // mapped junction produces and need no auto-junction branch of their own.
-        entities = AutoJunctionSynthesizer.Synthesize(context, entities, sqlBuilder);
-
-        var mappedEntities = new Dictionary<string, EntityData>();
-        foreach (var entity in entities)
+        foreach (var projection in duplicates.Projections)
         {
-            if (entity.IsMapped)
-            {
-                mappedEntities[entity.FullyQualifiedName] = entity;
-            }
+            ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder);
         }
 
-        // Relation shapes are validated here, at declaration time, so a mistyped foreign key or a
-        // composite-key child is reported even when no method eager-loads the relation (the emit
-        // path no longer re-reports these).
-        ValidateRelations(context, mappedEntities);
-
-        var mappedProjections = new Dictionary<string, ProjectionData>();
-        foreach (var projection in projections)
+        foreach (var adHoc in duplicates.AdHocs)
         {
-            if (projection.IsMapped)
-            {
-                mappedProjections[projection.FullyQualifiedName] = projection;
-            }
+            AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder);
         }
+    }
 
-        var mappedAdHocs = new Dictionary<string, AdHocData>();
-        foreach (var adHoc in adHocs)
+    private void ReportRotatingTokens(SourceProductionContext context, EntityData entity, bool emit)
+    {
+        if (emit && entity.IsMapped)
         {
-            if (adHoc.IsMapped)
-            {
-                mappedAdHocs[adHoc.FullyQualifiedName] = adHoc;
-            }
+            SchemaEmitter.ReportRotatingTokenStorageDiagnostics(context, new[] { entity }, CreateSqlBuilder());
         }
+    }
 
-        // Nothing in this compilation needs codegen — skip arbitration so consumer projects that
-        // only reference the runtime don't get spurious referenced-package dialect-collision noise.
-        if (mappedEntities.Count == 0 && stores.IsEmpty && mappedProjections.Count == 0 && mappedAdHocs.Count == 0)
+    private void EmitSchema(
+        SourceProductionContext context,
+        EntityIndex index,
+        ImmutableArray<StoreFacts> stores,
+        string manifestMetadataCollisionKey,
+        bool anyMappedProjectionOrAdHoc)
+    {
+        // Nothing in this compilation needs codegen. Skip the manifest check so consumer projects that only
+        // reference the runtime don't get spurious diagnostics.
+        if (!index.Emit || (!index.AnyMapped && stores.IsEmpty && !anyMappedProjectionOrAdHoc))
         {
             return;
         }
 
-        var entityRegistrations = ImmutableArray.CreateBuilder<EntityRegistration>();
-        foreach (var entity in mappedEntities.Values)
-        {
-            // A synthesized junction has no CLR type to materialize into, and nothing reads its rows as
-            // entities — the eager loader reads its two key columns straight off the reader. It stays in
-            // mappedEntities so relation resolution finds it, and in the schema set so it gets DDL.
-            if (entity.IsSynthesizedJunction)
-            {
-                continue;
-            }
-
-            // Materializers have their own outputs. A name declared twice is emitted here once, as
-            // before, because two outputs cannot add the same hint name.
-            entityRegistrations.Add(gate.IsDuplicateEntity(entity.FullyQualifiedName)
-                ? EntityProcessor.EmitMaterializer(context, entity, sqlBuilder)
-                : new EntityRegistration(entity.FullyQualifiedName, entity.ClassMaterializerFullName));
-        }
-
-        // projection materializers register like entity materializers (same
-        // IInquiryEntityMaterializer<T> contract), so they share the registration set.
-        foreach (var projection in mappedProjections.Values)
-        {
-            entityRegistrations.Add(gate.IsDuplicateProjection(projection.FullyQualifiedName)
-                ? ProjectionProcessor.EmitMaterializer(context, projection, sqlBuilder)
-                : new EntityRegistration(projection.FullyQualifiedName, projection.ClassMaterializerFullName));
-        }
-
-        // ad-hoc DTO materializers share the registration set too. They are dialect-independent
-        // (reads only — no SQL is ever generated for them), so the dialect owner emits them like
-        // the other materializers.
-        foreach (var adHoc in mappedAdHocs.Values)
-        {
-            entityRegistrations.Add(gate.IsDuplicateAdHoc(adHoc.FullyQualifiedName)
-                ? AdHocProcessor.EmitMaterializer(context, adHoc, sqlBuilder)
-                : new EntityRegistration(adHoc.FullyQualifiedName, adHoc.ClassMaterializerFullName));
-        }
-
-        var storeRegistrations = ImmutableArray.CreateBuilder<StoreRegistration>();
-        var collectionArtifacts = ImmutableArray.CreateBuilder<CollectionParameterArtifact>();
-
-        SchemaEmitter.ReportRotatingTokenStorageDiagnostics(context, entities.Where(static e => e.IsMapped).ToArray(), sqlBuilder);
-
-        foreach (var store in stores)
-        {
-            context.CancellationToken.ThrowIfCancellationRequested();
-
-            foreach (var diagnostic in store.Diagnostics)
-            {
-                context.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-
-            var emission = StoreProcessor.Emit(
-                context,
-                store,
-                mappedEntities,
-                mappedProjections,
-                sqlBuilder,
-                ownership.EmitUnsupportedOperationStubs,
-                computedInvalidEntityNames);
-            if (emission is not null)
-            {
-                storeRegistrations.Add(emission.Registration);
-                collectionArtifacts.AddRange(emission.Artifacts);
-            }
-        }
-
-        // emit one per-assembly schema DDL file for the resolved dialect. Iterate the original
-        // entity array (source order) filtered to mapped entities so emission is deterministic.
-        // Views are defined in the database, not created by Inquiry — exclude them from DDL.
-        var schemaEntities = entities.Where(e => e.IsMapped && !e.IsView).ToList();
-        var providerArtifacts = collectionArtifacts
+        // Iterate the entity array (source order) filtered to mapped entities so emission is deterministic.
+        // Views are defined in the database, not created by Inquiry, so they get no DDL.
+        var schemaEntities = index.Entities.AsImmutableArray().Where(static e => e.IsMapped && !e.IsView).ToList();
+        var providerArtifacts = stores
+            .SelectMany(static store => store.Artifacts.AsImmutableArray())
             .GroupBy(static artifact => artifact.Identity, System.StringComparer.Ordinal)
             .Select(static group => group.First())
             .OrderBy(static artifact => artifact.Schema, System.StringComparer.Ordinal)
             .ThenBy(static artifact => artifact.Name, System.StringComparer.Ordinal)
             .ToArray();
-        if (!string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey))
+        if (!string.IsNullOrEmpty(manifestMetadataCollisionKey))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.SchemaManifestMetadataCollision,
-                null, ownership.ManifestMetadataCollisionKey));
+                null, manifestMetadataCollisionKey));
         }
-        SchemaEmitter.Emit(context, schemaEntities, sqlBuilder, providerArtifacts,
-            emitManifestMetadata: string.IsNullOrEmpty(ownership.ManifestMetadataCollisionKey));
+        SchemaEmitter.Emit(context, schemaEntities, CreateSqlBuilder(), providerArtifacts,
+            emitManifestMetadata: string.IsNullOrEmpty(manifestMetadataCollisionKey));
+    }
 
-        if (storeRegistrations.Count > 0 || entityRegistrations.Count > 0)
+    private static void EmitRegistration(
+        SourceProductionContext context,
+        EquatableArray<EntityRegistration> entities,
+        EquatableArray<EntityRegistration> projections,
+        EquatableArray<EntityRegistration> adHocs,
+        ImmutableArray<StoreFacts> stores,
+        bool emit)
+    {
+        if (!emit)
         {
-            RegistrationEmitter.Emit(context, entityRegistrations.ToImmutable(), storeRegistrations.ToImmutable());
+            return;
+        }
+
+        // Projection and ad-hoc DTO materializers register like entity materializers (same
+        // IInquiryEntityMaterializer<T> contract), so they share the registration set.
+        var entityRegistrations = entities.AsImmutableArray().Concat(projections.AsImmutableArray()).Concat(adHocs.AsImmutableArray()).ToImmutableArray();
+        var storeRegistrations = stores
+            .Where(static store => store.Registration is not null)
+            .Select(static store => store.Registration!)
+            .ToImmutableArray();
+        if (storeRegistrations.Length > 0 || entityRegistrations.Length > 0)
+        {
+            RegistrationEmitter.Emit(context, entityRegistrations, storeRegistrations);
         }
     }
 
     /// <summary>
-    /// Reports relation-shape errors at declaration time for every mapped entity's relations,
+    /// Reports relation-shape errors at declaration time for one mapped entity's relations,
     /// regardless of whether any store method eager-loads them: a foreign-key property that is not a
     /// mapped column on the side that should own it (INQ040), the same property found on the opposite
     /// side — a reversed relation (INQ058), and a composite-key child (INQ041). A relation whose
     /// child type isn't a mapped entity is left alone (the emit path tolerates it).
     /// </summary>
-    private static void ValidateRelations(SourceProductionContext context, Dictionary<string, EntityData> mappedEntities)
+    private static void ValidateRelations(SourceProductionContext context, EntityData entity, Dictionary<string, EntityData> mappedEntities)
     {
-        foreach (var entity in mappedEntities.Values)
+        foreach (var relation in entity.Relations)
         {
-            foreach (var relation in entity.Relations)
+            if (relation.IsManyToMany)
             {
-                if (relation.IsManyToMany)
+                // A many-to-many association must be a collection nav whose junction and related
+                // entities are both mapped, and the junction must name one foreign-key property per
+                // key column of the related entity — one for a single-column key, or one per column
+                // for a composite key, paired by position. Each reason reports its own diagnostic so
+                // the message can name the offending type, property, or arity.
+                if (DescribeManyToManyFailure(mappedEntities, entity, relation) is { } diagnostic)
                 {
-                    // A many-to-many association must be a collection nav whose junction and related
-                    // entities are both mapped, and the junction must name one foreign-key property per
-                    // key column of the related entity — one for a single-column key, or one per column
-                    // for a composite key, paired by position. Each reason reports its own diagnostic so
-                    // the message can name the offending type, property, or arity.
-                    if (DescribeManyToManyFailure(mappedEntities, entity, relation) is { } diagnostic)
-                    {
-                        context.ReportDiagnostic(diagnostic);
-                    }
-
-                    continue;
+                    context.ReportDiagnostic(diagnostic);
                 }
 
-                if (!mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                // A to-many (collection) relation's FK lives on the child; a to-one (reference)
-                // relation's FK lives on the parent (this entity).
-                var owner = relation.IsCollection ? child : entity;
-                var other = relation.IsCollection ? entity : child;
-                var relationKind = relation.IsCollection ? "collection" : "reference";
-                var location = relation.Location?.ToLocation();
+            if (!mappedEntities.TryGetValue(relation.ChildEntityFullyQualifiedName, out var child))
+            {
+                continue;
+            }
 
-                if (FindEntityColumn(owner, relation.ForeignKeyProperty) is null)
-                {
-                    if (FindEntityColumn(other, relation.ForeignKeyProperty) is not null)
-                    {
-                        context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.RelationForeignKeyWrongSide, location,
-                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name, relationKind, other.Name));
-                    }
-                    else
-                    {
-                        context.ReportDiagnostic(Diagnostic.Create(
-                            InquiryDiagnosticDescriptors.UnknownRelationForeignKey, location,
-                            entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name,
-                            DescribeNearMiss(owner, relation.ForeignKeyProperty)));
-                    }
-                }
+            // A to-many (collection) relation's FK lives on the child; a to-one (reference)
+            // relation's FK lives on the parent (this entity).
+            var owner = relation.IsCollection ? child : entity;
+            var other = relation.IsCollection ? entity : child;
+            var relationKind = relation.IsCollection ? "collection" : "reference";
+            var location = relation.Location?.ToLocation();
 
-                if (child.Keys.Count > 1)
+            if (FindEntityColumn(owner, relation.ForeignKeyProperty) is null)
+            {
+                if (FindEntityColumn(other, relation.ForeignKeyProperty) is not null)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
-                        InquiryDiagnosticDescriptors.RelationCompositeChildKey, location,
-                        entity.Name, relation.PropertyName, child.Name, child.Keys.Count));
+                        InquiryDiagnosticDescriptors.RelationForeignKeyWrongSide, location,
+                        entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name, relationKind, other.Name));
                 }
-                else if (StoreProcessor.FindKeyStorageMismatch(entity, relation, child, junction: null) is { } mismatch)
+                else
                 {
-                    context.ReportDiagnostic(CreateKeyStorageMismatch(location, entity, relation, mismatch));
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.UnknownRelationForeignKey, location,
+                        entity.Name, relation.PropertyName, relation.ForeignKeyProperty, owner.Name,
+                        DescribeNearMiss(owner, relation.ForeignKeyProperty)));
                 }
+            }
+
+            if (child.Keys.Count > 1)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.RelationCompositeChildKey, location,
+                    entity.Name, relation.PropertyName, child.Name, child.Keys.Count));
+            }
+            else if (StoreProcessor.FindKeyStorageMismatch(entity, relation, child, junction: null) is { } mismatch)
+            {
+                context.ReportDiagnostic(CreateKeyStorageMismatch(location, entity, relation, mismatch));
             }
         }
     }

@@ -6,7 +6,7 @@ namespace Inquiry.Generators.Models;
 /// <summary>
 /// Decides whether a model gets its own materializer output. <see cref="Emit"/> is true when this
 /// generator owns the dialect and some model needs code. A fully qualified name that more than one
-/// mapped declaration uses is left to the shared model output, which keeps one materializer for it.
+/// mapped declaration uses is left to the duplicate-materializer output, which keeps one materializer for it.
 /// </summary>
 internal sealed record MaterializerGate(
     bool Emit,
