@@ -47,6 +47,28 @@ and the diagnostic registry. Naive parallelism collides there. The project's ans
 - **Append-only edits** to the operation/diagnostic enums and registration arrays, so parallel branches
   merge textually. See [Adding a provider](adding-a-provider.md) for the append-point checklist.
 
+### Incremental generator stages (#182)
+
+`InquiryGeneratorBase.Initialize` gives each piece of generated code its own output, so an IDE edit re-runs
+only what reads the changed declaration:
+
+- **Per model:** computed-expression resolution and the materializer of each table, view, projection and
+  ad-hoc DTO.
+- **One cheap index:** junction synthesis, the mapped-entity lookup and computed-invalid names. It rebuilds
+  on any entity edit and compares by value.
+- **Per entity:** relation checks, from a slice holding the entity and the mapped entities its relations
+  name.
+- **Per store:** a `StoreSlice` holds the store, its entity, relation children and junctions, returned
+  projections, stored-procedure result types, computed-invalid names and the INQ039 stub policy.
+  `StoreProcessor.Emit` writes into an `EmissionCollector`, and the store's sources and diagnostics are
+  cached as one value.
+- **Global:** the schema, which reads every entity and each store's collection-parameter artifacts, and
+  DI registration.
+
+Roslyn reports output-node diagnostics in registration order, then item order. The outputs are registered
+in the order the old single output reported them, so the diagnostic sequence is unchanged. Keep that order
+when adding an output.
+
 ## Live-runtime testing & benchmarks
 
 - **Per-dialect compilation.** Each provider test project link-compiles the shared Northwind source under
