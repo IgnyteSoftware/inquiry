@@ -247,6 +247,110 @@ public static class InquiryInExpansion
         command.CommandText = ReplaceAll(command.CommandText, sentinel, placeholders.ToString());
     }
 
+    /// <summary>
+    /// Binds a short <c>IN</c> list as scalar parameters instead of the dialect's one-parameter collection
+    /// transport. The list pads to the next power-of-two bucket, so each bucket keeps one statement text.
+    /// Every occurrence of <paramref name="collectionPredicate"/> is replaced with the bucket's predicate
+    /// from <paramref name="bucketPredicates"/> (index <c>log2(bucket)</c>).
+    /// </summary>
+    /// <returns>
+    /// <see langword="false"/>, with the command unchanged, when the caller must bind the collection
+    /// transport: the collection is null or empty, its count is not known without enumerating it, it has
+    /// more elements than <paramref name="elementNames"/>, its bucket does not fit in
+    /// <paramref name="maxParameterCount"/>, or the command text does not contain the predicate.
+    /// </returns>
+    /// <typeparam name="T">The element type of the IN collection.</typeparam>
+    public static bool TryBindScalarList<T>(
+        DbCommand command,
+        IEnumerable<T>? values,
+        int maxParameterCount,
+        string collectionPredicate,
+        string[] bucketPredicates,
+        string[] elementNames,
+        Func<T, object> convertElement,
+        Action<DbParameter> configureElement)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(collectionPredicate);
+        ArgumentNullException.ThrowIfNull(bucketPredicates);
+        ArgumentNullException.ThrowIfNull(elementNames);
+        ArgumentNullException.ThrowIfNull(convertElement);
+        ArgumentNullException.ThrowIfNull(configureElement);
+
+        if (values is null)
+        {
+            return false;
+        }
+
+        int count;
+        if (values is IReadOnlyCollection<T> readOnlyCollection)
+        {
+            count = readOnlyCollection.Count;
+        }
+        else if (!System.Linq.Enumerable.TryGetNonEnumeratedCount(values, out count))
+        {
+            return false;
+        }
+
+        if (count == 0 || count > elementNames.Length)
+        {
+            return false;
+        }
+
+        var bucket = NextPowerOfTwo(count);
+        var bucketIndex = System.Numerics.BitOperations.Log2((uint)bucket);
+        if (bucket > elementNames.Length || bucketIndex >= bucketPredicates.Length
+            || command.Parameters.Count + bucket > maxParameterCount)
+        {
+            return false;
+        }
+
+        var commandText = command.CommandText;
+        if (!commandText.Contains(collectionPredicate, System.StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var index = 0;
+        object last = System.DBNull.Value;
+        foreach (var value in values)
+        {
+            // A collection that grew after Count was read cannot fit the chosen bucket.
+            if (index == bucket)
+            {
+                throw new System.InvalidOperationException("The IN collection changed while Inquiry was binding it.");
+            }
+
+            last = convertElement(value);
+            AddScalar(command, elementNames[index], last, configureElement);
+            index++;
+        }
+
+        // Nothing was added, so the transport can still bind this (now empty) collection.
+        if (index == 0)
+        {
+            return false;
+        }
+
+        // A repeated element does not change the result of a positive IN, including a repeated NULL.
+        for (; index < bucket; index++)
+        {
+            AddScalar(command, elementNames[index], last, configureElement);
+        }
+
+        command.CommandText = ReplaceAll(commandText, collectionPredicate, bucketPredicates[bucketIndex]);
+        return true;
+    }
+
+    private static void AddScalar(DbCommand command, string name, object value, Action<DbParameter> configureElement)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        configureElement(parameter);
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
     // Smallest power of two >= n (n >= 1). Bounded by the parameter cap at the call site, so no overflow.
     private static int NextPowerOfTwo(int n)
     {

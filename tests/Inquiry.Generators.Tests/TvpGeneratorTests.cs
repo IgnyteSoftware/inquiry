@@ -27,7 +27,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("[CategoryId] IN (SELECT [Value] FROM @CategoryId)", generatedText);
         Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@CategoryId\", categoryIds, \"{IntTvpTypeName}\", _inquiryTvpDescriptor_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c);", generatedText);
-        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", generatedText);
         Assert.DoesNotContain("InquiryArrayParameter", generatedText);
     }
 
@@ -70,7 +70,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("[Id] IN (SELECT [Value] FROM @Id)", text);
         Assert.Contains($"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Id\", _args.Arg0, \"{BigIntTvpTypeName}\", _inquiryTvpDescriptor_7fd6c8a95588d206e3cbdd54c1dd765afffea824af43008e3f37179b9e033cfc);", text);
-        Assert.DoesNotContain("InquiryInExpansion", text);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", text);
         Assert.DoesNotContain("InquiryArrayParameter", text);
     }
 
@@ -193,6 +193,6 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("IN (SELECT value FROM json_each(@CategoryId))", generatedText);
         Assert.Contains("InquiryJsonArrayParameter.Bind", generatedText);
         Assert.DoesNotContain("InquiryTvpParameter", generatedText);
-        Assert.DoesNotContain("InquiryInExpansion", generatedText);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", generatedText);
     }
 }

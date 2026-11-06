@@ -195,6 +195,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("after.HasValue ?", convertedKeyset);
 
         var collection = Method(text, "InDatesAsync");
+        // Temporal lists keep the JSON transport for every length (#509), so no element is bridged.
+        Assert.DoesNotContain("TryBindScalarList", collection);
         Assert.DoesNotContain(".ToDateTime(global::System.TimeOnly.MinValue)", collection);
     }
 

@@ -39,6 +39,28 @@ internal sealed class PredicateBinding
 
     /// <summary>The exact provider resolution discovered for this binding and reused during emission.</summary>
     public CollectionParameterResolution? CollectionResolution { get; set; }
+
+    /// <summary>The scalar binding tried before the collection transport for a short positive IN list.</summary>
+    public ScalarInListPlan? ScalarList { get; set; }
+}
+
+/// <summary>
+/// Generated names and SQL fragments for binding a short positive IN list as scalar parameters.
+/// <see cref="ElementRuntimeNames"/> holds one name per element up to the dialect threshold;
+/// <see cref="BucketFragments"/> holds the criterion for each power-of-two bucket.
+/// </summary>
+internal sealed class ScalarInListPlan
+{
+    public ScalarInListPlan(string collectionFragment, IReadOnlyList<string> elementRuntimeNames, IReadOnlyList<string> bucketFragments)
+    {
+        CollectionFragment = collectionFragment;
+        ElementRuntimeNames = elementRuntimeNames;
+        BucketFragments = bucketFragments;
+    }
+
+    public string CollectionFragment { get; }
+    public IReadOnlyList<string> ElementRuntimeNames { get; }
+    public IReadOnlyList<string> BucketFragments { get; }
 }
 
 internal sealed class SetBinding

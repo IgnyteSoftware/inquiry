@@ -17,6 +17,9 @@ public sealed class Widget
 
     [InquiryColumn]
     public bool IsActive { get; set; }
+
+    [InquiryColumn]
+    public int Rank { get; set; }
 }
 
 public partial class WidgetStore : InquiryStore<Widget>
@@ -26,6 +29,10 @@ public partial class WidgetStore : InquiryStore<Widget>
 
     [InquirySelectOneByKey]
     public partial Task<Widget?> SelectByKeyAsync(Guid key, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate]
+    [InquiryWhere("Rank", Compare.In)]
+    public partial Task<IReadOnlyList<Widget>> SelectByRanksAsync(IReadOnlyList<int> ranks, CancellationToken cancellationToken = default);
 
     [InquiryInsert]
     public partial Task<int> InsertAsync(Widget widget, CancellationToken cancellationToken = default);

@@ -10,7 +10,7 @@ namespace Inquiry.SqlServer.Tests;
 /// power-of-two bucket, so a workload issuing many different IN cardinalities reuses a small fixed set of
 /// cached plans instead of one per length — without changing which rows match.
 /// </summary>
-/// <remarks>#199 replaces SQL Server bucketing with one stable TVP command and parameter signature.</remarks>
+/// <remarks>#199 binds one stable TVP signature; #509 binds lists of up to 16 values as padded scalar buckets.</remarks>
 [Collection(SqlServerCollection.Name)]
 public sealed class InListBucketingIntegrationTests
 {
@@ -30,9 +30,9 @@ public sealed class InListBucketingIntegrationTests
         await products.InsertAsync(new Product { ProductName = "Chai", UnitPrice = 18m, UnitsInStock = 39, CategoryID = c1, Discontinued = false });
         await products.InsertAsync(new Product { ProductName = "Aniseed", UnitPrice = 10m, UnitsInStock = 13, CategoryID = c2, Discontinued = false });
 
-        // Cardinalities 1..9 → buckets {1,2,4,4,8,8,8,8,16} → 5 distinct bucket lengths. Without bucketing
-        // these nine lengths would each render distinct SQL text (nine cached plans).
-        for (var k = 1; k <= 9; k++)
+        // Cardinalities 1..16 bind padded scalar buckets {1,2,4,8,16} (#509); 17..20 bind the TVP. Without
+        // bucketing these twenty lengths would each render distinct SQL text (twenty cached plans).
+        for (var k = 1; k <= 20; k++)
         {
             var ids = new List<int> { c1 };
             for (var i = 1; i < k; i++)
@@ -49,14 +49,14 @@ public sealed class InListBucketingIntegrationTests
         Assert.NotEmpty(justC1);
         Assert.All(justC1, p => Assert.Equal(c1, p.CategoryID));
 
-        var distinctSignatures = await DistinctInSignaturesAsync(harness.ConnectionString);
-        Assert.Equal(1, distinctSignatures);
+        Assert.Equal(1, await DistinctInSignaturesAsync(harness.ConnectionString, "%Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c%"));
+        Assert.Equal(5, await DistinctInSignaturesAsync(harness.ConnectionString, "%@CategoryID_in0 int%"));
     }
 
     // Distinct parameterized IN statement texts cached for THIS database (isolated by the dbid plan
-    // attribute so a sibling test class in the collection can't pollute the count). Every expansion names
-    // its first element @categoryID0, so that token identifies the InCategories query.
-    private static async Task<int> DistinctInSignaturesAsync(string connectionString)
+    // attribute so a sibling test class in the collection can't pollute the count). The pattern names the
+    // TVP type or the first scalar element, so it matches only the InCategories query.
+    private static async Task<int> DistinctInSignaturesAsync(string connectionString, string textPattern)
     {
         await using var conn = new SqlConnection(connectionString);
         await conn.OpenAsync();
@@ -68,9 +68,10 @@ public sealed class InListBucketingIntegrationTests
             CROSS APPLY sys.dm_exec_plan_attributes(cp.plan_handle) pa
             WHERE pa.attribute = 'dbid' AND pa.value = DB_ID()
               AND st.text LIKE '%Products%'
-              AND st.text LIKE '%Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c%'
+              AND st.text LIKE @pattern
               AND st.text NOT LIKE '%dm_exec%';
             """;
+        cmd.Parameters.AddWithValue("@pattern", textPattern);
         return (int)(await cmd.ExecuteScalarAsync())!;
     }
 }

@@ -61,10 +61,13 @@ public sealed class BatchChunkingIntegrationTests
             persisted.OrderBy(item => item.Id).Select(item => (item.Id, item.Value)));
 
         probe.Reset();
-        Assert.Equal(5, await store.DeleteAllAsync(Enumerable.Range(1, 5)));
+        // Ids 1-5 plus ids that match no row, so the list is longer than the 8-value scalar limit (#509) and
+        // binds the collection transport this test checks.
+        var ids = Enumerable.Range(1, 5).Concat(Enumerable.Range(1001, 4)).ToList();
+        Assert.Equal(5, await store.DeleteAllAsync(ids));
         Assert.Empty(probe.InitializedChunkSizes);
         Assert.Equal(0, probe.CreateBatchCount);
-        Assert.Equal("[1,2,3,4,5]", JsonValue(Assert.Single(probe.FinalizedCommands)));
+        Assert.Equal("[" + string.Join(",", ids) + "]", JsonValue(Assert.Single(probe.FinalizedCommands)));
         Assert.All(probe.FinalizedCommands, command =>
         {
             Assert.Contains("JSON_TABLE(@Id, '$[*]' COLUMNS(val INT PATH '$'))", command.CommandText, StringComparison.Ordinal);

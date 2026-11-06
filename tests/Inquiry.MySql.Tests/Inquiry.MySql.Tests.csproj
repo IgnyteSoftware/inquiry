@@ -35,6 +35,7 @@
     <Compile Include="..\Shared\BatchExecutionProbe.cs" Link="Shared\BatchExecutionProbe.cs" />
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" Link="Shared\EagerGridCommandAssertions.cs" />
     <Compile Include="..\Shared\PagedResultAssertions.cs" Link="Shared\PagedResultAssertions.cs" />
+    <Compile Include="..\Shared\SmallInListScenarios.cs" Link="Shared\SmallInListScenarios.cs" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
     <Compile Include="..\Shared\BulkCopierConnectionOwnershipAssertions.cs" Link="Shared\BulkCopierConnectionOwnershipAssertions.cs" />
     <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\*.cs" LinkBase="FeatureCatalog\LockingRegression" />

@@ -2579,6 +2579,8 @@ internal static class StoreProcessor
                 continue;
             }
 
+            StoreOperationEmitter.AppendScalarInListFields(source, method, predicatePlan);
+
             if (method.ProcedureReturn == ProcedureReturnKind.TaskOfMultipleResultSets)
             {
                 var missingType = method.ProcedureResultSetTypeFqns.AsImmutableArray().FirstOrDefault(fqn => !entities.ContainsKey(fqn));
@@ -3887,6 +3889,7 @@ internal static class StoreProcessor
         var nonCancellationCount = method.Parameters.Count - 1 - trailingParameterCount;
         var predicates = new List<SqlPredicate>(method.Predicates.Count);
         var bindings = new List<PredicateBinding>();
+        var positiveIns = new List<(PredicateBinding Binding, SqlPredicate Predicate, string NameBase)>();
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         var paramIndex = 0;
         var hasIn = false;
@@ -4071,7 +4074,12 @@ internal static class StoreProcessor
                         // sentinel path (isNegatedCollection) so its empty-collection rewrite is dialect-uniform.
                         bindings.Add(new PredicateBinding(sqlBuilder.ParameterName(name), first, column,
                             isCollection: true, isNegatedCollection: predicate.Op == SqlCompareOp.NotIn,
-                            elementIsNullable: parameter.ElementIsNullable));
+                            elementIsNullable: parameter.ElementIsNullable, usesProviderType: usesProviderType));
+                        if (predicate.Op == SqlCompareOp.In)
+                        {
+                            positiveIns.Add((bindings[bindings.Count - 1], predicates[predicates.Count - 1], paramBase));
+                        }
+
                         paramIndex += 1;
                         hasIn = true;
                         break;
@@ -4138,12 +4146,65 @@ internal static class StoreProcessor
             ReportPositionalSameType();
         }
 
+        AllocateScalarInLists();
         plan = new ResolvedPredicatePlan(predicates, bindings, hasIn)
         {
             OffsetParameterName = offsetName,
             LimitParameterName = limitName,
         };
         return true;
+
+        // Element names are allocated after every criterion name, so existing bind names never move.
+        // NOT IN expansion picks element names at run time and cannot see these, so such methods keep the
+        // collection transport for every list length.
+        void AllocateScalarInLists()
+        {
+            var maxLength = sqlBuilder.ScalarInListMaxLength;
+            if (maxLength <= 0 || bindings.Any(static binding => binding.IsNegatedCollection))
+            {
+                return;
+            }
+
+            foreach (var (binding, sqlPredicate, nameBase) in positiveIns)
+            {
+                if (!sqlBuilder.CanBindInListAsScalars(binding.Column))
+                {
+                    continue;
+                }
+
+                var sqlNames = new string[maxLength];
+                var runtimeNames = new string[maxLength];
+                for (var i = 0; i < maxLength; i++)
+                {
+                    var logical = AllocateElementName(nameBase + "_in" + i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    sqlNames[i] = sqlBuilder.ParameterName(logical);
+                    runtimeNames[i] = sqlBuilder.RuntimeParameterNameFromSql(sqlNames[i]);
+                }
+
+                var buckets = new List<string>();
+                for (var bucket = 1; bucket <= maxLength; bucket <<= 1)
+                {
+                    buckets.Add(sqlBuilder.RenderInScalarFragment(sqlPredicate, sqlNames.Take(bucket)));
+                }
+
+                binding.ScalarList = new ScalarInListPlan(sqlBuilder.RenderInCollectionFragment(sqlPredicate), runtimeNames, buckets);
+            }
+        }
+
+        // SQL Server and MySQL compare parameter names ignoring case, so a new name avoids every name that way.
+        string AllocateElementName(string candidate)
+        {
+            var name = candidate;
+            var suffix = 2;
+            while (reservedIgnoringCase.Contains(name) || usedNames.Any(used => string.Equals(used, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                name = candidate + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            usedNames.Add(name);
+            return name;
+        }
 
         bool TryResolveNamedParameters(PredicateData predicate, int arity, out int lower, out int upper)
         {

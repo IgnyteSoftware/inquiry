@@ -81,7 +81,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("[Code] IN (SELECT [Value] FROM @Code)", text);
         Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind(_c, \"@Code\", _args.Arg0", text);
-        Assert.DoesNotContain("InquiryInExpansion", text);
+        Assert.DoesNotContain("InquiryInExpansion.Expand(", text);
     }
 
     [Theory]

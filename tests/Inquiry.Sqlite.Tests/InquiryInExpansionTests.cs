@@ -305,4 +305,127 @@ public class InquiryInExpansionTests
         Assert.Equal($"SELECT * FROM t WHERE c IN {replacement} LIMIT 1; SELECT COUNT(*) FROM t WHERE c IN {replacement}", command.CommandText);
         Assert.Equal(0, command.Parameters.Count);
     }
+
+    private const string Transport = "c IN (SELECT value FROM json_each(@c))";
+    private static readonly string[] _scalarNames = { "@c_in0", "@c_in1", "@c_in2", "@c_in3" };
+    private static readonly string[] _scalarBuckets =
+    {
+        "c IN (@c_in0)",
+        "c IN (@c_in0, @c_in1)",
+        "c IN (@c_in0, @c_in1, @c_in2, @c_in3)",
+    };
+
+    private static bool TryBind<T>(SqliteCommand command, IEnumerable<T>? values, int maxParameterCount = 2000)
+        => InquiryInExpansion.TryBindScalarList(command, values, maxParameterCount, Transport, _scalarBuckets, _scalarNames,
+            static value => (object?)value ?? System.DBNull.Value,
+            static parameter => parameter.DbType = System.Data.DbType.Int32);
+
+    [Theory]
+    [InlineData(1, 1, "c IN (@c_in0)")]
+    [InlineData(2, 2, "c IN (@c_in0, @c_in1)")]
+    [InlineData(3, 4, "c IN (@c_in0, @c_in1, @c_in2, @c_in3)")]
+    [InlineData(4, 4, "c IN (@c_in0, @c_in1, @c_in2, @c_in3)")]
+    public void TryBindScalarList_ShortList_BindsPaddedBucketAndSwapsEveryFragment(int count, int bucket, string fragment)
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport} LIMIT 1; SELECT COUNT(*) FROM t WHERE {Transport}" };
+        var values = Enumerable.Range(10, count).ToList();
+
+        Assert.True(TryBind(command, values));
+
+        Assert.Equal($"SELECT * FROM t WHERE {fragment} LIMIT 1; SELECT COUNT(*) FROM t WHERE {fragment}", command.CommandText);
+        Assert.Equal(bucket, command.Parameters.Count);
+        for (var i = 0; i < bucket; i++)
+        {
+            Assert.Equal(_scalarNames[i], command.Parameters[i].ParameterName);
+            Assert.Equal(System.Data.DbType.Int32, command.Parameters[i].DbType);
+            Assert.Equal(values[Math.Min(i, count - 1)], command.Parameters[i].Value);
+        }
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("empty")]
+    [InlineData("long")]
+    [InlineData("lazy")]
+    public void TryBindScalarList_NullEmptyLongOrUncounted_LeavesCommandForTheTransport(string shape)
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport}" };
+        IEnumerable<int>? values = shape switch
+        {
+            "null" => null,
+            "empty" => new List<int>(),
+            "long" => Enumerable.Range(1, 5).ToList(),
+            _ => Lazy(1, 2),
+        };
+
+        Assert.False(TryBind(command, values));
+
+        Assert.Equal($"SELECT * FROM t WHERE {Transport}", command.CommandText);
+        Assert.Empty(command.Parameters);
+    }
+
+    [Fact]
+    public void TryBindScalarList_BucketOverBudget_LeavesCommandForTheTransport()
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport} AND d = @d" };
+        command.Parameters.AddWithValue("@d", 1);
+
+        // Three values need the four-element bucket, and only three slots are left.
+        Assert.False(TryBind(command, new List<int> { 1, 2, 3 }, maxParameterCount: 4));
+
+        Assert.Equal($"SELECT * FROM t WHERE {Transport} AND d = @d", command.CommandText);
+        Assert.Single(command.Parameters);
+    }
+
+    [Fact]
+    public void TryBindScalarList_MissingFragment_LeavesCommandForTheTransport()
+    {
+        using var command = new SqliteCommand { CommandText = "SELECT * FROM t" };
+
+        Assert.False(TryBind(command, new List<int> { 1 }));
+
+        Assert.Empty(command.Parameters);
+    }
+
+    [Fact]
+    public void TryBindScalarList_AllNull_PadsWithNull()
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport}" };
+
+        Assert.True(TryBind(command, new List<int?> { null, null, null }));
+
+        Assert.Equal(4, command.Parameters.Count);
+        Assert.All(command.Parameters.Cast<SqliteParameter>(), static parameter => Assert.Equal(System.DBNull.Value, parameter.Value));
+    }
+
+    [Fact]
+    public void TryBindScalarList_ConvertsEachRealElementOnce()
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport}" };
+        var calls = 0;
+
+        Assert.True(InquiryInExpansion.TryBindScalarList(command, new List<int> { 1, 2, 3 }, 2000, Transport, _scalarBuckets, _scalarNames,
+            value => { calls++; return value * 10; },
+            static _ => { }));
+
+        Assert.Equal(3, calls);
+        Assert.Equal([10, 20, 30, 30], command.Parameters.Cast<SqliteParameter>().Select(static parameter => (int)parameter.Value!));
+    }
+
+    [Fact]
+    public void TryBindScalarList_CountedProjection_BindsAsScalars()
+    {
+        using var command = new SqliteCommand { CommandText = $"SELECT * FROM t WHERE {Transport}" };
+        IEnumerable<int> projected = new List<int> { 1, 2 }.Select(static value => value + 1);
+
+        Assert.True(TryBind(command, projected));
+
+        Assert.Equal(2, command.Parameters.Count);
+    }
+
+    private static IEnumerable<int> Lazy(int first, int second)
+    {
+        yield return first;
+        yield return second;
+    }
 }

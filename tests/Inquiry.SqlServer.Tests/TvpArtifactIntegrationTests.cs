@@ -44,7 +44,10 @@ public sealed class TvpArtifactIntegrationTests
 
         var missingBefore = await ReadValidationAsync(harness.ConnectionString);
         Assert.Contains(missingBefore, row => row.Name == "[dbo].[Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c]" && row.Signature == "int|nullable=0" && row.Status == "missing");
-        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync([1]));
+        // A list of up to 16 values binds scalar parameters (#509), so only a longer list needs the type.
+        Assert.Equal(0, await store.DeleteAllAsync([2]));
+        var longIds = Enumerable.Range(1, 17).ToList();
+        var missingException = await Assert.ThrowsAsync<SqlException>(() => store.DeleteAllAsync(longIds));
         Assert.Contains("Inquiry_Tvp_04c62ef046c2b6360a93af873b3bf9acb9f7a1b100290f0d3f9116f1b78abf7c", missingException.Message);
 
         await ExecuteAsync(harness.ConnectionString, "CREATE TYPE [dbo].[Legacy_Unrelated_Type] AS TABLE ([Value] INT NOT NULL);");
@@ -54,7 +57,7 @@ public sealed class TvpArtifactIntegrationTests
 
         Assert.Empty(await ReadValidationAsync(harness.ConnectionString));
         Assert.Equal(1, await CountRowsAsync(harness.ConnectionString, "SELECT 1 FROM sys.table_types WHERE [name] = N'Legacy_Unrelated_Type'"));
-        Assert.Equal(1, await store.DeleteAllAsync([1]));
+        Assert.Equal(1, await store.DeleteAllAsync(longIds));
     }
 
     [SkippableFact]

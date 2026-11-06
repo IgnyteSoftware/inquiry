@@ -32,16 +32,19 @@ using var scope = provider.CreateScope();
 
 var inquiry = scope.ServiceProvider.GetRequiredService<IInquiry>();
 await inquiry.ExecuteAsync(new InquiryCommand(
-    "CREATE TABLE \"TWidget\" (\"Key\" TEXT NOT NULL PRIMARY KEY, \"Name\" TEXT NOT NULL, \"IsActive\" INTEGER NOT NULL)"));
+    "CREATE TABLE \"TWidget\" (\"Key\" TEXT NOT NULL PRIMARY KEY, \"Name\" TEXT NOT NULL, \"IsActive\" INTEGER NOT NULL, \"Rank\" INTEGER NOT NULL)"));
 
 var store = scope.ServiceProvider.GetRequiredService<WidgetStore>();
 
-var widget = new Widget { Name = "Anvil", IsActive = true };
+var widget = new Widget { Name = "Anvil", IsActive = true, Rank = 7 };
 var inserted = await store.InsertAsync(widget);
 var loaded = await store.SelectByKeyAsync(widget.Key);
 widget.Name = "Sprocket";
 var updated = await store.UpdateAsync(widget);
 var all = await store.SelectAllAsync();
+// A short integer IN list binds as scalar parameters; a longer one binds one JSON array parameter.
+var shortIn = await store.SelectByRanksAsync([7, 8]);
+var longIn = await store.SelectByRanksAsync([7, 1, 2, 3, 4, 5, 6, 8, 9]);
 var deleted = await store.DeleteByKeyAsync(widget.Key);
 
 // JSON columns serialize through source-generated JsonSerializerContext metadata, not reflection.
@@ -65,7 +68,7 @@ var jsonOk = jsonInserted == 2 && camelCaseRows == 1 &&
     fullLoaded.Tags.Count == 1 && fullLoaded.Tags["finish"] == "matte" &&
     emptyLoaded is { Spec: null, Tags.Count: 0 };
 
-if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || !deleted || !jsonOk)
+if (inserted != 1 || loaded?.Name != "Anvil" || !updated || all.Count != 1 || all[0].Name != "Sprocket" || shortIn.Count != 1 || longIn.Count != 1 || !deleted || !jsonOk)
 {
     await Console.Error.WriteLineAsync("AOT-SMOKE-FAILED");
     return 1;

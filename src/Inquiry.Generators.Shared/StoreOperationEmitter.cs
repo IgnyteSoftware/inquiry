@@ -1228,7 +1228,10 @@ internal static class StoreOperationEmitter
                     binding.IsNegatedCollection,
                     binding.ElementIsNullable,
                     binding.CollectionResolution,
-                    GeneratedCommandState.MaxParametersReference));
+                    GeneratedCommandState.MaxParametersReference,
+                    ScalarListFields(method, binding, i),
+                    ParametersBoundAfter(plan, i, includePaging ? 2 : 0),
+                    binding.UsesProviderType));
             }
             else
             {
@@ -1311,8 +1314,9 @@ internal static class StoreOperationEmitter
 
         // Predicate bindings carry absolute method-parameter indexes (offset past the SET values for
         // an update), so this loop is identical to the predicate-select binder.
-        foreach (var binding in plan.Bindings)
+        for (var bi = 0; bi < plan.Bindings.Count; bi++)
         {
+            var binding = plan.Bindings[bi];
             var arg = state.Reference(binding.MethodParameterIndex);
             if (binding.IsCollection)
             {
@@ -1324,7 +1328,10 @@ internal static class StoreOperationEmitter
                     binding.IsNegatedCollection,
                     binding.ElementIsNullable,
                     binding.CollectionResolution,
-                    GeneratedCommandState.MaxParametersReference));
+                    GeneratedCommandState.MaxParametersReference,
+                    ScalarListFields(method, binding, bi),
+                    ParametersBoundAfter(plan, bi, 0),
+                    binding.UsesProviderType));
             }
             else
             {
@@ -2243,6 +2250,48 @@ internal static class StoreOperationEmitter
         return type.IsValueType ? $"{accessor}.Value" : $"{accessor}!";
     }
 
+    /// <summary>Static field names that hold one IN binding's scalar element names and bucket criteria.</summary>
+    private sealed record ScalarInListFields(ScalarInListPlan Plan, string NamesField, string BucketsField);
+
+    private static ScalarInListFields? ScalarListFields(StoreMethodData method, PredicateBinding binding, int bindingIndex)
+    {
+        if (binding.ScalarList is not { } plan)
+        {
+            return null;
+        }
+
+        var suffix = method.MemberName + "_" + bindingIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return new ScalarInListFields(plan, "_inNames_" + suffix, "_inBuckets_" + suffix);
+    }
+
+    /// <summary>
+    /// Emits the static arrays that a short positive IN list binds from, once per binding, so the generated
+    /// binder allocates no names or SQL text per call.
+    /// </summary>
+    internal static void AppendScalarInListFields(StringBuilder source, StoreMethodData method, ResolvedPredicatePlan? plan)
+    {
+        if (plan is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < plan.Bindings.Count; i++)
+        {
+            if (ScalarListFields(method, plan.Bindings[i], i) is not { } fields)
+            {
+                continue;
+            }
+
+            source.AppendLine($"    private static readonly string[] {fields.NamesField} = {{ {string.Join(", ", fields.Plan.ElementRuntimeNames.Select(static name => "\"" + GeneratorHelpers.Escape(name) + "\""))} }};");
+            source.AppendLine($"    private static readonly string[] {fields.BucketsField} = {{ {string.Join(", ", fields.Plan.BucketFragments.Select(static sql => "\"" + GeneratorHelpers.Escape(sql) + "\""))} }};");
+            source.AppendLine();
+        }
+    }
+
+    // Parameters the binder adds after binding `index`. A later collection needs at least its one transport parameter.
+    private static int ParametersBoundAfter(ResolvedPredicatePlan plan, int index, int trailing)
+        => plan.Bindings.Count - index - 1 + trailing;
+
     /// <summary>
     /// Emits runtime binding for a column-backed collection used by IN/NOT IN predicates.
     /// A NOT IN collection always uses the sentinel <c>ExpandNotIn</c> (so an empty collection is
@@ -2262,7 +2311,10 @@ internal static class StoreOperationEmitter
         bool isNegatedCollection,
         bool elementIsNullable,
         CollectionParameterResolution? resolution,
-        string maxParametersExpression = "Inquiry.MaxParametersPerCommand")
+        string maxParametersExpression = "Inquiry.MaxParametersPerCommand",
+        ScalarInListFields? scalarList = null,
+        int reservedAfter = 0,
+        bool usesProviderType = true)
     {
         var name = GeneratorHelpers.Escape(sqlParameterName);
         var projected = ProjectedCollectionExpression(sqlBuilder, column, arg, elementIsNullable);
@@ -2289,8 +2341,28 @@ internal static class StoreOperationEmitter
                 throw new InvalidOperationException("Collection transport must be resolved once before method emission.");
             }
 
-            return "                " + sqlBuilder.BuildCollectionParameterBinding(
+            var transport = sqlBuilder.BuildCollectionParameterBinding(
                 new CollectionParameterBindingContext(resolution, "_c", name, projected));
+            if (scalarList is null)
+            {
+                return "                " + transport;
+            }
+
+            // Short lists bind like the scalar criterion `col = @p`, so they reuse its value and metadata emitters.
+            var metadata = new StringBuilder();
+            AppendColumnParameterMetadata(metadata, column, sqlBuilder, "_p", string.Empty, predicate: true, usesProviderType);
+            var configure = metadata.ToString().Replace(Environment.NewLine, " ").Trim();
+            // A reference-type converter model may still hold null elements; the transport projection guards them too.
+            var convert = BuildParameterValueExpression(column, "_e", sqlBuilder,
+                elementIsNullable || (column.Converter is not null && !column.Type.IsValueType));
+            var budget = reservedAfter > 0
+                ? maxParametersExpression + " - " + reservedAfter.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : maxParametersExpression;
+            var tryBind = $"                if (!global::Inquiry.Parameters.InquiryInExpansion.TryBindScalarList(_c, {arg}, {budget}, \"{GeneratorHelpers.Escape(scalarList.Plan.CollectionFragment)}\", {scalarList.BucketsField}, {scalarList.NamesField}, static _e => {convert}, static _p => {{ {configure} }}))";
+            return tryBind + Environment.NewLine
+                + "                {" + Environment.NewLine
+                + "                    " + transport + Environment.NewLine
+                + "                }";
         }
 
         return $"                global::Inquiry.Parameters.InquiryInExpansion.Expand(_c, \"{name}\", {projected}, {maxParametersExpression}{dbTypeArg}{sizePrecisionArgs});";

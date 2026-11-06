@@ -60,6 +60,8 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     public override IdentifierComparison ForeignKeyConstraintNameComparison => IdentifierComparison.OrdinalIgnoreCase;
     public override string DialectName => "Oracle";
     public override string ProviderId => "oracle";
+    // Measured for #509: scalar parameters beat JSON_TABLE up to 32 values; JSON_TABLE wins at large lists.
+    public override int ScalarInListMaxLength => 32;
     // Oracle requires DEFAULT before inline constraints such as NOT NULL.
     protected override bool DefaultExpressionPrecedesInlineConstraints => true;
     // Legal unquoted names fold to uppercase; names which require quotes retain exact identity.

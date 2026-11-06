@@ -303,7 +303,8 @@ public sealed partial class InquiryGeneratorTests
             static tree => tree.FilePath.EndsWith("Store.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
         Assert.Contains("static _e => unchecked((global::System.Int32)(global::Inquiry.Entities.InquiryConverterCache<global::Demo.TokenConverter>.Instance.ToProvider(_e)))", store);
         Assert.Contains("static _e => _e.HasValue ? (global::System.Int32?)unchecked((global::System.Int32)(global::Inquiry.Entities.InquiryConverterCache<global::Demo.TokenConverter>.Instance.ToProvider(_e.Value))) : null", store);
-        Assert.Equal(2, TokenToProviderRegex().Count(store));
+        // One transport projection and one scalar conversion per method.
+        Assert.Equal(4, TokenToProviderRegex().Count(store));
         Assert.DoesNotContain("_e.HasValue ?", store.Substring(store.IndexOf("NonNullable", StringComparison.Ordinal), store.IndexOf("Nullable", store.IndexOf("NonNullable", StringComparison.Ordinal) + 1, StringComparison.Ordinal) - store.IndexOf("NonNullable", StringComparison.Ordinal)));
     }
 
