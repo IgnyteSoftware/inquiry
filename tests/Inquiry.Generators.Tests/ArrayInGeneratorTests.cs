@@ -314,6 +314,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryColumn] public decimal Amount { get; set; }
                 [InquiryColumn(Scale = 3)] public DateTimeOffset CapturedAt { get; set; }
                 [InquiryColumn] public Guid Token { get; set; }
+                [InquiryColumn] public char Grade { get; set; }
             }
 
             public partial class ReadingStore : Inquiry.Stores.InquiryStore<Demo.Reading>
@@ -330,6 +331,8 @@ public sealed partial class InquiryGeneratorTests
                 public partial Task<IReadOnlyList<Reading>> ByTimesAsync(IReadOnlyList<DateTimeOffset> times, CancellationToken cancellationToken = default);
                 [InquirySelectAllByPredicate, InquiryWhere("Token", Compare.In)]
                 public partial Task<IReadOnlyList<Reading>> ByTokensAsync(IReadOnlyList<Guid> tokens, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("Grade", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByGradesAsync(IReadOnlyList<char> grades, CancellationToken cancellationToken = default);
             }
             """;
 
@@ -349,6 +352,8 @@ public sealed partial class InquiryGeneratorTests
         Assert.DoesNotContain("TryBindScalarList(_c, amounts, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, times, ", text);
         Assert.DoesNotContain("TryBindScalarList(_c, tokens, ", text);
+        // A char binds as a fixed-length string, which compares with blank padding that the TVP's text does not.
+        Assert.DoesNotContain("TryBindScalarList(_c, grades, ", text);
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Amount\", amounts, ", text);
     }
 }

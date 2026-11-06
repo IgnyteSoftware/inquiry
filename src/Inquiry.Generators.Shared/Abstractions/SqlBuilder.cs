@@ -1430,7 +1430,12 @@ public abstract class SqlBuilder
     /// types that compare the same both ways qualify; otherwise the result could change with list length.
     /// </summary>
     public virtual bool CanBindInListAsScalars(IColumn column)
-        => column.TypeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64 or DbTypeClass.String;
+        => column.TypeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64
+            || (column.TypeClass == DbTypeClass.String && !IsCharProvider(column.ProviderClrTypeName));
+
+    // A char binds as a fixed-length string, which blank-pads comparisons that the variable-length transport does not.
+    private static bool IsCharProvider(string providerClrTypeName)
+        => providerClrTypeName is "char" or "global::System.Char" or "System.Char";
 
     /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
     public string RenderInCollectionFragment(SqlPredicate predicate)
