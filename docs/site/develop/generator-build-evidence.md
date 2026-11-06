@@ -84,15 +84,20 @@ its paired generated build; order and host noise limit causal interpretation.
 Raw reports and SHA-256 checksums are in
 [`benchmarks/evidence/issue-396-generator`](https://github.com/IgnyteSoftware/inquiry/tree/main/benchmarks/evidence/issue-396-generator).
 
-## Materializer outputs per model (#182)
+## Materializer and store outputs per model (#182)
 
-Each entity, view, projection, and ad-hoc DTO materializer now has its own
-generator output. An edit re-emits only the materializers whose model changed.
-Junctions, relation checks, stores, schema, and registration still share one
-output, so a model edit still re-runs them. #182 tracks moving stores to their
-own outputs.
+Each entity, view, projection, and ad-hoc DTO materializer has its own
+generator output, and so does each store. An edit re-emits only the
+materializers whose model changed and the stores that read that model. A store
+reads its own entity, that entity's relation children and junctions, the
+projections its methods return, and its stored-procedure result-set entities.
+Relation checks also run per entity. The schema and DI registration are the
+only outputs that read the whole model. The schema re-runs after any entity
+edit. Registration re-runs only when the set of registered types changes.
 
-The table compares the same microbenchmark before and after this change. Both
+The table compares the same microbenchmark before and after the materializer
+change, which came first. The store change was measured with the same
+harness; those results are internal and are not recorded here. Both
 runs used a different host from the #396 results above: Windows 11, 12th Gen
 Intel Core i9-12900K, SDK 10.0.403, and .NET 10.0.14. Do not compare these
 numbers with the #396 tables. Each number is the ShortRun mean of three
