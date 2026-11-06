@@ -4167,6 +4167,11 @@ internal static class StoreProcessor
 
             foreach (var (binding, sqlPredicate, nameBase) in positiveIns)
             {
+                if (!sqlBuilder.CanBindInListAsScalars(binding.Column))
+                {
+                    continue;
+                }
+
                 var sqlNames = new string[maxLength];
                 var runtimeNames = new string[maxLength];
                 for (var i = 0; i < maxLength; i++)

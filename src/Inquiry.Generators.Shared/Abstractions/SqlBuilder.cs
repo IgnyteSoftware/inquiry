@@ -1424,6 +1424,14 @@ public abstract class SqlBuilder
     /// </summary>
     public virtual int ScalarInListMaxLength => 0;
 
+    /// <summary>
+    /// True when a short <c>IN</c> list over <paramref name="column"/> may bind as scalar parameters. The
+    /// collection transport converts each element to its own SQL type (JSON text, a TVP column), so only
+    /// types that compare the same both ways qualify; otherwise the result could change with list length.
+    /// </summary>
+    public virtual bool CanBindInListAsScalars(IColumn column)
+        => column.TypeClass is DbTypeClass.Byte or DbTypeClass.Int16 or DbTypeClass.Int32 or DbTypeClass.Int64 or DbTypeClass.String;
+
     /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
     public string RenderInCollectionFragment(SqlPredicate predicate)
         => RenderIn(RenderPredicateColumn(predicate), ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);

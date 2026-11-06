@@ -289,4 +289,66 @@ public sealed partial class InquiryGeneratorTests
         // The scalar criterion binds after the collection, so its parameter is reserved from the budget.
         Assert.Contains("TryBindScalarList(_c, codes, _args.MaxParameters - 1, ", text);
     }
+
+    [Fact]
+    public void SqlServerSmallInListBindsScalarsOnlyForTypesThatCompareTheSameAsTheTvp()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Reading")]
+            public sealed class Reading
+            {
+                [InquiryKey(IsGenerated = true)] public long Id { get; set; }
+                [InquiryColumn] public int Code { get; set; }
+                [InquiryColumn(Length = 20)] public string Name { get; set; } = string.Empty;
+                [InquiryColumn(SqlType = "varchar(20)")] public string Tag { get; set; } = string.Empty;
+                [InquiryColumn] public decimal Amount { get; set; }
+                [InquiryColumn(Scale = 3)] public DateTimeOffset CapturedAt { get; set; }
+                [InquiryColumn] public Guid Token { get; set; }
+            }
+
+            public partial class ReadingStore : Inquiry.Stores.InquiryStore<Demo.Reading>
+            {
+                [InquirySelectAllByPredicate, InquiryWhere("Code", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByCodesAsync(IReadOnlyList<int> codes, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("Name", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("Tag", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByTagsAsync(IReadOnlyList<string> tags, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("Amount", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByAmountsAsync(IReadOnlyList<decimal> amounts, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("CapturedAt", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByTimesAsync(IReadOnlyList<DateTimeOffset> times, CancellationToken cancellationToken = default);
+                [InquirySelectAllByPredicate, InquiryWhere("Token", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByTokensAsync(IReadOnlyList<Guid> tokens, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "SqlServer");
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ReadingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // Integers and plain strings compare the same as a scalar and as a TVP row.
+        Assert.Contains("TryBindScalarList(_c, codes, ", text);
+        Assert.Contains("TryBindScalarList(_c, names, ", text);
+        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.String; _p.Size = 20; }", text);
+        // The TVP rounds decimals to DECIMAL(18,2) and times to DATETIMEOFFSET(3), and an explicit SqlType sets
+        // its own column type, so those lists keep the TVP for every length.
+        Assert.DoesNotContain("TryBindScalarList(_c, tags, ", text);
+        Assert.DoesNotContain("TryBindScalarList(_c, amounts, ", text);
+        Assert.DoesNotContain("TryBindScalarList(_c, times, ", text);
+        Assert.DoesNotContain("TryBindScalarList(_c, tokens, ", text);
+        Assert.Contains("InquiryTvpParameter.Bind(_c, \"@Amount\", amounts, ", text);
+    }
 }

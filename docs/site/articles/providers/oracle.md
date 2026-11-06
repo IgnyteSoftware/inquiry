@@ -35,7 +35,7 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 | String | `VARCHAR2(N)` (bounded) or `CLOB` (unbounded) — `NVARCHAR2(N)` only via an explicit `[InquiryColumn(SqlType = "NVARCHAR2(N)")]` override |
 | JSON (`[InquiryJson]`) | Stored as text — `VARCHAR2(N)` (or `CLOB` when unbounded); no native `JSON` type or `IS JSON` check. JSON-path *querying* renders `JSON_VALUE("col", '$.path')` against the text column. |
 | Soft-delete literal | `IsDeleted = 0` (identifier emitted unquoted, in its original case) |
-| IN binding | `col IN (SELECT jt.val FROM JSON_TABLE(:param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` (Oracle 12c R2+); lists of up to 32 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `col IN (SELECT jt.val FROM JSON_TABLE(:param, '$[*]' COLUMNS(val TYPE PATH '$')) jt)` (Oracle 12c R2+); integer and string lists of up to 32 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Update-returning | Anonymous PL/SQL block (same ref-cursor mechanism as insert-returning) |
 | Upsert-returning | Not separately supported — upsert uses `MERGE`, which does not compose with the PL/SQL returning block |
 
@@ -61,7 +61,7 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 Oracle stores `Guid` columns as `RAW(16)` and boolean columns as `NUMBER(1)`. Generated binders set `DbType.Binary` for GUIDs and `DbType.Int32` for booleans before assigning the original CLR value. ODP.NET then preserves `Guid` identity and writes `false`/`true` as `0`/`1`; generated readers return them through `GetGuid` and `GetBoolean`. The generator does not allocate a GUID byte array or replace a boolean with an integer value. Nullable and value-converted columns use the same provider metadata.
 
-`IN` predicates with more than 32 values use the single JSON parameter. The generated `JSON_TABLE` projection converts canonical GUID strings to ODP.NET's `RAW(16)` byte order and JSON booleans to `0`/`1`. Shorter `IN` lists and every `NOT IN` list bind one parameter per element with the same `DbType.Binary`/`DbType.Int32` metadata used by scalar predicates.
+`IN` predicates over GUID and boolean columns use the single JSON parameter for every list length. The generated `JSON_TABLE` projection converts canonical GUID strings to ODP.NET's `RAW(16)` byte order and JSON booleans to `0`/`1`; `NOT IN` expands elements with the same `DbType.Binary`/`DbType.Int32` metadata used by scalar predicates.
 
 ## Testing
 

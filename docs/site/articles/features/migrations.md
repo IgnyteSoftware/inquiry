@@ -9,7 +9,7 @@ Inquiry deliberately does **not** ship a migration engine. It emits the full `CR
 - `Ddl` describes the schema that the current entities expect. It is a reference, not a migration. Take a copy of it once as your first migration script and never regenerate that script.
 - Write every later change as a new script. Inquiry does not generate `ALTER` statements.
 - DbUp records script names, not script contents. After any database has run a script, never rename or edit it.
-- On SQL Server, a `Compare.In` method binds a table-valued parameter whose type name comes from the column's exact type, facets and nullability. When those change, the new application version needs a new type. Add it in the same migration as the column change, and drop the old type in a later release. A list of up to 16 values binds as scalar parameters and does not use the type, so a missing type or a missing permission fails only a call with more values. Run `ProviderArtifactsValidationSql` during deployment instead of relying on calls to find it.
+- On SQL Server, a `Compare.In` method binds a table-valued parameter whose type name comes from the column's exact type, facets and nullability. When those change, the new application version needs a new type. Add it in the same migration as the column change, and drop the old type in a later release. A list of up to 16 integers or strings binds as scalar parameters and does not use the type, so a missing type or a missing permission fails only a call with more values. Run `ProviderArtifactsValidationSql` during deployment instead of relying on calls to find it.
 
 ## The runnable sample
 

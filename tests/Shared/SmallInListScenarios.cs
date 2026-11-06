@@ -13,6 +13,9 @@ public sealed class SmallInItem
 
     [InquiryColumn]
     public int? CategoryId { get; set; }
+
+    [InquiryColumn(Length = 20)]
+    public string? Code { get; set; }
 }
 
 public partial class SmallInItemStore : InquiryStore<SmallInItem>
@@ -37,6 +40,10 @@ public partial class SmallInItemStore : InquiryStore<SmallInItem>
     [InquiryWhere("CategoryId", Compare.In)]
     public partial Task<InquiryPagedResult<SmallInItem>> PageInCategoriesAsync(IReadOnlyList<int> categoryIds, int offset, int limit, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate(OrderBy = "Id ASC")]
+    [InquiryWhere("Code", Compare.In)]
+    public partial Task<IReadOnlyList<SmallInItem>> InCodesAsync(IReadOnlyList<string> codes, CancellationToken cancellationToken = default);
+
     [InquiryDelete, InquiryWhere("Id", Compare.In)]
     public partial Task<int> DeleteAllAsync(IReadOnlyList<int> ids, CancellationToken cancellationToken = default);
 }
@@ -50,11 +57,11 @@ internal static class SmallInListScenarios
     /// <summary>Seeds ids 1-2 in category 1, ids 3-4 in category 2 and id 5 with no category.</summary>
     internal static async Task SeedAsync(SmallInItemStore store)
     {
-        await store.InsertAsync(new SmallInItem { Id = 1, CategoryId = 1 });
-        await store.InsertAsync(new SmallInItem { Id = 2, CategoryId = 1 });
-        await store.InsertAsync(new SmallInItem { Id = 3, CategoryId = 2 });
-        await store.InsertAsync(new SmallInItem { Id = 4, CategoryId = 2 });
-        await store.InsertAsync(new SmallInItem { Id = 5, CategoryId = null });
+        await store.InsertAsync(new SmallInItem { Id = 1, CategoryId = 1, Code = "alpha" });
+        await store.InsertAsync(new SmallInItem { Id = 2, CategoryId = 1, Code = "Beta" });
+        await store.InsertAsync(new SmallInItem { Id = 3, CategoryId = 2, Code = "gamma" });
+        await store.InsertAsync(new SmallInItem { Id = 4, CategoryId = 2, Code = "delta" });
+        await store.InsertAsync(new SmallInItem { Id = 5, CategoryId = null, Code = null });
     }
 
     /// <summary>
@@ -130,6 +137,24 @@ internal static class SmallInListScenarios
         Assert.Equal([2, 3], (await store.InCategoriesAndIdsAsync([1, 2], WithFiller([2, 3, 5], scalarLimit + 1))).Select(static row => row.Id));
     }
 
+    /// <summary>
+    /// A string list returns the same rows as scalars and through the transport, including values that differ
+    /// only in case or trailing spaces, which each provider's collation decides.
+    /// </summary>
+    internal static async Task StringListsMatchOnBothPathsAsync(SmallInItemStore store, int scalarLimit)
+    {
+        await SeedAsync(store);
+
+        foreach (var codes in new[] { new List<string> { "alpha" }, ["ALPHA", "beta"], ["gamma ", "Delta"], ["missing"] })
+        {
+            var shortIds = (await store.InCodesAsync(codes)).Select(static row => row.Id).ToList();
+            var longIds = (await store.InCodesAsync(WithFillerCodes(codes, scalarLimit + 1))).Select(static row => row.Id).ToList();
+            Assert.Equal(longIds, shortIds);
+        }
+
+        Assert.Equal([1], (await store.InCodesAsync(["alpha"])).Select(static row => row.Id));
+    }
+
     /// <summary>A delete by a short list and by a long list each remove exactly the listed rows.</summary>
     internal static async Task DeletesRemoveListedRowsOnBothPathsAsync(SmallInItemStore store, int scalarLimit)
     {
@@ -138,6 +163,14 @@ internal static class SmallInListScenarios
         Assert.Equal(1, await store.DeleteAllAsync([1]));
         Assert.Equal(2, await store.DeleteAllAsync(WithFiller([2, 3], scalarLimit + 1)));
         Assert.Equal([4, 5], (await store.OutsideCategoriesAsync([])).Select(static row => row.Id));
+    }
+
+    // Pads a list with codes that match no row until it has the requested length.
+    private static List<string> WithFillerCodes(List<string> values, int length)
+    {
+        var list = new List<string>(values);
+        list.AddRange(Enumerable.Range(0, Math.Max(0, length - values.Count)).Select(static i => "filler-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        return list;
     }
 
     // Pads a list with ids that match no row until it has the requested length.

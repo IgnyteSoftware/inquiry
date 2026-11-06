@@ -329,9 +329,10 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Idxxxx$30d4cf864d6e68\", ids);", directIn);
         Assert.Contains("InquiryJsonArrayParameter.Bind(_c, \":iq1$Enable$f77dd1731be3f8\", enabled);", directIn);
         Assert.DoesNotContain("InquiryInExpansion.Expand(", directIn);
-        // The JSON transport carries no element metadata; short lists bind like the scalar criterion (RAW(16)/NUMBER(1)).
-        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.Binary; }", directIn);
-        Assert.Contains("static _p => { _p.DbType = global::System.Data.DbType.Int32; }", directIn);
+        // GUID and boolean lists keep the JSON transport for every length (#509), so no element carries metadata.
+        Assert.DoesNotContain("TryBindScalarList", directIn);
+        Assert.DoesNotContain("DbType.Binary", directIn);
+        Assert.DoesNotContain("DbType.Int32", directIn);
 
         var convertedIn = Method(text, "InConvertedAsync");
         var convertedGuidSql = $"ConvertedToken IN (SELECT {guidFromJson} FROM JSON_TABLE(:iq1$Conver$a66c43bcfcaa30, '$[*]' COLUMNS(val VARCHAR2(36) PATH '$')) jt)";

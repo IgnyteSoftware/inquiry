@@ -32,7 +32,7 @@ services.AddInquiryMySql("Server=localhost;Database=app;User=app;Password=…");
 | Auto-key | `AUTO_INCREMENT` |
 | Upsert | `INSERT … ON DUPLICATE KEY UPDATE …` |
 | Insert-returning | Emulated two-statement batch (`INSERT …; SELECT …`) — keyed on `LAST_INSERT_ID()` for `AUTO_INCREMENT`, on the key predicate for client-supplied keys (no `RETURNING`) |
-| IN binding | `JSON_TABLE` subquery (MySQL 8.0+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter; lists of up to 16 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `JSON_TABLE` subquery (MySQL 8.0+): `col IN (SELECT jt.val FROM JSON_TABLE(@param, …) jt)` — constant SQL, single parameter; integer and string lists of up to 16 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Pagination | `LIMIT @limit OFFSET @offset` |
 | Boolean | `TINYINT(1)` (0/1) |
 | String | `VARCHAR(N)` / `LONGTEXT` |

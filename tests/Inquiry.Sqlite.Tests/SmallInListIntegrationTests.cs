@@ -15,7 +15,7 @@ public sealed class SmallInListIntegrationTests
     // Matches the dialect's ScalarInListMaxLength.
     private const int ScalarLimit = 4;
     private const string TransportMarker = "json_each(";
-    private const string Ddl = "CREATE TABLE \"SmallInItem\" (\"Id\" INTEGER PRIMARY KEY, \"CategoryId\" INTEGER NULL)";
+    private const string Ddl = "CREATE TABLE \"SmallInItem\" (\"Id\" INTEGER PRIMARY KEY, \"CategoryId\" INTEGER NULL, \"Code\" TEXT NULL)";
 
     private static Task<SqliteTestHarness> CreateAsync(RecordingCommandInterceptor recorder)
         => SqliteTestHarness.CreateAsync(Ddl, "SmallIn", foreignKeys: false, configureServices: services => services.AddSingleton<IInquiryCommandInterceptor>(recorder));
@@ -54,6 +54,15 @@ public sealed class SmallInListIntegrationTests
         await using var harness = await CreateAsync(recorder);
         var store = harness.GetRequiredService<SmallInItemStore>();
         await SmallInListScenarios.TwoListsBindIndependentlyAsync(store, ScalarLimit);
+    }
+
+    [Fact]
+    public async Task StringListsMatchOnBothPaths()
+    {
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await CreateAsync(recorder);
+        var store = harness.GetRequiredService<SmallInItemStore>();
+        await SmallInListScenarios.StringListsMatchOnBothPathsAsync(store, ScalarLimit);
     }
 
     [Fact]

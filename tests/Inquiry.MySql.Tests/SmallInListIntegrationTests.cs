@@ -16,7 +16,7 @@ public sealed class SmallInListIntegrationTests
     // Matches the dialect's ScalarInListMaxLength.
     private const int ScalarLimit = 16;
     private const string TransportMarker = "JSON_TABLE(";
-    private const string Ddl = "CREATE TABLE `SmallInItem` (`Id` INT PRIMARY KEY, `CategoryId` INT NULL)";
+    private const string Ddl = "CREATE TABLE `SmallInItem` (`Id` INT PRIMARY KEY, `CategoryId` INT NULL, `Code` VARCHAR(20) NULL)";
 
     private readonly MySqlContainerFixture _fixture;
     public SmallInListIntegrationTests(MySqlContainerFixture fixture) => _fixture = fixture;
@@ -62,6 +62,16 @@ public sealed class SmallInListIntegrationTests
         await using var harness = await CreateAsync(recorder);
         var store = harness.GetRequiredService<SmallInItemStore>();
         await SmallInListScenarios.TwoListsBindIndependentlyAsync(store, ScalarLimit);
+    }
+
+    [SkippableFact]
+    public async Task StringListsMatchOnBothPaths()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var recorder = new RecordingCommandInterceptor();
+        await using var harness = await CreateAsync(recorder);
+        var store = harness.GetRequiredService<SmallInItemStore>();
+        await SmallInListScenarios.StringListsMatchOnBothPathsAsync(store, ScalarLimit);
     }
 
     [SkippableFact]
