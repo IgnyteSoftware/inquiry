@@ -182,6 +182,59 @@ public sealed class InquiryInterceptorsTests
     }
 
     [Fact]
+    public async Task NPlusOneOuterScopeDisposedFirstThrowsAndKeepsBothScopes()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        var outer = InquiryNPlusOneScope.BeginScope();
+        var inner = InquiryNPlusOneScope.BeginScope();
+
+        Assert.Throws<InvalidOperationException>(outer.Dispose);
+
+        // The inner scope is still the active one.
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+
+        inner.Dispose();
+
+        // The outer scope is active again with its own counts, and it can now be disposed.
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+        outer.Dispose();
+
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NPlusOneRepeatedDisposalDoesNotReactivateOrCloseOtherScopes()
+    {
+        await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
+        var inquiry = harness.Services.GetRequiredService<IInquiry>();
+
+        var outer = InquiryNPlusOneScope.BeginScope();
+        var inner = InquiryNPlusOneScope.BeginScope();
+        inner.Dispose();
+        inner.Dispose();
+
+        // The second disposal left the outer scope active.
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+
+        outer.Dispose();
+        outer.Dispose();
+        inner.Dispose();
+
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        await inquiry.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM Item");
+        Assert.Single(harness.Log.Messages, m => m.StartsWith("Warning", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task NPlusOneStaysSilentOutsideScope()
     {
         await using var harness = await CreateHarnessAsync(s => s.AddInquiryNPlusOneDetection(threshold: 2));
