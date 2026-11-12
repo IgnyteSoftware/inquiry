@@ -178,8 +178,8 @@ through the alias `L2Async`, for example `L2Async.FirstOrDefaultAsync(dc.GetTabl
 #### On PostgreSQL
 
 `benchmarks/Inquiry.Benchmarks.PostgreSql` has a `ShipperReadCompetitorBenchmarks` class with the same legs and
-the same `GlobalSetup` check. MySQL and MariaDB have it too (see below); SQL Server and Oracle follow in later
-changes. It differs from the SQLite class in
+the same `GlobalSetup` check. MySQL, MariaDB and SQL Server have it too (see below); Oracle follows in a later
+change. It differs from the SQLite class in
 these ways:
 
 - It has one row tier, `Rows = 1000`. The PostgreSQL container is shared by the whole process and seeded once
@@ -237,6 +237,37 @@ dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release -f net10.0
 dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MySql --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.MySql.Ef.MySqlShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MySql.Ef.CompiledModels
 dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release -f net10.0
 dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MariaDb --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.MariaDb.Ef.MariaDbShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MariaDb.Ef.CompiledModels
+```
+
+#### On SQL Server
+
+`benchmarks/Inquiry.Benchmarks.SqlServer` has a `ShipperReadCompetitorBenchmarks` class with the same legs and
+the same `GlobalSetup` check as the PostgreSQL class. Every leg works on SQL Server, so none is left out. The
+PostgreSQL notes apply: one row tier, `Rows = 1000`, and under `--inProcess` run the class with its own filter.
+`BatchMutationStrategyBenchmarks` and `WideBatchInsertThresholdBenchmarks` seed one row, and `ShipperBenchmarks`
+inserts rows, so the setup check throws after them. These parts differ:
+
+- The tuned EF Core legs use `SqlServerShipperContext` with the compiled model in
+  `benchmarks/Inquiry.Benchmarks.SqlServer/Ef/CompiledModels`. The project file excludes
+  `SqlServerShipperContextAssemblyAttributes.cs` for the same reason as above.
+- linq2db uses `UseSqlServer(connectionString, SqlServerVersion.v2022, SqlServerProvider.MicrosoftDataSqlClient)`,
+  and RepoDB uses `RepoDb.SqlServer`.
+- Dapper.AOT also checks the T-SQL of plain ADO.NET commands in a project that uses `Microsoft.Data.SqlClient`.
+  `.editorconfig` turns off `DAP200`, `DAP225`, `DAP241` and `DAP242` for the four files that report them, because the fixture and evidence commands
+  build DDL and catalog queries from constants in code.
+
+Run and check it as for PostgreSQL:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.SqlServer -c Release
+dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+```
+
+Regenerate the compiled model from a Release build:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.SqlServer -c Release -f net10.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.SqlServer --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.SqlServer.Ef.SqlServerShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.SqlServer.Ef.CompiledModels
 ```
 
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
