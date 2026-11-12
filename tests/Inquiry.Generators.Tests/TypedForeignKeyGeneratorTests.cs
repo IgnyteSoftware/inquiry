@@ -323,6 +323,127 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ085");
     }
 
+    // INQ116 (#546): the second argument of the typed form is a property name on the target.
+    private const string TypedFkPropertyTarget = """
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("TCategory")]
+        public sealed class Category
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn("category_code")]
+            public string Code { get; set; } = string.Empty;
+        }
+        """;
+
+    private static string TypedFkPropertyChild(string referencedName, string tableOptions = "") => $$"""
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("TProduct"{{tableOptions}})]
+        public sealed class Product
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryForeignKey(typeof(Category), {{referencedName}})]
+            public string CategoryCode { get; set; } = string.Empty;
+        }
+        """;
+
+    private static string WithoutUsing(string source)
+        => source.Replace("using Inquiry.Entities;", string.Empty, StringComparison.Ordinal)
+            .Replace("namespace Demo;", string.Empty, StringComparison.Ordinal);
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(", GenerateDdl = false")]
+    [InlineData(", GenerateForeignKeys = false")]
+    public void TypedForeignKeyNamingAMissingPropertyReportsInq116(string tableOptions)
+    {
+        var source = TypedFkPropertyTarget + WithoutUsing(TypedFkPropertyChild("\"Cod\"", tableOptions));
+
+        var result = RunGenerator(source);
+
+        // Every provider generator in the harness reports the entity diagnostics, so the ID repeats.
+        var diagnostic = result.RunResult.Diagnostics.First(static d => d.Id == "INQ116");
+        Assert.Equal(Microsoft.CodeAnalysis.DiagnosticSeverity.Error, diagnostic.Severity);
+        var message = diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Contains("typeof(Category), \"Cod\"", message);
+        Assert.Contains("nameof(Category.Property)", message);
+    }
+
+    [Fact]
+    public void TypedForeignKeyNamingAColumnInsteadOfAPropertyReportsInq116()
+    {
+        // "category_code" is the mapped column of Category.Code. The typed form takes the property name.
+        var source = TypedFkPropertyTarget + WithoutUsing(TypedFkPropertyChild("\"category_code\""));
+
+        var result = RunGenerator(source);
+
+        Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ116");
+    }
+
+    [Theory]
+    [InlineData("nameof(Category.Code)", false)]
+    [InlineData("\"Cod\"", true)]
+    public void TypedForeignKeyChecksAPropertyOfATargetInAnotherAssembly(string referencedName, bool expectError)
+    {
+        var result = RunGenerator(TypedFkPropertyChild(referencedName), referencedAssemblySource: TypedFkPropertyTarget);
+
+        if (expectError)
+        {
+            Assert.Contains(result.RunResult.Diagnostics, static d => d.Id == "INQ116");
+            return;
+        }
+
+        AssertNoErrors(result);
+        Assert.Contains("category_code", ExtractDdlFragment(result, "TProduct"));
+    }
+
+    [Fact]
+    public void TypedForeignKeyResolvesAPropertyTheTargetInherits()
+    {
+        const string source = """
+            using Inquiry.Entities;
+
+            namespace Demo;
+
+            public abstract class CategoryBase
+            {
+                [InquiryColumn("category_code")]
+                public string Code { get; set; } = string.Empty;
+            }
+
+            [InquiryTable("TCategory", GenerateDdl = false)]
+            public sealed class Category : CategoryBase
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+            }
+
+            [InquiryTable("TProduct")]
+            public sealed class Product
+            {
+                [InquiryKey(IsGenerated = true)]
+                public long Id { get; set; }
+
+                [InquiryForeignKey(typeof(Category), nameof(Category.Code))]
+                public string CategoryCode { get; set; } = string.Empty;
+            }
+            """;
+
+        var result = RunGenerator(source);
+
+        AssertNoErrors(result);
+        Assert.Contains("category_code", ExtractDdlFragment(result, "TProduct"));
+    }
+
     private static string ExtractDdlFragment(GeneratorTestResult result, string tableName)
     {
         var schema = Assert.Single(result.RunResult.GeneratedTrees,

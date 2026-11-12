@@ -1445,3 +1445,15 @@ Failing shape: `[InquirySelectAll] [InquiryWhere("Category", Compare.IsNull)]` o
 Smallest correction: Change the operation to one that applies criteria, such as `[InquirySelectAllByPredicate]` for rows or `[InquiryCount]` for a count. Remove the criteria only when the method should read every row. Suppressing INQ115 does not generate the method.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ116
+
+Typed foreign key names a property the target does not have. Default: error, enabled.
+
+Trigger: `[InquiryForeignKey(typeof(T), "Name")]` names a property, and `T` has no property with that name, declared or inherited. The check does not depend on `GenerateDdl`, on `GenerateForeignKeys`, or on which assembly declares `T`. A name that equals a column name of `T`, but no property name, also fails.
+
+Failing shape: `[InquiryForeignKey(typeof(Category), "CategoryId")]` when the property is `Category.CategoryID`.
+
+Smallest correction: Name the property with `nameof(Category.CategoryID)`. To reference a table and column by their physical names, use the string form, `[InquiryForeignKey("Category", "CATEGORY_ID")]`.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

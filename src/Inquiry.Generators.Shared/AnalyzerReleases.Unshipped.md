@@ -115,3 +115,4 @@ INQ112 | Inquiry | Warning | Positional InquiryWhere criteria bind parameters of
 INQ113 | Inquiry | Error | Store concurrency-token shape is not supported
 INQ114 | Inquiry | Error | Stored-procedure feature is not supported by the target dialect
 INQ115 | Inquiry | Error | Operation does not support InquiryWhere criteria
+INQ116 | Inquiry | Error | Typed foreign key names a property the target does not have
