@@ -1457,9 +1457,14 @@ internal static class StoreOperationEmitter
         {
             AppendPagedResultGridReads(source, state, entityType, structMat, cancellation);
         }
-        else
+        else if (method.ReturnsList)
         {
             source.AppendLine($"        return Inquiry.QueryListAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation}{pagedCapacityArg});");
+        }
+        else
+        {
+            // An ordered by-field select can stream. Offset paging always returns a list.
+            source.AppendLine($"        return Inquiry.QueryAsync<{entityType}, {state.Type}, {structMat}>(_cmd, default, {cancellation});");
         }
     }
 
