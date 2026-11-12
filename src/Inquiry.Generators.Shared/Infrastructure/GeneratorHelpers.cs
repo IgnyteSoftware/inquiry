@@ -15,7 +15,8 @@ internal static class GeneratorHelpers
     /// <summary>
     /// The properties an entity can map: those of its base classes, base class first, then its own.
     /// A base property is left out when a more derived class hides it, or overrides it with an
-    /// Inquiry attribute of its own. The entity's own properties are returned as declared.
+    /// Inquiry attribute of its own, or when generated code cannot reach it. The entity's own
+    /// properties are returned as declared.
     /// </summary>
     public static IEnumerable<IPropertySymbol> GetMappableProperties(INamedTypeSymbol type)
     {
@@ -29,7 +30,8 @@ internal static class GeneratorHelpers
         {
             var index = i;
             foreach (var property in baseTypes[i].GetMembers().OfType<IPropertySymbol>()
-                .Where(property => !IsReplacedInDerivedType(property, type, baseTypes, index)))
+                .Where(property => IsAccessibleToGeneratedCode(property, type)
+                    && !IsReplacedInDerivedType(property, type, baseTypes, index)))
             {
                 yield return property;
             }
@@ -40,6 +42,13 @@ internal static class GeneratorHelpers
             yield return property;
         }
     }
+
+    // The materializer and the binder are separate types in the entity's assembly, so they cannot
+    // reach a private or protected base property, or an internal one from another assembly.
+    private static bool IsAccessibleToGeneratedCode(IPropertySymbol property, INamedTypeSymbol type)
+        => property.DeclaredAccessibility == Accessibility.Public
+            || (property.DeclaredAccessibility is Accessibility.Internal or Accessibility.ProtectedOrInternal
+                && SymbolEqualityComparer.Default.Equals(property.ContainingAssembly, type.ContainingAssembly));
 
     // An override without an Inquiry attribute keeps the mapping of the property it overrides.
     // Any other member with the same name replaces the base property.

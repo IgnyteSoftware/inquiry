@@ -32,6 +32,10 @@ public sealed partial class InquiryGeneratorTests
 
             [InquiryColumn("hidden_tag")]
             public string Tag { get; set; } = string.Empty;
+
+            // Generated code cannot reach a protected property, so it is not mapped.
+            [InquiryColumn("secret")]
+            protected string Secret { get; set; } = string.Empty;
         }
 
         public abstract class Keyed<TKey> : Audited

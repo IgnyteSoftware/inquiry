@@ -16,7 +16,8 @@ values back differs, as described in [Provider notes](#provider-notes).
   and so is a relation declared there. This also works on a generic base such as `Entity<TKey>` that
   holds the key. Inherited columns come first, starting with the outermost base class. When a derived
   class overrides a property, the override keeps the base mapping unless it has an Inquiry attribute of
-  its own. A property that hides a base property with `new` replaces it. Each entity class still maps
+  its own. A property that hides a base property with `new` replaces it. A base property that generated
+  code cannot reach, such as a protected one, is not mapped. Each entity class still maps
   to its own table with all of its columns: there is no shared-table or joined-table inheritance.
 - **Column name.** A mapped property uses its own name unless the attribute gives one, as in
   `[InquiryColumn("BODY")]` or `[InquiryKey("ShipperID")]`.
