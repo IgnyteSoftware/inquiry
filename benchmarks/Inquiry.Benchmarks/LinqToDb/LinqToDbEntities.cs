@@ -13,10 +13,11 @@ public sealed class L2Shipper
     [Column("CompanyName"), NotNull]
     public string CompanyName { get; set; } = "";
 
-    [Column("Phone"), Nullable]
+    [Column("Phone", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
     public string? Phone { get; set; }
 }
 
+// The write legs set five columns, as the handwritten SQL does. The other columns are read only.
 [Table("Customers")]
 public sealed class L2Customer
 {
@@ -29,11 +30,29 @@ public sealed class L2Customer
     [Column("ContactName"), Nullable]
     public string? ContactName { get; set; }
 
-    [Column("Country"), Nullable]
-    public string? Country { get; set; }
+    [Column("ContactTitle", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? ContactTitle { get; set; }
+
+    [Column("Address", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? Address { get; set; }
 
     [Column("City"), Nullable]
     public string? City { get; set; }
+
+    [Column("Region", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? Region { get; set; }
+
+    [Column("PostalCode", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? PostalCode { get; set; }
+
+    [Column("Country"), Nullable]
+    public string? Country { get; set; }
+
+    [Column("Phone", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? Phone { get; set; }
+
+    [Column("Fax", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? Fax { get; set; }
 }
 
 [Table("Products")]
@@ -45,14 +64,26 @@ public sealed class L2Product
     [Column("ProductName"), NotNull]
     public string ProductName { get; set; } = "";
 
+    [Column("SupplierID", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public int? SupplierID { get; set; }
+
     [Column("CategoryID"), Nullable]
     public int? CategoryID { get; set; }
+
+    [Column("QuantityPerUnit", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public string? QuantityPerUnit { get; set; }
 
     [Column("UnitPrice"), Nullable]
     public decimal? UnitPrice { get; set; }
 
     [Column("UnitsInStock"), Nullable]
     public short? UnitsInStock { get; set; }
+
+    [Column("UnitsOnOrder", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public short? UnitsOnOrder { get; set; }
+
+    [Column("ReorderLevel", SkipOnInsert = true, SkipOnUpdate = true), Nullable]
+    public short? ReorderLevel { get; set; }
 
     [Column("Discontinued"), NotNull]
     public bool Discontinued { get; set; }

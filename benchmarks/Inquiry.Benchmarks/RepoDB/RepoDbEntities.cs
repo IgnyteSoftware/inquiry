@@ -30,11 +30,29 @@ public sealed class RdCustomer
     [Map("ContactName")]
     public string? ContactName { get; set; }
 
-    [Map("Country")]
-    public string? Country { get; set; }
+    [Map("ContactTitle")]
+    public string? ContactTitle { get; set; }
+
+    [Map("Address")]
+    public string? Address { get; set; }
 
     [Map("City")]
     public string? City { get; set; }
+
+    [Map("Region")]
+    public string? Region { get; set; }
+
+    [Map("PostalCode")]
+    public string? PostalCode { get; set; }
+
+    [Map("Country")]
+    public string? Country { get; set; }
+
+    [Map("Phone")]
+    public string? Phone { get; set; }
+
+    [Map("Fax")]
+    public string? Fax { get; set; }
 }
 
 [Map("Products")]
@@ -46,14 +64,26 @@ public sealed class RdProduct
     [Map("ProductName")]
     public string ProductName { get; set; } = "";
 
+    [Map("SupplierID")]
+    public int? SupplierID { get; set; }
+
     [Map("CategoryID")]
     public int? CategoryID { get; set; }
+
+    [Map("QuantityPerUnit")]
+    public string? QuantityPerUnit { get; set; }
 
     [Map("UnitPrice"), PropertyHandler(typeof(SqliteDecimalPropertyHandler))]
     public decimal? UnitPrice { get; set; }
 
     [Map("UnitsInStock")]
     public short? UnitsInStock { get; set; }
+
+    [Map("UnitsOnOrder")]
+    public short? UnitsOnOrder { get; set; }
+
+    [Map("ReorderLevel")]
+    public short? ReorderLevel { get; set; }
 
     [Map("Discontinued"), PropertyHandler(typeof(SqliteBooleanPropertyHandler))]
     public bool Discontinued { get; set; }

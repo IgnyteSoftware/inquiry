@@ -11,7 +11,7 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
     public partial class NorthwindDbContextModel
     {
         private NorthwindDbContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("ee96507a-196d-440e-89bc-ac72d597acb1"), entityTypeCount: 3)
+            : base(skipDetectChanges: false, modelId: new Guid("5587dea9-9fea-4e4e-aa6b-5b03aa8a405a"), entityTypeCount: 3)
         {
         }
 

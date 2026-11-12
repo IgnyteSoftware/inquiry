@@ -43,7 +43,9 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 typeof(string),
                 propertyInfo: typeof(EfShipper).GetProperty("Phone", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 fieldInfo: typeof(EfShipper).GetField("<Phone>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-                nullable: true);
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
             phone.AddAnnotation("Relational:ColumnName", "Phone");
 
             var key = runtimeEntityType.AddKey(
