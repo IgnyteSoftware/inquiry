@@ -14,8 +14,8 @@ No stable release has shipped yet; `1.0.0-preview` packages are published on [nu
 
 | Version         | Status                          | .NET TFMs               |
 |-----------------|---------------------------------|-------------------------|
-| 1.0.0-preview.x | Published previews              | net8.0, net9.0, net10.0 |
-| 1.0.x           | Upcoming first stable release   | net8.0, net9.0, net10.0 |
+| 1.0.0-preview.x | Published previews              | net8.0, net9.0, net10.0 through preview.13; net10.0, net11.0 after |
+| 1.0.x           | Upcoming first stable release   | net10.0, net11.0        |
 
 ## Target framework policy
 

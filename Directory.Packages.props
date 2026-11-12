@@ -97,9 +97,4 @@
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire.Tests'">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
   </ItemGroup>
-
-  <!-- A central entry would pin System.Collections.Immutable for the analyzers too, so only this project gets it. -->
-  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Benchmarks.Contracts.Tests'">
-    <PackageVersion Include="System.Collections.Immutable" Version="10.0.11" />
-  </ItemGroup>
 </Project>

@@ -309,7 +309,7 @@ await store.InsertAsync(doc);
 
 - **Supplied keys win.** A non-empty key is never overwritten.
 - **The entity is mutated before execution** so the client-generated key is visible even if the write fails. Ordinary database-generated identity inserts do not copy the identity into the input.
-- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a UUIDv7. On .NET 9+ it delegates to `Guid.CreateVersion7()`; on .NET 8 it's an RFC 9562-conformant polyfill. For SQL Server-ordered keys, use `InquiryGuid.NewSqlServerSequential()`.
+- **`InquiryGuid.NewVersion7()`** is public; use it directly anywhere you need a UUIDv7. It delegates to `Guid.CreateVersion7()`. For SQL Server-ordered keys, use `InquiryGuid.NewSqlServerSequential()`.
 - `SequentialGuid` requires a plain client-supplied `Guid`/`Guid?` key — combining it with `IsGenerated` or `UseDatabaseDefault`, or putting it on a non-Guid key, is a build-time error (`INQ047`).
 
 ## Derived query methods

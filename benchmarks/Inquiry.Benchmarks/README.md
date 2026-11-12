@@ -120,7 +120,7 @@ then shares one process. The class has no `MemoryDiagnoser`, because
 BenchmarkDotNet measures allocation on an extra call after the measured one.
 
 ```powershell
-dotnet run -c Release -f net8.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ColdStartBenchmarks*"
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ColdStartBenchmarks*"
 ```
 
 ### Tuned and source-generated competitors (`ShipperReadCompetitorBenchmarks`)
@@ -155,7 +155,7 @@ compilation, so only the tuned legs use the model, through `UseModel`:
 
 ```powershell
 dotnet tool restore
-dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks --framework net8.0 --configuration Release --context Inquiry.Benchmarks.Ef.NorthwindDbContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.Ef.CompiledModels
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks --framework net10.0 --configuration Release --context Inquiry.Benchmarks.Ef.NorthwindDbContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.Ef.CompiledModels
 ```
 
 ```powershell
@@ -188,14 +188,14 @@ does not return a failure exit code, so check the JSON report for cases without 
 
 ```powershell
 dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
-dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
 ```
 
 Regenerate the compiled model from a Release build:
 
 ```powershell
-dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release -f net8.0
-dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.PostgreSql --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.PostgreSql.Ef.PgShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.PostgreSql.Ef.CompiledModels
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release -f net10.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.PostgreSql --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.PostgreSql.Ef.PgShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.PostgreSql.Ef.CompiledModels
 ```
 
 #### On MySQL and MariaDB
@@ -217,18 +217,18 @@ Each compiled model is in the project's `Ef/CompiledModels`, and each project fi
 
 ```powershell
 dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release
-dotnet benchmarks/Inquiry.Benchmarks.MySql/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.MySql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+dotnet benchmarks/Inquiry.Benchmarks.MySql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.MySql.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
 dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release
-dotnet benchmarks/Inquiry.Benchmarks.MariaDb/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.MariaDb.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+dotnet benchmarks/Inquiry.Benchmarks.MariaDb/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.MariaDb.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
 ```
 
 Regenerate the compiled models from a Release build:
 
 ```powershell
-dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release -f net8.0
-dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MySql --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.MySql.Ef.MySqlShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MySql.Ef.CompiledModels
-dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release -f net8.0
-dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MariaDb --framework net8.0 --configuration Release --no-build --context Inquiry.Benchmarks.MariaDb.Ef.MariaDbShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MariaDb.Ef.CompiledModels
+dotnet build benchmarks/Inquiry.Benchmarks.MySql -c Release -f net10.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MySql --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.MySql.Ef.MySqlShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MySql.Ef.CompiledModels
+dotnet build benchmarks/Inquiry.Benchmarks.MariaDb -c Release -f net10.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.MariaDb --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.MariaDb.Ef.MariaDbShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.MariaDb.Ef.CompiledModels
 ```
 
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
@@ -483,23 +483,23 @@ The SQL Server benchmark project pins a Linux RID for release evidence. On Windo
 invoke the managed DLL instead of `dotnet run` (the latter attempts to launch the Linux apphost):
 
 ```powershell
-dotnet build benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj -c Release -f net8.0
-dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net8.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --collection-smoke
+dotnet build benchmarks/Inquiry.Benchmarks.SqlServer/Inquiry.Benchmarks.SqlServer.csproj -c Release -f net10.0
+dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --collection-smoke
 ```
 
 Use that managed-DLL form with `--collection-benchmark`, `--collection-verify`, or
 `--collection-evidence <path>` for the corresponding Windows command below.
 
 ```powershell
-dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-benchmark
 dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-benchmark
+dotnet run -c Release -f net11.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-benchmark
 ```
 
 The smoke commands only validate wiring and are not suitable for published comparisons:
 
 ```powershell
-dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-smoke
 dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-smoke
+dotnet run -c Release -f net11.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-smoke
 ```
 
 Correctness and server evidence run outside the timed BenchmarkDotNet path. Evidence contains logical
@@ -512,8 +512,8 @@ not silently carried forward; a separately controlled parameter-signature experi
 follow-up work under #87.
 
 ```powershell
-dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-verify
-dotnet run -c Release -f net8.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-evidence artifacts/benchmarks/sqlserver-collection-evidence.json
+dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-verify
+dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-evidence artifacts/benchmarks/sqlserver-collection-evidence.json
 ```
 
 Until checked historical baselines and a stable benchmark runner are added under the broader benchmark

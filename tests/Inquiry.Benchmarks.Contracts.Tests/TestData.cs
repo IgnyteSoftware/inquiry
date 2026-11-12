@@ -13,7 +13,7 @@ internal static class TestData
     public static IReadOnlyList<SourceArtifact> Artifacts(
         BenchmarkSourceMode mode,
         string provider = "sqlite",
-        string runtimeTfm = "net8.0")
+        string runtimeTfm = "net10.0")
     {
         var manifest = Manifest(mode, provider, runtimeTfm);
         var resolved = ResolvedDependencies(mode, provider, runtimeTfm);
@@ -29,7 +29,7 @@ internal static class TestData
     public static ResolvedDependencyManifest ResolvedDependencies(
         BenchmarkSourceMode mode,
         string provider = "sqlite",
-        string runtimeTfm = "net8.0")
+        string runtimeTfm = "net10.0")
     {
         var sourceManifest = Manifest(mode, provider, runtimeTfm);
         var projectAssetsIndex = sourceManifest.ExpectedArtifacts.ToList().FindIndex(
@@ -41,7 +41,7 @@ internal static class TestData
         var assets = new List<ResolvedDependencyAsset>
         {
             new("dotnet/packs/Microsoft.NETCore.App.Ref/ref/System.Runtime.dll", ResolvedAssetKind.CompilerReference, "compiler:framework", new string('a', 64)),
-            new("nuget/benchmarkdotnet/0.15.8/lib/net8.0/BenchmarkDotNet.dll", ResolvedAssetKind.Runtime, "runtime:BenchmarkDotNet", new string('b', 64)),
+            new("nuget/benchmarkdotnet/0.15.8/lib/net10.0/BenchmarkDotNet.dll", ResolvedAssetKind.Runtime, "runtime:BenchmarkDotNet", new string('b', 64)),
             new($"repo/analyzers/Inquiry.{ProviderSuffix(provider)}.Analyzer.dll", ResolvedAssetKind.Analyzer, $"analyzer:Inquiry.{ProviderSuffix(provider)}.Analyzer", new string('c', 64)),
             new("repo/analyzers/Inquiry.Generators.Shared.dll", ResolvedAssetKind.Analyzer, "analyzer:Inquiry.Generators.Shared", new string('5', 64)),
             new("repo/generated/SelectedAssetProbe.InquiryStore.g.cs", ResolvedAssetKind.GeneratedSource, "compiler-generated", new string('6', 64)),
@@ -80,15 +80,15 @@ internal static class TestData
 
     private static ResolvedDependencyAsset ProviderResolvedAsset(string provider) => provider switch
     {
-        "sqlite" => new("nuget/microsoft.data.sqlite/10.0.8/lib/net8.0/Microsoft.Data.Sqlite.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.Sqlite", new string('7', 64)),
-        "sqlserver" => new("nuget/microsoft.data.sqlclient/7.0.1/lib/net8.0/Microsoft.Data.SqlClient.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.SqlClient", new string('7', 64)),
-        "postgresql" => new("nuget/npgsql/10.0.3/lib/net8.0/Npgsql.dll", ResolvedAssetKind.Runtime, "runtime:Npgsql", new string('7', 64)),
-        "mysql" or "mariadb" => new("nuget/mysqlconnector/2.6.0/lib/net8.0/MySqlConnector.dll", ResolvedAssetKind.Runtime, "runtime:MySqlConnector", new string('7', 64)),
-        "oracle" => new("nuget/oracle.manageddataaccess.core/23.26.200/lib/net8.0/Oracle.ManagedDataAccess.dll", ResolvedAssetKind.Runtime, "runtime:Oracle.ManagedDataAccess.Core", new string('7', 64)),
+        "sqlite" => new("nuget/microsoft.data.sqlite/10.0.8/lib/net10.0/Microsoft.Data.Sqlite.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.Sqlite", new string('7', 64)),
+        "sqlserver" => new("nuget/microsoft.data.sqlclient/7.0.1/lib/net10.0/Microsoft.Data.SqlClient.dll", ResolvedAssetKind.Runtime, "runtime:Microsoft.Data.SqlClient", new string('7', 64)),
+        "postgresql" => new("nuget/npgsql/10.0.3/lib/net10.0/Npgsql.dll", ResolvedAssetKind.Runtime, "runtime:Npgsql", new string('7', 64)),
+        "mysql" or "mariadb" => new("nuget/mysqlconnector/2.6.0/lib/net10.0/MySqlConnector.dll", ResolvedAssetKind.Runtime, "runtime:MySqlConnector", new string('7', 64)),
+        "oracle" => new("nuget/oracle.manageddataaccess.core/23.26.200/lib/net10.0/Oracle.ManagedDataAccess.dll", ResolvedAssetKind.Runtime, "runtime:Oracle.ManagedDataAccess.Core", new string('7', 64)),
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Unknown provider."),
     };
 
-    public static BenchmarkSourceIdentity ProjectSource(string provider = "sqlite", string runtimeTfm = "net8.0")
+    public static BenchmarkSourceIdentity ProjectSource(string provider = "sqlite", string runtimeTfm = "net10.0")
     {
         var manifest = SourceArtifactManifestCatalog.GetRequired(provider, BenchmarkSourceMode.ProjectReference, runtimeTfm);
         return BenchmarkSourceIdentity.Project(Commit, manifest.IdentityHash,
@@ -96,7 +96,7 @@ internal static class TestData
             Artifacts(BenchmarkSourceMode.ProjectReference, provider, runtimeTfm));
     }
 
-    public static BenchmarkSourceIdentity PackageSource(string provider = "sqlite", string runtimeTfm = "net8.0")
+    public static BenchmarkSourceIdentity PackageSource(string provider = "sqlite", string runtimeTfm = "net10.0")
     {
         var manifest = Manifest(BenchmarkSourceMode.PackageConsumer, provider, runtimeTfm);
         return BenchmarkSourceIdentity.Package("rc-bundle", new string('9', 64), manifest.IdentityHash,
@@ -107,7 +107,7 @@ internal static class TestData
     public static BenchmarkCaseKey CaseKey(
         BenchmarkSourceIdentity? source = null,
         string provider = "sqlite",
-        string runtimeTfm = "net8.0") => new(
+        string runtimeTfm = "net10.0") => new(
         "1", "customer.by-key", provider, "exact-single-with-duplicate-check", "tiny", 1,
         BufferingMode.Buffered, ConnectionLifecycle.PerOperation, PoolingMode.Pooled,
         PreparationMode.Unprepared, TemperatureMode.Warm, TrackingMode.NotApplicable,
@@ -142,12 +142,12 @@ internal static class TestData
     public static BenchmarkEvidenceEnvelope Envelope(
         BenchmarkSourceIdentity? source = null,
         string provider = "sqlite",
-        string runtimeTfm = "net8.0")
+        string runtimeTfm = "net10.0")
     {
         source ??= ProjectSource(provider, runtimeTfm);
         var key = CaseKey(source, provider, runtimeTfm);
         var fixture = NorthwindFixtureCatalog.For(FixtureTier.Tiny);
-        var job = BenchmarkJobCatalog.GetRequired(runtimeTfm == "net8.0" ? "net8-live-v1" : "net10-live-v1");
+        var job = BenchmarkJobCatalog.GetRequired(runtimeTfm == "net10.0" ? "net10-live-v1" : "net11-live-v1");
         var scenario = Scenario(key);
         var observation = new ParityObservation(
             scenario.Expected.Count, scenario.Expected.Checksum, scenario.Expected.ErrorClass,
@@ -156,8 +156,8 @@ internal static class TestData
         var parity = new ParityEvidence(scenario, observation);
         var environment = new EnvironmentEvidence(
             "inquiry-benchmark-v1", "linux", "6.8.0", runtimeTfm, RuntimeIdentifier,
-            runtimeTfm == "net8.0" ? "8.0.28" : "10.0.9",
-            runtimeTfm == "net8.0" ? ".NET 8.0.28" : ".NET 10.0.9", "workstation-gc", "x64-v1",
+            runtimeTfm == "net10.0" ? "10.0.9" : "11.0.0",
+            runtimeTfm == "net10.0" ? ".NET 10.0.9" : ".NET 11.0.0", "workstation-gc", "x64-v1",
             "0x123", "single-node", "disabled", "fixed", "bare-metal", "none", "local", "loopback", "healthy");
         var measurements = Enumerable.Range(0, 16)
             .SelectMany(launch => Enumerable.Range(0, 15)

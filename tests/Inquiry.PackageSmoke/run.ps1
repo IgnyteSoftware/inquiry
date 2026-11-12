@@ -77,7 +77,7 @@ function Copy-Recipe([string] $Recipe, [string] $Directory) {
 }
 
 function Invoke-Recipe([string] $Recipe, [string[]] $ExpectedFiles, [string[]] $Sources, [string[]] $Packages = @('Ignyte.Inquiry.Sqlite'), [switch] $Logging) {
-    $project = New-Consumer "recipe-$Recipe" 'net8.0' $Packages $Sources -Logging:$Logging
+    $project = New-Consumer "recipe-$Recipe" 'net10.0' $Packages $Sources -Logging:$Logging
     $directory = Split-Path -Parent $project
     $files = Copy-Recipe $Recipe $directory
     if (@(Compare-Object ($files | Sort-Object) ($ExpectedFiles | Sort-Object)).Count -ne 0) {
@@ -120,14 +120,14 @@ function New-ProbePackage([string] $Id, [string] $Version) {
 }
 
 function Invoke-RestoreProbe([string] $Name, [string[]] $Packages, [bool] $WarningsAsErrors, [bool] $ShouldFail, [string] $Pattern) {
-    $project = New-Consumer "probe-$Name" 'net8.0' $Packages @() -WarningsAsErrors $WarningsAsErrors
+    $project = New-Consumer "probe-$Name" 'net10.0' $Packages @() -WarningsAsErrors $WarningsAsErrors
     $output = @(& dotnet restore $project --configfile $probeConfig --no-cache 2>&1 | ForEach-Object { "$_" })
     $exitCode = $LASTEXITCODE
     $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if (($exitCode -ne 0) -ne $ShouldFail) { throw "Restore probe '$Name' exited with $exitCode." }
     if ($Pattern -and -not ($output -match $Pattern)) { throw "Restore probe '$Name' did not report /$Pattern/." }
     if (-not $Pattern -and ($output -match '\bNU1\d{3}\b')) { throw "Restore probe '$Name' reported a NuGet diagnostic." }
-    $checks.Add("net8.0/version-mismatch/$Name")
+    $checks.Add("net10.0/version-mismatch/$Name")
 }
 
 # The schema evolution sample has two entity libraries and runs against SQL Server, so it cannot use the
@@ -165,7 +165,7 @@ function Invoke-SchemaEvolutionSample {
         Copy-Item -LiteralPath (Join-Path $sample "$version/Catalog.cs") -Destination (Join-Path $directory $version)
         @"
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
   <ItemGroup><PackageReference Include="Ignyte.Inquiry.SqlServer" /></ItemGroup>
 </Project>
 "@ | Set-Content -LiteralPath (Join-Path $directory "$version/Inquiry.SchemaEvolution.$version.csproj") -Encoding utf8
@@ -218,24 +218,24 @@ try {
     $output = @(Invoke-Recipe 'getting-started' @('Shipper.cs', 'ShipperStore.cs', 'Program.cs', 'output.txt') @())
     $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-getting-started/output.txt'))
     if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The getting-started output differs from its documented output.' }
-    $checks.Add('net8.0/sqlite/docs-recipe-getting-started')
+    $checks.Add('net10.0/sqlite/docs-recipe-getting-started')
     $output = @(Invoke-Recipe 'partial-updates' @('schema.sql', 'ContactPatches.cs') @((Join-Path $PSScriptRoot 'PartialUpdatesRecipe.cs')))
     if ($output[-1] -cne 'PARTIAL-UPDATES-RECIPE-OK') { throw 'The partial-updates recipe did not complete.' }
-    $checks.Add('net8.0/sqlite/docs-recipe-partial-updates')
+    $checks.Add('net10.0/sqlite/docs-recipe-partial-updates')
     $output = @(Invoke-Recipe 'entity-mapping' @('Models.cs', 'Stores.cs', 'SqlTrace.cs', 'Program.cs', 'output.txt') @())
     $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-entity-mapping/output.txt'))
     if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The entity-mapping output differs from its documented output.' }
-    $checks.Add('net8.0/sqlite/docs-recipe-entity-mapping')
+    $checks.Add('net10.0/sqlite/docs-recipe-entity-mapping')
     $output = @(Invoke-Recipe 'aggregates' @('Product.cs', 'ProductStore.cs', 'Program.cs', 'output.txt') @())
     $expected = @(Get-Content -LiteralPath (Join-Path $workRoot 'recipe-aggregates/output.txt'))
     if (($output -join "`n") -cne ($expected -join "`n")) { throw 'The aggregates output differs from its documented output.' }
-    $checks.Add('net8.0/sqlite/docs-recipe-aggregates')
+    $checks.Add('net10.0/sqlite/docs-recipe-aggregates')
     $output = @(Invoke-Recipe 'n-plus-one' @('Order.cs', 'OrderStore.cs', 'NPlusOneExample.cs') @((Join-Path $PSScriptRoot 'NPlusOneRecipe.cs')) @('Ignyte.Inquiry.Sqlite', 'Ignyte.Inquiry.Interceptors') -Logging)
     if ($output[-1] -cne 'N-PLUS-ONE-RECIPE-OK') { throw 'The N+1 detection recipe did not complete.' }
-    $checks.Add('net8.0/sqlite/docs-recipe-n-plus-one')
+    $checks.Add('net10.0/sqlite/docs-recipe-n-plus-one')
     $sample = Join-Path $repoRoot 'samples/Inquiry.AotSmoke'
     $providers = @{ Sqlite = 'sqlite'; SqlServer = 'sqlserver'; PostgreSql = 'postgresql'; MySql = 'mysql'; MariaDb = 'mariadb'; Oracle = 'oracle' }
-    foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {
+    foreach ($tfm in @('net10.0', 'net11.0')) {
         foreach ($provider in ($providers.Keys | Sort-Object)) {
             $project = New-Consumer "provider-$provider-$tfm" $tfm @("Ignyte.Inquiry.$provider") @((Join-Path $PSScriptRoot 'Program.cs'), (Join-Path $sample 'Widget.cs'))
             Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
@@ -287,7 +287,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'The actual-package NativeAOT consumer failed.' }
     $checks.Add("net10.0/$RuntimeIdentifier/nativeaot-crud")
     Invoke-SchemaEvolutionSample
-    $checks.Add('net8.0/sqlserver/docs-sample-schema-evolution')
+    $checks.Add('net10.0/sqlserver/docs-sample-schema-evolution')
     if (@(Compare-Object ($hashes.file | Sort-Object) ((Get-ChildItem -LiteralPath $bundle -File).Name | Sort-Object)).Count -ne 0) {
         throw 'Bundle inventory changed during verification.'
     }

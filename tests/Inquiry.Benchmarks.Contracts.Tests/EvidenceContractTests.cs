@@ -44,7 +44,7 @@ public sealed class EvidenceContractTests
         var projectAssetsPath = metadata["ProjectAssetsFile"];
         var selectedAssetsPath = metadata["SelectedAssetsManifest"];
         var runtimeIdentifier = metadata["RuntimeIdentifier"];
-        var runtimeTfm = Environment.Version.Major == 8 ? "net8.0" : "net10.0";
+        var runtimeTfm = Environment.Version.Major == 10 ? "net10.0" : "net11.0";
         var repositoryRoot = FindRepositoryRoot();
         var nuGetPackageRoot = metadata["NuGetPackageRoot"];
         var userRoot = DeriveUserProfileRoot(nuGetPackageRoot);
@@ -171,7 +171,7 @@ public sealed class EvidenceContractTests
             var projectAssets = Path.Combine(temporary, "project.assets.json");
             File.WriteAllText(projectAssets, "{}");
             var manifest = Path.Combine(temporary, "selected-assets.tsv");
-            var header = $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet8.0\tlinux-x64";
+            var header = $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet10.0\tlinux-x64";
             string[] required =
             [
                 $"CompilerReference\tcompiler:framework\t{compiler}",
@@ -187,19 +187,19 @@ public sealed class EvidenceContractTests
             File.WriteAllLines(manifest, [header, .. required, $"GeneratedSource\tgenerated:outside\t{outside}"]);
             Assert.Throws<InvalidDataException>(() => ResolvedDependencyManifestCollector.Collect(
                 manifest, projectAssets, "sqlite", BenchmarkSourceLane.DeveloperProject,
-                "net8.0", "linux-x64", roots));
+                "net10.0", "linux-x64", roots));
 
             File.WriteAllLines(manifest,
                 [header, .. required, $"Runtime\truntime:case-upper\t{upperCase}", $"Runtime\truntime:case-lower\t{lowerCase}"]);
             Assert.Contains("collides case-insensitively", Assert.Throws<InvalidDataException>(() =>
                 ResolvedDependencyManifestCollector.Collect(manifest, projectAssets, "sqlite",
-                    BenchmarkSourceLane.DeveloperProject, "net8.0", "linux-x64", roots)).Message,
+                    BenchmarkSourceLane.DeveloperProject, "net10.0", "linux-x64", roots)).Message,
                 StringComparison.Ordinal);
 
-            File.WriteAllLines(manifest, [header.Replace("net8.0", "net10.0", StringComparison.Ordinal), .. required]);
+            File.WriteAllLines(manifest, [header.Replace("net10.0", "net11.0", StringComparison.Ordinal), .. required]);
             Assert.Throws<InvalidDataException>(() => ResolvedDependencyManifestCollector.Collect(
                 manifest, projectAssets, "sqlite", BenchmarkSourceLane.DeveloperProject,
-                "net8.0", "linux-x64", roots));
+                "net10.0", "linux-x64", roots));
         }
         finally
         {
@@ -227,7 +227,7 @@ public sealed class EvidenceContractTests
             var manifest = Path.Combine(temporary, "selected-assets.tsv");
             File.WriteAllLines(manifest,
             [
-                $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet8.0\tlinux-x64",
+                $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet10.0\tlinux-x64",
                 $"CompilerReference\tcompiler:framework\t{Asset("compiler.dll")}",
                 $"Runtime\truntime:host\t{Asset("runtime.dll")}",
                 $"Analyzer\tanalyzer:shared\t{Asset("Inquiry.Generators.Shared.dll")}",
@@ -241,7 +241,7 @@ public sealed class EvidenceContractTests
 
             var exception = Assert.Throws<InvalidDataException>(() => ResolvedDependencyManifestCollector.Collect(
                 manifest, projectAssets, "sqlite", BenchmarkSourceLane.DeveloperProject,
-                "net8.0", "linux-x64", [new SelectedAssetRoot("repo", temporary)]));
+                "net10.0", "linux-x64", [new SelectedAssetRoot("repo", temporary)]));
 
             Assert.Contains("provider analyzer", exception.Message, StringComparison.Ordinal);
         }
@@ -292,7 +292,7 @@ public sealed class EvidenceContractTests
                 var selected = Path.Combine(root, "selected-assets.tsv");
                 File.WriteAllLines(selected,
                 [
-                    $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet8.0\tlinux-x64",
+                    $"{ResolvedDependencyManifestCollector.EmittedSchemaVersion}\tsqlite\tDeveloperProject\tnet10.0\tlinux-x64",
                     .. assets.Select(static asset => $"{asset.Item1}\t{asset.Item2}\t{asset.Item3}"),
                 ]);
                 var projectAssets = Path.Combine(root, "project.assets.json");
@@ -302,7 +302,7 @@ public sealed class EvidenceContractTests
                     ["packageFolders"] = new Dictionary<string, object> { [Path.Combine(root, "packages")] = new { } },
                 }));
                 return ResolvedDependencyManifestCollector.Collect(selected, projectAssets, "sqlite",
-                    BenchmarkSourceLane.DeveloperProject, "net8.0", "linux-x64",
+                    BenchmarkSourceLane.DeveloperProject, "net10.0", "linux-x64",
                     [new SelectedAssetRoot("repo", root)]);
             }
         }
@@ -338,14 +338,14 @@ public sealed class EvidenceContractTests
         var providers = new[] { "sqlite", "sqlserver", "postgresql", "mysql", "mariadb", "oracle" };
         Assert.Equal(providers, SourceArtifactManifestCatalog.Providers);
         var rids = SourceArtifactManifestCatalog.RuntimeIdentifiers;
-        string[] runtimeTfms = ["net8.0", "net10.0"];
+        string[] runtimeTfms = ["net10.0", "net11.0"];
         var expectedLanes = providers.SelectMany(provider => rids.SelectMany(rid =>
             runtimeTfms.Select(runtimeTfm =>
                 (Provider: provider, RuntimeTfm: runtimeTfm, Rid: rid, Lane: BenchmarkSourceLane.DeveloperProject)))).ToArray();
         Assert.Equal(expectedLanes, SourceArtifactManifestCatalog.Manifests.Select(static manifest =>
             (manifest.Provider, manifest.RuntimeTfm, manifest.RuntimeIdentifier, manifest.Lane)));
         var packageError = Assert.Throws<ArgumentOutOfRangeException>(() => SourceArtifactManifestCatalog.GetRequired(
-            "sqlite", BenchmarkSourceMode.PackageConsumer, "net8.0"));
+            "sqlite", BenchmarkSourceMode.PackageConsumer, "net10.0"));
         Assert.Equal("mode", packageError.ParamName);
         Assert.Contains("trusted RC package producer", packageError.Message, StringComparison.Ordinal);
 
@@ -432,9 +432,9 @@ public sealed class EvidenceContractTests
             });
         }
 
-        Assert.Contains(EvidenceValidator.Validate(TestData.Envelope(TestData.PackageSource(), "postgresql", "net8.0")),
+        Assert.Contains(EvidenceValidator.Validate(TestData.Envelope(TestData.PackageSource(), "postgresql", "net10.0")),
             static error => error.Code == "source-artifact-manifest");
-        Assert.Contains(EvidenceValidator.Validate(TestData.Envelope(TestData.PackageSource(), "sqlite", "net10.0")),
+        Assert.Contains(EvidenceValidator.Validate(TestData.Envelope(TestData.PackageSource(), "sqlite", "net11.0")),
             static error => error.Code == "source-artifact-manifest");
     }
 
@@ -638,7 +638,7 @@ public sealed class EvidenceContractTests
             TestData.Commit,
             "not-a-project-bundle",
             new string('9', 64),
-            SourceArtifactManifestCatalog.GetRequired("sqlite", BenchmarkSourceMode.ProjectReference, "net8.0").IdentityHash,
+            SourceArtifactManifestCatalog.GetRequired("sqlite", BenchmarkSourceMode.ProjectReference, "net10.0").IdentityHash,
             TestData.ResolvedDependencies(BenchmarkSourceMode.ProjectReference),
             TestData.Artifacts(BenchmarkSourceMode.PackageConsumer));
 
@@ -822,7 +822,7 @@ public sealed class EvidenceContractTests
         Assert.NotEqual(envelope.Environment.IdentityHash, versionDrift.IdentityHash);
         Assert.NotEqual(envelope.Environment.IdentityHash, descriptionDrift.IdentityHash);
 
-        var tfmDrift = envelope with { Environment = envelope.Environment with { RuntimeTfm = "net10.0" } };
+        var tfmDrift = envelope with { Environment = envelope.Environment with { RuntimeTfm = "net11.0" } };
         var codes = EvidenceValidator.Validate(tfmDrift).Select(static error => error.Code).ToHashSet();
         Assert.Contains("environment-hash", codes);
         Assert.Contains("bdn-contract", codes);
@@ -1311,7 +1311,7 @@ public sealed class EvidenceContractTests
     [Fact]
     public void CanonicalJobManifestPinsNet8Net10AndLiveIterationRules()
     {
-        Assert.Equal(["net8.0", "net10.0"], BenchmarkJobCatalog.Jobs.Select(static job => job.RuntimeTfm));
+        Assert.Equal(["net10.0", "net11.0"], BenchmarkJobCatalog.Jobs.Select(static job => job.RuntimeTfm));
         Assert.All(BenchmarkJobCatalog.Jobs, static job =>
         {
             Assert.Equal(16, job.LaunchCount);
@@ -1363,8 +1363,8 @@ public sealed class EvidenceContractTests
         var artifacts = Path.Combine(Path.GetTempPath(), $"inquiry-bdn-smoke-{Guid.NewGuid():N}");
         try
         {
-            var runtimeTfm = Environment.Version.Major == 8 ? "net8.0" : "net10.0";
-            var contract = BenchmarkJobCatalog.GetRequired(runtimeTfm == "net8.0" ? "net8-live-v1" : "net10-live-v1") with
+            var runtimeTfm = Environment.Version.Major == 10 ? "net10.0" : "net11.0";
+            var contract = BenchmarkJobCatalog.GetRequired(runtimeTfm == "net10.0" ? "net10-live-v1" : "net11-live-v1") with
             {
                 Id = "evidence-smoke",
                 LaunchCount = 1,
@@ -1472,7 +1472,7 @@ public sealed class EvidenceContractTests
     {
         var metadata = typeof(EvidenceContractTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .ToDictionary(static attribute => attribute.Key, static attribute => attribute.Value!, StringComparer.Ordinal);
-        var runtimeTfm = Environment.Version.Major == 8 ? "net8.0" : "net10.0";
+        var runtimeTfm = Environment.Version.Major == 10 ? "net10.0" : "net11.0";
         var repositoryRoot = FindRepositoryRoot();
         var nuGetPackageRoot = metadata["NuGetPackageRoot"];
         var userRoot = DeriveUserProfileRoot(nuGetPackageRoot);
@@ -1536,7 +1536,7 @@ public sealed class EvidenceContractTests
                         break;
                     case SourceArtifactRole.BenchmarkConfigFile:
                         File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(BenchmarkJobCatalog.GetRequired(
-                            runtimeTfm == "net8.0" ? "net8-live-v1" : "net10-live-v1"), EvidenceJson.Options));
+                            runtimeTfm == "net10.0" ? "net10-live-v1" : "net11-live-v1"), EvidenceJson.Options));
                         sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(path)))
                             .ToLowerInvariant();
                         break;

@@ -13,12 +13,18 @@
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Aspire",
@@ -50,12 +56,19 @@
         "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Hosting.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.AspNetCore",
@@ -68,9 +81,8 @@
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
       "frameworkReferences": [
@@ -78,6 +90,12 @@
       ],
       "prunedDependencies": {
         "net10.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Diagnostics.HealthChecks",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ],
+        "net11.0": [
           "Microsoft.Extensions.Configuration.Abstractions",
           "Microsoft.Extensions.DependencyInjection.Abstractions",
           "Microsoft.Extensions.Diagnostics.HealthChecks",
@@ -98,15 +116,21 @@
         "SQLitePCLRaw.lib.e_sqlite3": "3.53.3"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.Sqlite.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Sqlite.Testing",
@@ -123,12 +147,18 @@
         "SQLitePCLRaw.lib.e_sqlite3": "3.53.3"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.SqlServer",
@@ -144,15 +174,21 @@
         "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.SqlServer.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.PostgreSql",
@@ -166,15 +202,21 @@
         "Npgsql": "10.0.3"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.PostgreSql.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.MySql",
@@ -188,15 +230,21 @@
         "MySqlConnector": "2.6.2"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.MySql.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.MariaDb",
@@ -210,15 +258,21 @@
         "MySqlConnector": "2.6.2"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.MariaDb.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Oracle",
@@ -234,15 +288,21 @@
         "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [
         "Inquiry.Oracle.Analyzer.dll",
         "Inquiry.Generators.Shared.dll"
       ],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Interceptors",
@@ -256,12 +316,18 @@
         "Microsoft.Extensions.Logging.Abstractions": "10.0.12"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     },
     {
       "id": "Ignyte.Inquiry.Testing",
@@ -279,12 +345,18 @@
         "System.Security.Cryptography.Pkcs": "10.0.13"
       },
       "libTfms": [
-        "net8.0",
-        "net9.0",
-        "net10.0"
+        "net10.0",
+        "net11.0"
       ],
       "analyzers": [],
-      "frameworkReferences": []
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      }
     }
   ],
   "assets": {

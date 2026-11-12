@@ -93,7 +93,7 @@ and manual dispatches that verify the combined `main` commit before tagging:
 - an **aot-smoke** job — publishes the `Inquiry.AotSmoke` sample as a native binary and executes it,
   verifying the NativeAOT story end-to-end;
 - an **integration** job — a matrix of **PostgreSQL, MySQL, MariaDB, SQL Server, and Oracle** live suites, each on
-  **net8.0**, **net9.0**, and **net10.0** (exactly 15 required legs), provisioned with Testcontainers; and
+  **net10.0** and **net11.0** (exactly 10 required legs), provisioned with Testcontainers; and
 - a **docs** job — builds the DocFX site with `--warningsAsErrors` and checks every local link. It runs on
   every pull request, so changes to shared MSBuild props and targets are covered too.
 
@@ -135,8 +135,8 @@ Benchmark evidence for a release candidate:
 
 | Provider | Required evidence at the candidate commit |
 |---|---|
-| SQLite | A local run with no filter on net8.0 and net10.0 in which `regression-gate compare` passes for every inventoried class. Keep the reports and comparison output with the release. |
-| PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | No accepted baseline. Run `dotnet run -c Release -f <tfm> --project benchmarks/Inquiry.Benchmarks.<Provider> -- --filter '*' --exporters json` with Docker for net8.0 and net10.0. Each JSON report must pass `regression-gate generate`, which rejects cases without statistics. Keep the reports with the release. This timing is informational: it cannot prove or clear a regression. |
+| SQLite | A local run with no filter on net10.0 and net11.0 in which `regression-gate compare` passes for every inventoried class. Keep the reports and comparison output with the release. |
+| PostgreSQL, MySQL, MariaDB, SQL Server, Oracle | No accepted baseline. Run `dotnet run -c Release -f <tfm> --project benchmarks/Inquiry.Benchmarks.<Provider> -- --filter '*' --exporters json` with Docker for net10.0 and net11.0. Each JSON report must pass `regression-gate generate`, which rejects cases without statistics. Keep the reports with the release. This timing is informational: it cannot prove or clear a regression. |
 
 **Warnings are errors everywhere.** Production projects set `TreatWarningsAsErrors`, and
 `tests/Directory.Build.props` extends the same gate to every test project, so a new compiler/analyzer
@@ -229,7 +229,7 @@ After packing a clean commit, verify the same bundle without rebuilding packages
 ./tests/Inquiry.PackageSmoke/run.ps1 -BundlePath $output -ResultsPath "$output-consumers" -Commit (git rev-parse HEAD)
 ```
 
-This requires .NET 8/9/10 runtimes and a native compiler (CI provisions clang and zlib on Linux).
+This requires .NET 10/11 runtimes and a native compiler (CI provisions clang and zlib on Linux).
 Use `-RuntimeIdentifier win-x64` on Windows with the NativeAOT C++ toolchain installed.
 For a preview bundle, also pass its exact `-PackageVersion` and the `-RepositoryBranch` used when packing.
 The runner uses fresh NuGet caches and maps every manifest package ID exclusively to the candidate feed.
@@ -237,13 +237,13 @@ It compiles all six provider generators, runs SQLite CRUD and companion APIs on 
 and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution
 remains covered by the required integration matrix.
 
-Restore probes on .NET 8 prove that a mixed set of Inquiry packages fails. The runner copies candidate
+Restore probes on .NET 10 prove that a mixed set of Inquiry packages fails. The runner copies candidate
 packages and rewrites their nuspec version to an older and a newer version. These copies stay in its
 work folder and never enter the bundle. A newer companion package must fail with `NU1107`, and an
 older direct `Ignyte.Inquiry` must fail with `NU1605`. A newer direct `Ignyte.Inquiry` must warn
 `NU1608`, and fail when warnings are errors. A coordinated set must restore cleanly.
 
-It also runs the complete documentation recipes on .NET 8 against the candidate packages. It
+It also runs the complete documentation recipes on .NET 10 against the candidate packages. It
 extracts the files marked with `<!-- recipe: name/File -->` comments from the published pages. The
 [getting-started](../articles/getting-started.md) program must print exactly its documented output.
 The [partial-updates](../articles/features/partial-updates.md) recipe runs under

@@ -26,9 +26,8 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: |
-            8.0.x
-            9.0.x
             10.0.x
+            11.0.x
       - run: dotnet restore Inquiry.slnx
       - run: dotnet build Inquiry.slnx --configuration Release --no-restore --warnaserror
       # The provider source generators load from the analyzer build output. Format runs after the build
@@ -88,16 +87,15 @@ jobs:
       fail-fast: false
       matrix:
         provider: [PostgreSql, MySql, MariaDb, SqlServer, Oracle]
-        tfm: [net8.0, net9.0, net10.0]
+        tfm: [net10.0, net11.0]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
           dotnet-version: |
-            8.0.x
-            9.0.x
             10.0.x
+            11.0.x
       - name: Build pinned SQL Server full-text image
         if: matrix.provider == 'SqlServer'
         run: docker build --file tests/Inquiry.SqlServer.Tests/Fixtures/SqlServerFts.Dockerfile --tag inquiry-sqlserver-fts:2022-cu14 .
@@ -142,9 +140,8 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: |
-            8.0.x
-            9.0.x
             10.0.x
+            11.0.x
       - name: Pack and verify the exact manifest inventory
         shell: pwsh
         run: ./eng/pack-release.ps1 -OutputPath "$env:RUNNER_TEMP/package-contract" -Commit ((git rev-parse HEAD).Trim())
@@ -202,9 +199,8 @@ jobs:
         with:
           global-json-file: global.json
           dotnet-version: |
-            8.0.x
-            9.0.x
             10.0.x
+            11.0.x
       - name: Verify the stored artifact archive digest
         env:
           ARTIFACT_ID: ${{ needs.package-producer.outputs.artifact-id }}
@@ -258,7 +254,7 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
       - name: Install DocFX
         run: dotnet tool install --global docfx --version 2.78.5
       - name: Build site with warnings as errors

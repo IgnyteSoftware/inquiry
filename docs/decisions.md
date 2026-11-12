@@ -16,7 +16,7 @@ The solution file is named `Ignyte.<Product>.slnx` and sits at the repository ro
 
 ## SDK and language version
 
-- `global.json` sets the lowest .NET 10 SDK, 10.0.100, and rolls forward to the newest installed 10.0 SDK (`latestFeature`). Developers and CI can use any 10.0 SDK. CI installs the newest one.
+- `global.json` sets the lowest .NET 11 SDK, 11.0.100, and rolls forward to the newest installed 11.0 SDK (`latestFeature`). Developers and CI can use any 11.0 SDK. CI installs the newest one.
 - Because the floor is 10.0.100, the oldest supported compiler is Roslyn 5.0. A source generator or analyzer that ships in a package must reference `Microsoft.CodeAnalysis` 5.0 or lower, or it will not load on older 10.0 SDKs.
 - `Directory.Build.props` pins the C# language version to the version supported by that SDK for C# projects. F# and Visual Basic use their SDK defaults.
 - Visual Basic projects use explicit `Option Strict`, `Option Explicit`, `Option Infer`, and binary comparison settings.

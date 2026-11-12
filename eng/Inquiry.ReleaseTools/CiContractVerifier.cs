@@ -25,7 +25,7 @@ public static partial class CiContractVerifier
         "vars.ENABLE_ATTESTATIONS == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)";
     private static readonly string[] _integrationProviders =
         ["PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle"];
-    private static readonly string[] _integrationTfms = ["net8.0", "net9.0", "net10.0"];
+    private static readonly string[] _integrationTfms = ["net10.0", "net11.0"];
 
     public static void Verify(string repositoryRoot, string contractPath, string workflowPath)
     {
@@ -149,8 +149,8 @@ public static partial class CiContractVerifier
             RequireSequence(requiredTfms!, _integrationTfms, "CI contract integration TFMs");
             RequireSequence(Sequence(matrix["provider"], "integration.matrix.provider"), requiredProviders!, "integration providers");
             RequireSequence(Sequence(matrix["tfm"], "integration.matrix.tfm"), requiredTfms!, "integration TFMs");
-            Require(Sequence(matrix["provider"], "integration.matrix.provider").Length * Sequence(matrix["tfm"], "integration.matrix.tfm").Length == 15,
-                "Integration matrix must contain exactly 15 provider/TFM legs.");
+            Require(Sequence(matrix["provider"], "integration.matrix.provider").Length * Sequence(matrix["tfm"], "integration.matrix.tfm").Length == 10,
+                "Integration matrix must contain exactly 10 provider/TFM legs.");
         }
         else
         {
@@ -341,8 +341,8 @@ public static partial class CiContractVerifier
             var expectedVersions = jobId switch
             {
                 "aot-smoke" => "10.0.x",
-                "docs" => "8.0.x",
-                _ => "8.0.x\n9.0.x\n10.0.x"
+                "docs" => "10.0.x",
+                _ => "10.0.x\n11.0.x"
             };
             Require(NormalizeRun(Scalar(with["dotnet-version"], "setup-dotnet.dotnet-version")) == expectedVersions,
                 $"{jobId} setup-dotnet SDK inputs drifted.");

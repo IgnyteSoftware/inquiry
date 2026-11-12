@@ -140,7 +140,7 @@ dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.Generat
 
 Use a new directory for build evidence. The command refuses to overwrite an
 existing path. It retains consumer sources and build logs there; archive them
-with `build-evidence.json`. Both commands also support `-f net8.0`. Omit
+with `build-evidence.json`. Both commands also support `-f net11.0`. Omit
 `--job Short` for the default BenchmarkDotNet configuration. `--job Dry` checks
 execution only. Require 30 populated statistics and memory records before
 using an exported microbenchmark report; a zero process exit code alone is not

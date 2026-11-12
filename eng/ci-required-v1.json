@@ -7,7 +7,7 @@
       "job": "integration",
       "matrix": {
         "provider": [ "PostgreSql", "MySql", "MariaDb", "SqlServer", "Oracle" ],
-        "tfm": [ "net8.0", "net9.0", "net10.0" ]
+        "tfm": [ "net10.0", "net11.0" ]
       }
     },
     { "job": "package-producer" },

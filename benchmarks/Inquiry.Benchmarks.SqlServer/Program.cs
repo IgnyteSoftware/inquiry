@@ -31,9 +31,9 @@ public static class Program
         {
             var job = BenchmarkJobCatalog.GetRequired(Environment.Version.Major switch
             {
-                8 => "net8-live-v1",
                 10 => "net10-live-v1",
-                _ => throw new InvalidOperationException("Authoritative collection benchmarks require net8.0 or net10.0."),
+                11 => "net11-live-v1",
+                _ => throw new InvalidOperationException("Authoritative collection benchmarks require net10.0 or net11.0."),
             });
             BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(
                 ["--filter", "*SqlServerCollectionBenchmarks*"], BenchmarkDotNetConfigFactory.Create(job));

@@ -36,15 +36,15 @@ if ($evidence.schemaVersion -cne 'inquiry-package-consumers-v1' -or $evidence.st
     throw 'Package consumer evidence does not match this release.'
 }
 $expectedChecks = @(
-    'net8.0/sqlite/docs-recipe-getting-started'
-    'net8.0/sqlite/docs-recipe-partial-updates'
-    foreach ($tfm in @('net8.0', 'net9.0', 'net10.0')) {
+    'net10.0/sqlite/docs-recipe-getting-started'
+    'net10.0/sqlite/docs-recipe-partial-updates'
+    foreach ($tfm in @('net10.0', 'net11.0')) {
         foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) { "$tfm/$provider/analyzer-and-generated-crud-build" }
         "$tfm/sqlite/crud"
         "$tfm/companions"
     }
     foreach ($probe in @('companion-newer-nu1107', 'core-older-nu1605', 'core-newer-nu1608-warning', 'core-newer-nu1608-warnings-as-errors', 'coordinated-restores')) {
-        "net8.0/version-mismatch/$probe"
+        "net10.0/version-mismatch/$probe"
     }
     'net10.0/linux-x64/nativeaot-crud'
 )

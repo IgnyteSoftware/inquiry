@@ -104,7 +104,7 @@ public static class SourceArtifactManifestCatalog
 
     public static IReadOnlyList<SourceArtifactManifest> Manifests { get; } =
         Providers.SelectMany(provider => RuntimeIdentifiers.SelectMany(rid =>
-            new[] { "net8.0", "net10.0" }.Select(runtimeTfm =>
+            new[] { "net10.0", "net11.0" }.Select(runtimeTfm =>
                 Create(provider, runtimeTfm, rid)))).ToArray();
 
     public const string ReleaseRuntimeIdentifier = "linux-x64";
@@ -411,7 +411,7 @@ public static class ScenarioValidator
 
         if (scenario.Key.ContractVersion != "1" ||
             scenario.Key.JobKind != BenchmarkJobKind.Live ||
-            scenario.Key.RuntimeTfm is not ("net8.0" or "net10.0"))
+            scenario.Key.RuntimeTfm is not ("net10.0" or "net11.0"))
         {
             errors.Add(new("scenario-dimensions", "Scenario contract version, runtime, and job kind must match the checked release contract."));
         }
@@ -665,10 +665,10 @@ public static class BenchmarkJobCatalog
 
     public static IReadOnlyList<BenchmarkJobContract> Jobs { get; } =
     [
-        new("net8-live-v1", "net8.0", 16, 1, 1, 3, 15, "artifacts/benchmarks/net8", true, true,
+        new("net10-live-v1", "net10.0", 16, 1, 1, 3, 15, "artifacts/benchmarks/net10", true, true,
             "scenario-declared", "once-per-launch", "once-per-launch", PreparationMode.Unprepared, "iteration-or-launch-declared",
             100, 0.02, true, "dont-remove"),
-        new("net10-live-v1", "net10.0", 16, 1, 1, 3, 15, "artifacts/benchmarks/net10", true, true,
+        new("net11-live-v1", "net11.0", 16, 1, 1, 3, 15, "artifacts/benchmarks/net11", true, true,
             "scenario-declared", "once-per-launch", "once-per-launch", PreparationMode.Unprepared, "iteration-or-launch-declared",
             100, 0.02, true, "dont-remove"),
     ];

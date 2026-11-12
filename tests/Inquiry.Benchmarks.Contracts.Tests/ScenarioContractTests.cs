@@ -26,7 +26,7 @@ public sealed class ScenarioContractTests
             canonical with { Transaction = TransactionMode.Committed },
             canonical with { Competitor = "dapper" },
             canonical with { CompetitorMajor = 2 },
-            canonical with { RuntimeTfm = "net10.0" },
+            canonical with { RuntimeTfm = "net11.0" },
             canonical with { JobKind = BenchmarkJobKind.InProcess },
             canonical with { MetricFamily = MetricFamily.Throughput },
         };
