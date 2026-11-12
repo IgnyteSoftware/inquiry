@@ -3,7 +3,7 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**1.0.0 is not release-ready yet.** Live status, priority, open/closed counts, and delivery history live
+**1.0.0 is not released yet.** The public API of all twelve packages and the diagnostic IDs are frozen: they are recorded as Shipped, and a change to either now needs an entry in the matching Unshipped file. Live status, priority, open/closed counts, and delivery history live
 in GitHub — the single source of truth. See the [`1.0.0` milestone](https://github.com/IgnyteSoftware/inquiry/milestone/1),
 the [open milestone issues](https://github.com/IgnyteSoftware/inquiry/issues?q=is%3Aissue+is%3Aopen+milestone%3A1.0.0),
 and [`CHANGELOG.md`](https://github.com/IgnyteSoftware/inquiry/blob/main/CHANGELOG.md) for shipped work.

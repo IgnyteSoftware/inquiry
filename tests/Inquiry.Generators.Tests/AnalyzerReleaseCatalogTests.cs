@@ -18,10 +18,12 @@ public sealed partial class AnalyzerReleaseCatalogTests
         "Inquiry.Oracle.Analyzer",
     ];
 
+    private static readonly string[] _releaseFiles = ["AnalyzerReleases.Shipped.md", "AnalyzerReleases.Unshipped.md"];
+
     private static readonly string[] _reservedIds = ["INQ003", "INQ013", "INQ015", "INQ027"];
 
     [Fact]
-    public void EveryActiveDescriptorHasOneUnshippedEntryOwnedByItsDeclaringAnalyzer()
+    public void EveryActiveDescriptorHasOneReleaseEntryOwnedByItsDeclaringAnalyzer()
     {
         var descriptors = AnalyzerAssemblies()
             .SelectMany(assembly => DescriptorFields(assembly)
@@ -34,20 +36,15 @@ public sealed partial class AnalyzerReleaseCatalogTests
         Assert.Equal(descriptors.Length, descriptors.Select(static entry => entry.Id).Distinct(StringComparer.Ordinal).Count());
 
         var root = RepositoryRoot();
+        // The 1.0.0 rules are in the Shipped files. A rule added later starts in an Unshipped file.
         var releases = _analyzerProjects
-            .SelectMany(project => ParseReleaseEntries(
-                Path.Combine(root, "src", project, "AnalyzerReleases.Unshipped.md"),
-                project))
+            .SelectMany(project => _releaseFiles
+                .SelectMany(file => ParseReleaseEntries(Path.Combine(root, "src", project, file), project)))
             .OrderBy(static entry => entry.Id, StringComparer.Ordinal)
             .ToArray();
 
         Assert.Equal(descriptors, releases);
         Assert.Equal("Inquiry.SqlServer.Analyzer", Assert.Single(releases, static entry => entry.Id == "INQ076").Owner);
-        Assert.All(_analyzerProjects, project =>
-        {
-            var shipped = File.ReadAllText(Path.Combine(root, "src", project, "AnalyzerReleases.Shipped.md"));
-            Assert.DoesNotMatch(@"\bINQ\d{3}\b", shipped);
-        });
     }
 
     [Fact]
