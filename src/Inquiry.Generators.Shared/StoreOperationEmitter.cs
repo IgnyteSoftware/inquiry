@@ -2590,9 +2590,12 @@ internal static class StoreOperationEmitter
         // Collection and M:N relations use the by-FK const; reference (belongs-to) relations use the
         // _ByKey subquery const so the FK value is resolved server-side in the same round trip.
         var sqlFields = new List<string> { parentSelectField };
+        var referenceSuffix = method.IncludeDeleted && entity.SoftDeleteColumn is not null
+            ? "_ByKey_IncludeDeleted"
+            : "_ByKey";
         foreach (var relation in emittedRelations)
         {
-            var suffix = relation.IsCollection || relation.IsManyToMany ? "" : "_ByKey";
+            var suffix = relation.IsCollection || relation.IsManyToMany ? "" : referenceSuffix;
             sqlFields.Add($"_sql_{relation.PropertyName}{suffix}");
         }
         AppendGridCommandText(source, sqlBuilder, sqlFields);
