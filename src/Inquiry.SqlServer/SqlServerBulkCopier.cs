@@ -57,10 +57,12 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
         {
             var options = context.Options;
             var copyOptions = options.TableLock ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
+            // EnableStreaming stays off. With it, SqlBulkCopy reads a VARBINARY(MAX) value in 4 KB chunks,
+            // and the row reader runs the value converter again for each chunk. A converter that returns
+            // different bytes on each call, such as encryption with a fresh nonce, then stores a corrupt value.
             using var bulk = new SqlBulkCopy(sqlConnection, copyOptions, (SqlTransaction?)context.Transaction)
             {
                 DestinationTableName = QualifiedTableName(definition.Schema, definition.Table),
-                EnableStreaming = true,
             };
             if (options.Timeout is { } timeout)
             {
