@@ -66,9 +66,8 @@ dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
 before the versioned `ci-required-v1` aggregate gate can pass. Publishing is live: release tags publish
 to nuget.org via Trusted Publishing (see [Contributing — Releasing](contributing.md#releasing)).
-[#87](https://github.com/IgnyteSoftware/inquiry/issues/87) (benchmark truth and regression gates) is closed:
-corrected baselines committed, regression budgets checked locally with the regression gate, and EF Core
-coverage gaps closed. Benchmarks do not run in CI.
+Benchmarks are internal tools: they do not run in CI, no results are committed, and no release gate depends
+on them.
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine acceptance
 criteria: package identity, an immutable CI artifact, clean consumer installs on net8/net9/net10 and
 NativeAOT from the produced nupkgs, an API-compatibility baseline, CycloneDX SBOM plus SLSA build

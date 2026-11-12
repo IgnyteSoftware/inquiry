@@ -45,9 +45,9 @@ For 1.0, "feature complete" means:
    transaction, cancellation, concurrency, schema, batch, bulk, and failover behavior have live coverage.
 2. **Public contract:** public API/APICompat baseline, analyzer diagnostic release tracking, provider
    capability diagnostics, and a reviewed compatibility policy are checked in.
-3. **Performance:** corrected baselines and current competitors cover CRUD, streaming, eager/M:N,
-   collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency; stable regression
-   budgets guard latency and allocations.
+3. **Performance:** benchmarks against current competitors cover CRUD, streaming, eager/M:N,
+   collections, paging, batch/bulk, transactions, cold/warm startup, and concurrency. Their results are
+   for internal testing; they are not committed and do not gate the release.
 4. **Packaging:** clean projects consume the actual twelve `.nupkg` files on .NET 10/11 and NativeAOT;
    SourceLink, symbols, metadata, icon, provenance, and dependency/security evidence are verified.
 5. **Documentation and governance:** hosted versioned docs match generated behavior, the tracker and roadmap
