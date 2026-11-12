@@ -44,6 +44,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
 
     public ShipperStore Shippers => GetRequiredService<ShipperStore>(PreparedStatementMode.None);
     public EmployeeStore Employees => GetRequiredService<EmployeeStore>(PreparedStatementMode.None);
+    public BenchmarkM2MOrderStore ManyToManyOrders => GetRequiredService<BenchmarkM2MOrderStore>(PreparedStatementMode.None);
     public BatchMutationBenchmarkStore BatchMutations => GetRequiredService<BatchMutationBenchmarkStore>(PreparedStatementMode.Auto);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
@@ -81,6 +82,9 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
                         CREATE TABLE "InquiryBatchEvidence" (
                             "Id" integer NOT NULL PRIMARY KEY,
                             "ValueText" varchar(100) NOT NULL);
+                        CREATE TABLE "BenchmarkM2MOrder" ("Id" bigint NOT NULL PRIMARY KEY, "Name" varchar(200) NOT NULL);
+                        CREATE TABLE "BenchmarkM2MProduct" ("Id" bigint NOT NULL PRIMARY KEY, "Title" varchar(200) NOT NULL);
+                        CREATE TABLE "BenchmarkM2MOrderProduct" ("OrderId" bigint NOT NULL, "ProductId" bigint NOT NULL, PRIMARY KEY ("OrderId", "ProductId"));
                         """;
                     await command.ExecuteNonQueryAsync().ConfigureAwait(false);
                 }

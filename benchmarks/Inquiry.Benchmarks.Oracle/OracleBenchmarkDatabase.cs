@@ -48,6 +48,9 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public EmployeeStore Employees => _services!.GetRequiredService<EmployeeStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    public BenchmarkM2MOrderStore ManyToManyOrders => _services!.GetRequiredService<BenchmarkM2MOrderStore>();
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
@@ -95,7 +98,11 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
                 await using (var connection = new OracleConnection(adminConnectionString))
                 {
                     await connection.OpenAsync().ConfigureAwait(false);
-                    foreach (var statement in SplitStatements(NorthwindSchema.OracleDdl))
+                    foreach (var statement in SplitStatements(NorthwindSchema.OracleDdl + """
+                        CREATE TABLE BenchmarkM2MOrder (Id NUMBER(19) PRIMARY KEY NOT NULL, Name VARCHAR2(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MProduct (Id NUMBER(19) PRIMARY KEY NOT NULL, Title VARCHAR2(200) NOT NULL);
+                        CREATE TABLE BenchmarkM2MOrderProduct (OrderId NUMBER(19) NOT NULL, ProductId NUMBER(19) NOT NULL, PRIMARY KEY (OrderId, ProductId));
+                        """))
                     {
                         await using var command = connection.CreateCommand();
                         command.CommandText = statement;

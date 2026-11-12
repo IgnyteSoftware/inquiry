@@ -60,6 +60,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public EmployeeStore Employees => _services.GetRequiredService<EmployeeStore>();
     public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
     public MixedBenchPostStore MixedPosts => _services.GetRequiredService<MixedBenchPostStore>();
+    public BenchmarkM2MOrderStore ManyToManyOrders => _services.GetRequiredService<BenchmarkM2MOrderStore>();
 
     /// <summary>
     /// Seeds <paramref name="seedRows"/> rows of each benchmarked entity. Returns the freshly
@@ -91,6 +92,9 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
                     Id INTEGER NOT NULL PRIMARY KEY,
                     PostId INTEGER NOT NULL,
                     Label TEXT NOT NULL);
+                CREATE TABLE BenchmarkM2MOrder (Id INTEGER NOT NULL PRIMARY KEY, Name TEXT NOT NULL);
+                CREATE TABLE BenchmarkM2MProduct (Id INTEGER NOT NULL PRIMARY KEY, Title TEXT NOT NULL);
+                CREATE TABLE BenchmarkM2MOrderProduct (OrderId INTEGER NOT NULL, ProductId INTEGER NOT NULL, PRIMARY KEY (OrderId, ProductId));
                 """;
             await command.ExecuteNonQueryAsync().ConfigureAwait(false);
         }

@@ -36,6 +36,9 @@ public partial class BenchmarkM2MOrderStore : InquiryStore<BenchmarkM2MOrder>
 {
     [InquirySelectAllEager]
     public partial IAsyncEnumerable<BenchmarkM2MOrder> AllWithProductsAsync(CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByKeyEager]
+    public partial Task<BenchmarkM2MOrder?> GetWithProductsAsync(long id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

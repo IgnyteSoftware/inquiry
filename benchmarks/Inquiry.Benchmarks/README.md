@@ -526,6 +526,45 @@ dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/In
 
 Run each provider project the same way.
 
+### Many-to-many reads (`ManyToManyBenchmarks`)
+
+`ManyToManyBenchmarks` exists in the SQLite suite and in each provider project. It eager-loads
+`BenchmarkM2MOrder.Products` through the `BenchmarkM2MOrderProduct` junction table
+(`[InquiryManyToMany]`): every order with its products (`AllParents`, `[InquirySelectAllEager]`) and one
+order with its products (`OneParent`, `[InquirySelectOneByKeyEager]`).
+
+| Leg | Configuration |
+| --- | --- |
+| `_AdoNet` | Baseline. One command with the same statements, in the same result-set order, as the generated store |
+| `_Dapper` | `QueryMultipleAsync` over the same command |
+| `_Inquiry` | Generated `BenchmarkM2MOrderStore` |
+
+For `AllParents` the command returns the linked products, the links and the orders, and each leg attaches
+the products to their orders in memory. For `OneParent` it returns the order and its products from a join.
+The ordinary rule applies: the baseline does the same work as the store, so a ratio below 1.00 means the
+baseline is wrong. On Oracle the statements are in one PL/SQL block that returns implicit results, because
+Oracle has no multi-statement batch. `GlobalSetup` throws unless every leg attaches the same number of
+products.
+
+The data differs by project:
+
+- SQLite, PostgreSQL, MySQL, MariaDB and Oracle: the first setup seeds 1 000 products and 100 orders with
+  ten products each. Half of the products have no link, so the product query must filter them out. No
+  other class uses the tables.
+- SQL Server: the entities, the store and the tables were already there for the `ManyToManyChildFiltering`
+  legs of `EagerLoadingBenchmarks`. The class reads the data that the fixture seeds for those legs: two
+  orders, eight linked products and 1 000 products without a link.
+
+EF Core, linq2db and RepoDB have no legs. The benchmark projects have no many-to-many mapping for them.
+
+```powershell
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ManyToManyBenchmarks*"
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*ManyToManyBenchmarks*" --inProcess
+```
+
+Run each provider project the same way.
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,
