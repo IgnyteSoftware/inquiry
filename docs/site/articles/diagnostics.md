@@ -858,7 +858,7 @@ Trigger: A nullable column also declares a default.
 
 Failing shape: A nullable value with DefaultExpression.
 
-Smallest correction: Choose nullability/default intentionally. Remove an unintended default or make the column non-nullable when valid. Explicit NULL can still be stored in a nullable column; DEFAULT does not forbid NULL.
+Smallest correction: Choose nullability/default intentionally. Generated inserts send the property value, so a `null` property stores `NULL`. The default applies only when an insert omits the column, as with `UseDatabaseDefault = true` or handwritten SQL. Make the column non-nullable if it must always have a value, or remove the default if `NULL` is meaningful.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L544).
 
