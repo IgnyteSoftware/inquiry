@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Inquiry.Benchmarks.Aot/Inquiry.Benchmarks.Aot.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.Contracts/Inquiry.Benchmarks.Contracts.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.FixtureGenerator/Inquiry.Benchmarks.FixtureGenerator.csproj" />
     <Project Path="benchmarks/Inquiry.Benchmarks.Generators/Inquiry.Benchmarks.Generators.csproj" />

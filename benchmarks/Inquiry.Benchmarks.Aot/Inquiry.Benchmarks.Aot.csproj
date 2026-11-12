@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- `dotnet publish -r <rid>` gives the NativeAOT build. Add `-p:PublishAot=false` for the JIT build that
+         it is compared with. A normal `dotnet build` still works. -->
+    <PublishAot>true</PublishAot>
+    <!-- Restore both RIDs so the lock file is valid on Linux CI and on Windows. -->
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <!-- Source-generated Dapper. Reflection-based Dapper does not run under NativeAOT. -->
+    <PackageReference Include="Dapper.AOT" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <ProjectReference Include="..\..\src\Inquiry\Inquiry.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link-compile the shipper model and store, so the generator emits the store in this assembly. -->
+    <Compile Include="..\..\samples\Inquiry.Northwind\Models\Shipper.cs" Link="Northwind\Shipper.cs" />
+    <Compile Include="..\..\samples\Inquiry.Northwind\Stores\ShipperStore.cs" Link="Northwind\ShipperStore.cs" />
+    <Compile Include="..\Inquiry.Benchmarks.ProcessColdStart\ProcessColdStartRunner.cs" Link="ColdStart\ProcessColdStartRunner.cs" />
+  </ItemGroup>
+</Project>
