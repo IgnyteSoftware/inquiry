@@ -45,4 +45,13 @@ public sealed class InquiryCommandTests
         Assert.Equal(new InquiryParameter("@p0", 42), command.Parameters[0]);
         Assert.Equal(new InquiryParameter("@p1", "Ada"), command.Parameters[1]);
     }
+
+    [Fact]
+    public void SqlFactoryUnescapesBracesWhenThereAreNoHoles()
+    {
+        var command = InquirySql.Sql($"UPDATE People SET Prefs = '{{}}' WHERE Prefs IS NULL");
+
+        Assert.Equal("UPDATE People SET Prefs = '{}' WHERE Prefs IS NULL", command.CommandText);
+        Assert.Empty(command.Parameters);
+    }
 }
