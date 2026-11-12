@@ -36,6 +36,23 @@ updates:
       - dependency-name: Npgsql.EntityFrameworkCore.PostgreSQL
       - dependency-name: Pomelo.EntityFrameworkCore.MySql
       - dependency-name: Oracle.EntityFrameworkCore
+      # The dotnet-ef tool must match that cohort's major version, so it moves with it.
+      - dependency-name: dotnet-ef
+      # RepoDB packages share one version, and RepoDb.Oracle holds the family at 1.16
+      # (see Directory.Packages.props).
+      - dependency-name: RepoDb*
+      # These packages are versioned with .NET and ship in the release manifest. A new major
+      # raises the dependency floor of the lowest target framework, which is a release decision
+      # made by hand together with eng/release-manifest.json. Each such bump opened its own pull
+      # request, and CI fails every one of them.
+      - dependency-name: Microsoft.Extensions.*
+        update-types: ["version-update:semver-major"]
+      - dependency-name: Microsoft.Data.Sqlite
+        update-types: ["version-update:semver-major"]
+      - dependency-name: System.Configuration.ConfigurationManager
+        update-types: ["version-update:semver-major"]
+      - dependency-name: System.Security.Cryptography.Pkcs
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
