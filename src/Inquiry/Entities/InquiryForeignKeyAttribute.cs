@@ -43,8 +43,8 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     public InquiryForeignKeyAttribute(Type referencedType)
     {
         ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
-        ReferencedTable = null!;
-        ReferencedColumn = null!;
+        ReferencedTable = null;
+        ReferencedColumn = null;
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
             throw new ArgumentException("Referenced column cannot be empty.", nameof(referencedColumn));
         }
 
-        ReferencedTable = null!;
+        ReferencedTable = null;
         ReferencedColumn = referencedColumn;
     }
 
@@ -75,14 +75,17 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     public Type? ReferencedType { get; }
 
     /// <summary>
-    /// Gets the referenced table name.
+    /// Gets the referenced table name, or <see langword="null"/> when a type-safe constructor was used.
+    /// The source generator then takes the table from <see cref="ReferencedType"/>.
     /// </summary>
-    public string ReferencedTable { get; }
+    public string? ReferencedTable { get; }
 
     /// <summary>
-    /// Gets the referenced column name.
+    /// Gets the referenced column name. With the two-argument type-safe constructor it is the name of a
+    /// property on <see cref="ReferencedType"/>. With the one-argument type-safe constructor it is
+    /// <see langword="null"/>, and the source generator uses the target's key.
     /// </summary>
-    public string ReferencedColumn { get; }
+    public string? ReferencedColumn { get; }
 
     /// <summary>
     /// Gets or sets the schema that contains the referenced table.
