@@ -341,6 +341,24 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             return null;
         }
 
+        // A partial store can repeat its base list on several declarations, and each one passes the
+        // syntax filter. They all describe one store, and two outputs with one hint name stop the
+        // generator. Only the first such declaration produces the store.
+        foreach (var reference in storeSymbol.DeclaringSyntaxReferences)
+        {
+            if (!IsStoreCandidateClass(reference.GetSyntax(cancellationToken)))
+            {
+                continue;
+            }
+
+            if (reference.SyntaxTree != context.Node.SyntaxTree || reference.Span != context.Node.Span)
+            {
+                return null;
+            }
+
+            break;
+        }
+
         return StoreProcessor.Extract(storeSymbol, cancellationToken);
     }
 
