@@ -68,7 +68,8 @@ public sealed class MySqlBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MySqlBuilder("mysql:8.0").Build();
+                // MySqlBulkCopy sends LOAD DATA LOCAL INFILE, which the server rejects unless local_infile is on.
+                var container = new MySqlBuilder("mysql:8.0").WithCommand("--local-infile=1").Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
 
