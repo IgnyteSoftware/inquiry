@@ -47,6 +47,22 @@ public sealed class InquiryArrayParameterTests
 
     private enum BigFlag : long { A = 5, B = 6 }
 
+    private enum SmallFlag : byte { A = 1, B = 200 }
+
+    [Fact]
+    public void ByteAndCharInputsBecomeArraysThatBindAsArrays()
+    {
+        // A byte[] would bind as bytea and a char[] as text, and "= ANY" rejects both.
+        Assert.Equal(new short[] { 0, 200 }, Assert.IsType<short[]>(InquiryArrayParameter.ToArrayValue(new byte[] { 0, 200 })));
+        Assert.Equal(new short?[] { null, 200 }, Assert.IsType<short?[]>(InquiryArrayParameter.ToArrayValue(new byte?[] { null, 200 })));
+        Assert.Equal(new short[] { 1, 200 }, Assert.IsType<short[]>(InquiryArrayParameter.ToArrayValue(new[] { SmallFlag.A, SmallFlag.B })));
+        char[] chars = ['A', 'é'];
+        string[] strings = ["A", "é"];
+        Assert.Equal(strings, Assert.IsType<string[]>(InquiryArrayParameter.ToArrayValue(chars)));
+        Assert.Equal(new string?[] { null, "B" }, Assert.IsType<string?[]>(InquiryArrayParameter.ToArrayValue(new char?[] { null, 'B' })));
+        Assert.Empty(Assert.IsType<short[]>(InquiryArrayParameter.ToArrayValue<byte>(null)));
+    }
+
     [Fact]
     public void TypedArrayPassesThroughUnchanged()
     {
