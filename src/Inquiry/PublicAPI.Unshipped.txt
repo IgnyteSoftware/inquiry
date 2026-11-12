@@ -187,10 +187,10 @@ Inquiry.Entities.InquiryForeignKeyAttribute.OnDelete.get -> Inquiry.Entities.Inq
 Inquiry.Entities.InquiryForeignKeyAttribute.OnDelete.set -> void
 Inquiry.Entities.InquiryForeignKeyAttribute.OnUpdate.get -> Inquiry.Entities.InquiryReferentialAction
 Inquiry.Entities.InquiryForeignKeyAttribute.OnUpdate.set -> void
-Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedColumn.get -> string!
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedColumn.get -> string?
 Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedSchema.get -> string?
 Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedSchema.set -> void
-Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedTable.get -> string!
+Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedTable.get -> string?
 Inquiry.Entities.InquiryForeignKeyAttribute.ReferencedType.get -> System.Type?
 Inquiry.Entities.InquiryGlobalFilterAttribute
 Inquiry.Entities.InquiryGlobalFilterAttribute.InquiryGlobalFilterAttribute() -> void
