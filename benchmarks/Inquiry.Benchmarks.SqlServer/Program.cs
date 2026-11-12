@@ -5,7 +5,15 @@ namespace Inquiry.Benchmarks.SqlServer;
 
 public static class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static Task<int> Main(string[] args) => args switch
+    {
+        [ProcessColdStart.ProbeSwitch, var leg] => ProcessColdStart.ProbeAsync(leg),
+        [ProcessColdStart.DriverSwitch, .. var rest] => ProcessColdStart.RunAsync(rest),
+        _ => RunBenchmarksAsync(args),
+    };
+
+    // Kept out of the entry point, so that a cold-start probe does not load BenchmarkDotNet.
+    private static async Task<int> RunBenchmarksAsync(string[] args)
     {
         if (args is ["--collection-verify"])
         {

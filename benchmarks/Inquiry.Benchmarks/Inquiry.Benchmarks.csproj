@@ -61,6 +61,8 @@
     <!-- EF Core 9 generates this [assembly: DbContextModel] file, which makes every NorthwindDbContext use the
          compiled model. Only the tuned legs may use it, through UseModel, so the plain legs stay plain. -->
     <Compile Remove="Ef\CompiledModels\NorthwindDbContextAssemblyAttributes.cs" />
+    <!-- Shared as source by all six benchmark projects, because three of them do not reference the Contracts project. -->
+    <Compile Include="..\Inquiry.Benchmarks.ProcessColdStart\ProcessColdStartRunner.cs" Link="ColdStart\ProcessColdStartRunner.cs" />
   </ItemGroup>
 
   <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />

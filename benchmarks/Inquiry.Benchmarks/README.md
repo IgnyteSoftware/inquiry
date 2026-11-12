@@ -131,6 +131,46 @@ BenchmarkDotNet measures allocation on an extra call after the measured one.
 dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*ColdStartBenchmarks*"
 ```
 
+### Process cold start (`--process-cold-start`)
+
+`ColdStartBenchmarks` measures the first call inside a process that has already started. The process cold
+start measures the whole process instead. It is in the SQLite project and in each provider project, as a
+mode of the benchmark program and not as a BenchmarkDotNet class:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks -c Release
+dotnet benchmarks/Inquiry.Benchmarks/bin/Release/net10.0/win-x64/Inquiry.Benchmarks.dll --process-cold-start
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --process-cold-start 50
+```
+
+The driver creates and seeds the database once (for a provider project it starts the container). Then it
+starts the same program again for each measurement, as `--process-cold-start-probe <leg>`. A probe runs
+one shipper point read with one library and exits. The optional number is the launches for each leg; the
+default is 20. The driver runs one launch of every leg in each round and prints the median, minimum and
+maximum time for each leg.
+
+**What the time includes.** The time is from just before the probe process starts until it has exited:
+process launch, runtime start, assembly loading, JIT, the library's setup, the first connection, the query
+and process exit. It does not include the database setup, which the driver does. The connection string
+goes to the probe in the `INQUIRY_BENCH_COLD_START_CONNECTION` environment variable.
+
+| Leg | The probe process does |
+| --- | --- |
+| `Startup` | Nothing. It shows the cost of the process alone |
+| `AdoNet` | The baseline for the `Ratio` column: one point read with the ADO.NET driver |
+| `Dapper`, `DapperAot` | Reflection-based Dapper, and the same call intercepted by Dapper.AOT |
+| `EfCore` | A new context with a LINQ query |
+| `EfCoreTuned` | The compiled model and `EF.CompileAsyncQuery`. A context pool does not change a first call, so the leg has none |
+| `LinqToDb`, `LinqToDbCompiled` | A LINQ query, and `CompiledQuery.Compile` |
+| `RepoDb` | RepoDB, with its provider setup |
+| `Inquiry` | A new service provider and the generated `ShipperStore` |
+
+A probe sets up only the library of its leg, so no leg pays for another library. The benchmark entry
+points keep BenchmarkDotNet out of the probe path for the same reason. The probes share the machine with
+the driver and, for a provider project, with the database container, so use enough launches and a quiet
+machine for numbers that you compare.
+
 ### Tuned and source-generated competitors (`ShipperReadCompetitorBenchmarks`)
 
 `SelectAll` and `SelectByKey` on `Shippers` (1 000 and 100 000 rows) against every competitor, each in its
