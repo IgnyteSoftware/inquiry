@@ -269,7 +269,7 @@ internal static class EntityProcessor
     {
         var columns = new List<ColumnData>();
 
-        foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var property in GeneratorHelpers.GetMappableProperties(entitySymbol))
         {
             var keyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
             // [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
@@ -521,8 +521,8 @@ internal static class EntityProcessor
             // live on InquiryColumnAttribute, which InquiryForeignKeyAttribute also inherits. When a
             // property is mapped solely by [InquiryForeignKey] (no separate [InquiryColumn]/[InquiryKey]),
             // read those named args off the FK attribute so e.g. Length is honored on the FK column.
-            // ResolveColumnName/ResolveConverter still use columnAttribute alone — the FK attribute's
-            // constructor args are (table, column), not a column name.
+            // ResolveColumnName still uses columnAttribute alone — the FK attribute's constructor args
+            // are (table, column), not a column name. Converter is a named arg, so it is read here too.
             var metadataAttribute = columnAttribute ?? foreignKeyAttribute;
             var isKey = keyAttribute is not null;
             var sqlType = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "SqlType") : null;
@@ -604,7 +604,7 @@ internal static class EntityProcessor
 
             // a value converter (explicit Converter=typeof(X), or [InquiryJson] → built-in JSON
             // converter) maps a non-primitive property to/from a provider primitive.
-            var converter = ResolveConverter(property, columnAttribute, typeData, entitySymbol, compilation, diagnostics);
+            var converter = ResolveConverter(property, metadataAttribute, typeData, entitySymbol, compilation, diagnostics);
 
             if (isDatabaseGeneratedToken &&
                 (!typeData.IsByteArray || typeData.IsNullable || keyAttribute is not null || isGenerated || useDatabaseDefault ||
@@ -1000,7 +1000,7 @@ internal static class EntityProcessor
     /// Returns null when neither applies; reports INQ037 when an explicit converter type does not
     /// implement the converter interface.
     /// </summary>
-    private static ConverterData? ResolveConverter(
+    internal static ConverterData? ResolveConverter(
         IPropertySymbol property,
         AttributeData? columnAttribute,
         TypeData typeData,
@@ -1434,7 +1434,7 @@ internal static class EntityProcessor
         string? firstKey = null;
         var keyCount = 0;
 
-        foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in GeneratorHelpers.GetMappableProperties(targetType))
         {
             var keyAttr = GeneratorHelpers.GetEntityAttribute(member, "InquiryKeyAttribute");
             if (keyAttr is not null)
@@ -1454,10 +1454,12 @@ internal static class EntityProcessor
     private static string? ResolveTargetColumn(INamedTypeSymbol targetType, string propertyName)
     {
         // nameof(Target.Property) also compiles for an inherited property. The most derived
-        // declaration wins, as it does in C#.
+        // declaration wins, as it does in C#. An override without an Inquiry attribute keeps the
+        // base mapping, as it does in column discovery.
         for (var type = targetType; type is not null; type = type.BaseType)
         {
-            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().FirstOrDefault() is { } property)
+            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().FirstOrDefault() is { } property
+                && !(property.IsOverride && !GeneratorHelpers.HasEntityAttribute(property)))
             {
                 return ResolveMappedColumnName(property);
             }
@@ -1504,7 +1506,7 @@ internal static class EntityProcessor
     {
         var relations = new List<RelationData>();
 
-        foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var property in GeneratorHelpers.GetMappableProperties(entitySymbol))
         {
             cancellationToken.ThrowIfCancellationRequested();
 

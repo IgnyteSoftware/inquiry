@@ -70,6 +70,29 @@ public sealed partial class InquiryGeneratorTests
             text);
     }
 
+    [Fact]
+    public void OrderedByFieldSelectCanStream()
+    {
+        var source = PagingStore("""
+            [InquirySelectAllByField(nameof(User.Name), OrderBy = "Id DESC")]
+            public partial IAsyncEnumerable<User> StreamByNameAsync(string name, CancellationToken cancellationToken = default);
+
+            [InquirySelectAllByField(nameof(User.Name), OrderBy = "Id DESC")]
+            public partial Task<IReadOnlyList<User>> ListByNameAsync(string name, CancellationToken cancellationToken = default);
+            """);
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var text = GetStore(result);
+
+        // The stream must not return the buffered-list call, which does not convert to IAsyncEnumerable.
+        Assert.Contains("return Inquiry.QueryAsync<global::Demo.User, string, global::Demo.UserInquiryEntityStructMaterializer>(_cmd, default, cancellationToken);", text);
+        Assert.Contains("return Inquiry.QueryListAsync<global::Demo.User, string, global::Demo.UserInquiryEntityStructMaterializer>(_cmd, default, cancellationToken);", text);
+        Assert.Contains(
+            "private const string _sql_StreamByNameAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"CreatedAt\\\" FROM \\\"TUser\\\" WHERE \\\"Name\\\" = @Name ORDER BY \\\"Id\\\" DESC\";",
+            text);
+    }
+
     [Theory]
     [InlineData("Sqlite", "LIMIT @__limit OFFSET @__offset")]
     [InlineData("PostgreSql", "LIMIT @__limit OFFSET @__offset")]

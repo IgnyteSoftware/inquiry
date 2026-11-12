@@ -27,8 +27,11 @@ public static class InquiryTelemetryServiceCollectionExtensions
 
         foreach (var descriptor in services)
         {
-            if (descriptor.ServiceType == typeof(InquiryTelemetryInterceptor))
+            // A repeat call configures the options of the first registration. The Aspire integration
+            // registers telemetry itself, so a later call from the application must still take effect.
+            if (descriptor.ImplementationInstance is Registration registration)
             {
+                configure?.Invoke(registration.Options);
                 return services;
             }
         }
@@ -36,10 +39,18 @@ public static class InquiryTelemetryServiceCollectionExtensions
         var options = new InquiryTelemetryOptions();
         configure?.Invoke(options);
 
+        services.AddSingleton(new Registration(options));
         services.AddSingleton(
             provider => new InquiryTelemetryInterceptor(options, provider.GetService<ILoggerFactory>()));
         services.AddSingleton<IInquiryCommandInterceptor>(
             provider => provider.GetRequiredService<InquiryTelemetryInterceptor>());
         return services;
+    }
+
+    // Holds the options that the interceptor reads. A private type cannot be confused with an
+    // options instance that the application registers.
+    private sealed class Registration(InquiryTelemetryOptions options)
+    {
+        public InquiryTelemetryOptions Options => options;
     }
 }

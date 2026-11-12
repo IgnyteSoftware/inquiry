@@ -6,7 +6,8 @@ name: Release
 # The tag version must match eng/release-manifest.json (stable exactly; previews must be
 # -preview.N of the manifest version), and the tagged commit must be on main. Tag creation
 # is restricted to organization admins by the protect-release-tags ruleset; update and
-# deletion of v* tags are blocked for everyone, so a release tag is immutable once pushed.
+# deletion of v* tags are blocked for everyone by the protect-release-tags-immutable
+# ruleset, which has no bypass actor, so a release tag is immutable once pushed.
 
 on:
   push:

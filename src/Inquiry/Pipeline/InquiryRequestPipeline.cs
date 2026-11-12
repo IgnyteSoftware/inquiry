@@ -1513,12 +1513,15 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
+            // Convert before Executed. A conversion failure must report Failed only.
+            var result = ScalarConvert.From<T>(value);
+
             if (HasInterceptors)
             {
                 await InvokeExecutedAsync(command, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             }
 
-            return ScalarConvert.From<T>(value);
+            return result;
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -1821,12 +1824,15 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
             await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
             var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
+            // Convert before Executed. A conversion failure must report Failed only.
+            var result = ScalarConvert.From<T>(value);
+
             if (interceptorCommand is not null)
             {
                 await InvokeExecutedAsync(interceptorCommand, dbCommand, recordsAffected: null, cancellationToken).ConfigureAwait(false);
             }
 
-            return ScalarConvert.From<T>(value);
+            return result;
         }
         catch (OperationCanceledException exception)
             when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -2129,7 +2135,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 }
             }
-            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+            catch
+            {
+                // This rollback is best effort. A driver rejects it after a failed commit or on a lost
+                // connection, and that error must not turn the primary failure into an aggregate.
+                // Disposal below still releases the transaction.
+            }
             try
             {
                 if (transaction is not null)

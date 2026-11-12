@@ -185,6 +185,9 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
         ThrowFailures(failures, "The database transaction completed successfully, but provider resource cleanup failed.");
     }
 
+    // This rollback is best effort, and its failure is not reported. A driver rejects it when the
+    // transaction has already ended or the connection is lost. That error must not replace the
+    // failure that caused the cleanup. Disposal still releases the transaction.
     private async Task RollbackAndCleanupBoundedAsync(List<Exception> failures)
     {
         Task rollbackTask;
@@ -192,9 +195,8 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
         {
             rollbackTask = _transaction.RollbackAsync(CancellationToken.None);
         }
-        catch (Exception exception)
+        catch
         {
-            failures.Add(exception);
             await DisposeProviderResourcesBoundedAsync(failures).ConfigureAwait(false);
             return;
         }
@@ -210,9 +212,9 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
             _ = ContinueCleanupAfterRollbackAsync(rollbackTask);
             return;
         }
-        catch (Exception exception)
+        catch
         {
-            failures.Add(exception);
+            // Best effort. See the comment on this method.
         }
 
         await DisposeProviderResourcesBoundedAsync(failures).ConfigureAwait(false);

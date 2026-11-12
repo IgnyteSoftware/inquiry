@@ -540,15 +540,29 @@ public sealed class BatchRuntimeEvidenceTests
             commandFailure.InnerExceptions,
             item => Assert.Equal("command execute failed", item.Message),
             item => Assert.Equal("command dispose failed", item.Message));
+        // The rollback is attempted, but its failure is not reported: real drivers reject a rollback
+        // on a lost connection or after a failed commit.
         Assert.Collection(
             exception.InnerExceptions.Skip(1),
             item => Assert.Equal("enumerator dispose failed", item.Message),
-            item => Assert.Equal("transaction rollback failed", item.Message),
             item => Assert.Equal("transaction dispose failed", item.Message),
             item => Assert.Equal("connection dispose failed", item.Message));
         Assert.Equal(
             ["command-dispose", "transaction-rollback", "transaction-dispose", "connection-dispose"],
             state.CleanupEvents);
+    }
+
+    [Fact]
+    public async Task FailedRollbackDoesNotReplaceTheCommandFailure()
+    {
+        var state = new RecordingState { ThrowOnCommandExecute = true, ThrowOnRollback = true };
+        var pipeline = CreatePipeline(state, InquiryBatchExecutionMode.ReusedCommand, maxBatchSize: 2);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteBatchAsync(RowCommand(), [1]));
+
+        Assert.Equal("command execute failed", exception.Message);
+        Assert.Equal(1, state.TransactionRollbackCount);
     }
 
     private static InquiryRequestPipeline CreatePipeline(

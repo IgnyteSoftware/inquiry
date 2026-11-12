@@ -5,20 +5,23 @@
 .DESCRIPTION
     Requires a public repository (or GitHub Pro). Uses the GitHub CLI (gh).
 
-    Creates (or replaces, matched by name) two rulesets:
+    Creates (or replaces, matched by name) three rulesets:
 
     - protect-release-branches (main): pull request required with 1 approval,
       code-owner review, last-push approval, stale-review dismissal, and conversation
       resolution; the ci-required-v1 status check (pinned to GitHub Actions) with strict
       up-to-date enforcement; linear history; no force pushes; no deletion.
-    - protect-release-tags (v*): creation restricted to org admins; update and deletion
-      blocked for everyone (release tags are immutable and ARE the release trigger).
+    - protect-release-tags (v*): creation restricted to org admins (release tags ARE the
+      release trigger).
+    - protect-release-tags-immutable (v*): update and deletion blocked for everyone, with
+      no bypass actor, so a pushed release tag cannot move or disappear.
 
-    Bypass model (deliberate): Organization admins are a named bypass actor on both
-    rulesets — solo-maintainer reality means self-approval is impossible, so admin merges
-    must stay possible; ruleset bypasses are logged and labeled, unlike the old
-    enforce_admins=false. Remove the OrganizationAdmin bypass actor once a second
-    maintainer can review.
+    Bypass model (deliberate): Organization admins are a named bypass actor on the branch
+    ruleset and on tag creation — solo-maintainer reality means self-approval is impossible,
+    so admin merges must stay possible; ruleset bypasses are logged and labeled, unlike the
+    old enforce_admins=false. Remove the OrganizationAdmin bypass actor once a second
+    maintainer can review. A bypass actor bypasses every rule of its ruleset, so the tag
+    update and deletion rules are in a ruleset of their own that has none.
 
     Bodies are written to BOM-free temp files: Windows PowerShell 5.1 stamps a BOM onto
     pipeline output to native commands and the GitHub API rejects the resulting JSON.
@@ -87,21 +90,39 @@ $tagRuleset = @{
         }
     }
     # Tag-driven releases: creating a v* tag IS the release act, so creation is restricted to
-    # organization admins (the bypass actor). Update and deletion are blocked for everyone,
-    # making a release tag immutable once pushed.
+    # organization admins (the bypass actor).
     rules = @(
         @{ type = 'creation' }
-        @{ type = 'update' }
-        @{ type = 'deletion' }
     )
     bypass_actors = @(
         @{ actor_id = 1; actor_type = 'OrganizationAdmin'; bypass_mode = 'always' }
     )
 }
 
+$immutableTagRuleset = @{
+    name = 'protect-release-tags-immutable'
+    target = 'tag'
+    enforcement = 'active'
+    conditions = @{
+        ref_name = @{
+            include = @('refs/tags/v*')
+            exclude = @()
+        }
+    }
+    # Update and deletion are blocked for everyone, so a release tag is immutable once pushed.
+    # This ruleset has no bypass actor: a bypass actor on the creation ruleset would also bypass
+    # these rules if they were in it.
+    rules = @(
+        @{ type = 'update' }
+        @{ type = 'deletion' }
+    )
+    bypass_actors = @()
+}
+
 $existing = gh api "repos/$owner/$repo/rulesets" | ConvertFrom-Json
 
-foreach ($ruleset in @($branchRuleset, $tagRuleset)) {
+# The immutable ruleset goes first. A failure then never leaves a tag without update and deletion rules.
+foreach ($ruleset in @($branchRuleset, $immutableTagRuleset, $tagRuleset)) {
     $bodyPath = Join-Path ([System.IO.Path]::GetTempPath()) ("inquiry-ruleset-" + [guid]::NewGuid().ToString('N') + '.json')
     try {
         [System.IO.File]::WriteAllText($bodyPath, ($ruleset | ConvertTo-Json -Depth 8))
@@ -124,4 +145,4 @@ foreach ($ruleset in @($branchRuleset, $tagRuleset)) {
     }
 }
 
-Write-Host 'Done. Bypass model: OrganizationAdmin (audited) on both rulesets; only admins may create v* release tags.'
+Write-Host 'Done. Bypass model: OrganizationAdmin (audited) on the branch ruleset and on v* tag creation; nobody may update or delete a v* release tag.'

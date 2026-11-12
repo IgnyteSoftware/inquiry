@@ -417,6 +417,21 @@ public sealed class InquiryTelemetryTests
         Assert.IsType<InquiryTelemetryInterceptor>(interceptor);
     }
 
+    [Fact]
+    public void RepeatedAddInquiryTelemetryConfiguresTheFirstRegistration()
+    {
+        var services = new ServiceCollection();
+        services.AddInquiryTelemetry();
+        // An options instance that the application registers is not the one the interceptor reads.
+        services.AddSingleton(new InquiryTelemetryOptions());
+        services.AddInquiryTelemetry(options => options.RecordCommandText = false);
+
+        using var provider = services.BuildServiceProvider();
+        var interceptor = Assert.IsType<InquiryTelemetryInterceptor>(
+            Assert.Single(provider.GetServices<IInquiryCommandInterceptor>()));
+        Assert.False(interceptor.RecordCommandText);
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(false, false, true)]

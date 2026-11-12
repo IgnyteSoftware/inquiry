@@ -1,3 +1,5 @@
+using Inquiry.Generators.Infrastructure;
+
 namespace Inquiry.Generators.Models;
 
 /// <summary>
@@ -13,6 +15,13 @@ internal sealed record ParameterData(
     string ComparisonDisplay,
     bool IsCancellationToken)
 {
+    /// <summary>
+    /// The name as it must be written in C#. A reserved word such as <c>event</c> takes the <c>@</c>
+    /// prefix, because <see cref="Name"/> holds the name without it. SQL parameter names, diagnostics
+    /// and documentation use <see cref="Name"/>.
+    /// </summary>
+    public string Identifier => GeneratorHelpers.EscapeIdentifier(Name);
+
     /// <summary>
     /// When the parameter is an <c>IEnumerable&lt;T&gt;</c> (used by <c>Compare.In</c>), the
     /// <c>FullyQualifiedFormat</c> of its element type <c>T</c>; otherwise null. Lets the predicate

@@ -67,7 +67,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryProjectionAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(ProjectionsTrackingName);
 
         // Ad-hoc DTOs: each [InquiryAdHoc] class is projected into an equatable AdHocData. Its
@@ -339,6 +339,24 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         if (context.SemanticModel.GetDeclaredSymbol((ClassDeclarationSyntax)context.Node, cancellationToken) is not INamedTypeSymbol storeSymbol)
         {
             return null;
+        }
+
+        // A partial store can repeat its base list on several declarations, and each one passes the
+        // syntax filter. They all describe one store, and two outputs with one hint name stop the
+        // generator. Only the first such declaration produces the store.
+        foreach (var reference in storeSymbol.DeclaringSyntaxReferences)
+        {
+            if (!IsStoreCandidateClass(reference.GetSyntax(cancellationToken)))
+            {
+                continue;
+            }
+
+            if (reference.SyntaxTree != context.Node.SyntaxTree || reference.Span != context.Node.Span)
+            {
+                return null;
+            }
+
+            break;
         }
 
         return StoreProcessor.Extract(storeSymbol, cancellationToken);

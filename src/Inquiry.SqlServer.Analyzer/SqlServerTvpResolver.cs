@@ -458,6 +458,7 @@ internal static class SqlServerTvpResolver
     {
         var expectedMaxLength = ExpectedMaxLength(p);
         var expectedPrecision = ExpectedPrecision(p);
+        var expectedScale = ExpectedScale(p);
         var collation = p.IsText ? " AND c.collation_name = CONVERT(sysname, DATABASEPROPERTYEX(DB_NAME(), 'Collation'))" : " AND c.collation_name IS NULL";
         var exact = "EXISTS (SELECT 1 FROM sys.table_types tt " +
             "JOIN sys.schemas ss ON ss.schema_id = tt.schema_id " +
@@ -466,7 +467,7 @@ internal static class SqlServerTvpResolver
             $"WHERE ss.name = N'{Sql(schema)}' AND tt.name = N'{Sql(name)}' AND tt.is_memory_optimized = 0 " +
             "AND (SELECT COUNT(*) FROM sys.columns ac WHERE ac.object_id = tt.type_table_object_id) = 1 " +
             $"AND c.name = N'Value' AND st.name = N'{Sql(p.SystemType)}' AND st.is_user_defined = 0 AND st.is_assembly_type = 0 " +
-            $"AND c.max_length = {expectedMaxLength} AND c.precision = {expectedPrecision} AND c.scale = {p.Scale} " +
+            $"AND c.max_length = {expectedMaxLength} AND c.precision = {expectedPrecision} AND c.scale = {expectedScale} " +
             $"AND c.is_nullable = {(nullable ? 1 : 0)} AND c.is_identity = 0 AND c.is_computed = 0{collation} " +
             "AND NOT EXISTS (SELECT 1 FROM sys.indexes i WHERE i.object_id = tt.type_table_object_id AND i.index_id > 0) " +
             "AND NOT EXISTS (SELECT 1 FROM sys.key_constraints k WHERE k.parent_object_id = tt.type_table_object_id) " +
@@ -507,6 +508,9 @@ internal static class SqlServerTvpResolver
         "datetimeoffset" => p.Scale == 0 ? 26 : 27 + p.Scale,
         _ => p.Precision,
     };
+
+    // sys.columns reports scale 3 for datetime, although the type takes no scale.
+    private static int ExpectedScale(PhysicalType p) => p.SystemType == "datetime" ? 3 : p.Scale;
 
     private static bool TryInt(string value, out int result)
         => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out result);

@@ -818,7 +818,7 @@ internal static class StoreProcessor
             DeclaredPrecision = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Precision") : null) ?? 0,
             IsInputOutput = paramAttr is not null && GeneratorHelpers.GetNamedBool(paramAttr, "IsInputOutput"),
             DeclaredScale = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Scale") : null) ?? 0,
-            ProcedureValueExpression = BuildProcedureValueExpression(parameter.Name, typeData),
+            ProcedureValueExpression = BuildProcedureValueExpression(GeneratorHelpers.EscapeIdentifier(parameter.Name), typeData),
             TvpTypeName = paramAttr is not null ? GeneratorHelpers.GetNamedString(paramAttr, "TvpTypeName") : null,
             ElementDbTypeClass = elementTypeData is not null ? MapElementDbTypeClass(elementTypeData) : null,
         };
@@ -2336,6 +2336,8 @@ internal static class StoreProcessor
             m.Method.Operation is StoreOperation.SelectAllEager or StoreOperation.SelectOneByKeyEager);
         var hasIncludeDeletedSelectAllEager = hasSoftDelete && valid.Any(static m =>
             m.Method.Operation == StoreOperation.SelectAllEager && m.Method.IncludeDeleted);
+        var hasIncludeDeletedSelectOneByKeyEager = hasSoftDelete && valid.Any(static m =>
+            m.Method.Operation == StoreOperation.SelectOneByKeyEager && m.Method.IncludeDeleted);
         if (relationChildEntities.Count > 0 && hasEagerMethod)
         {
             // Only relations that a valid eager method loads get consts. A relation that no method
@@ -2446,6 +2448,13 @@ internal static class StoreProcessor
                 {
                     AppendSql("_sql_" + relation.PropertyName + "_ByKey",
                         sqlBuilder.BuildSelectByKeySubquerySql(childCtx, filterColumn.ColumnName, ctx, parentKeyColumn));
+                    if (hasIncludeDeletedSelectOneByKeyEager)
+                    {
+                        // The subquery reads the foreign key from the parent row. With IncludeDeleted the
+                        // parent may be soft-deleted, so the subquery must not filter it out.
+                        AppendSql("_sql_" + relation.PropertyName + "_ByKey_IncludeDeleted",
+                            sqlBuilder.BuildSelectByKeySubquerySql(childCtx, filterColumn.ColumnName, ctxIncludeDeleted, parentKeyColumn));
+                    }
                 }
                 if (hasIncludeDeletedSelectAllEager)
                 {

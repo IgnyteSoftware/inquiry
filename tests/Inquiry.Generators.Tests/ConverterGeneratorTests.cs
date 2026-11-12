@@ -79,6 +79,61 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("is null ? global::System.DBNull.Value", text);
     }
 
+    [Fact]
+    public void ConverterOnAForeignKeyAttributeIsApplied()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public readonly record struct CustomerId(long Value);
+
+            public sealed class CustomerIdConverter : IInquiryValueConverter<CustomerId, long>
+            {
+                public long ToProvider(CustomerId model) => model.Value;
+                public CustomerId FromProvider(long provider) => new(provider);
+            }
+
+            [InquiryTable("TCustomer")]
+            public sealed class Customer
+            {
+                [InquiryKey(Converter = typeof(CustomerIdConverter))]
+                public CustomerId Id { get; set; }
+            }
+
+            [InquiryTable("TOrder")]
+            public sealed class Order
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryForeignKey(typeof(Customer), Converter = typeof(CustomerIdConverter))]
+                public CustomerId CustomerId { get; set; }
+            }
+
+            public partial class OrderStore : Inquiry.Stores.InquiryStore<Demo.Order>
+            {
+                [InquiryInsert]
+                public partial Task<int> InsertAsync(Order order, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        // The property is mapped by [InquiryForeignKey] alone, so its named Converter must be read from it.
+        var entity = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("Order.InquiryEntity.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("CustomerId = global::Inquiry.Entities.InquiryConverterCache<global::Demo.CustomerIdConverter>.Instance.FromProvider(reader.GetInt64(1))", entity);
+        var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("OrderStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("global::Inquiry.Entities.InquiryConverterCache<global::Demo.CustomerIdConverter>.Instance.ToProvider(", store);
+        var schema = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("{\\\"name\\\":\\\"CustomerId\\\",\\\"storeType\\\":\\\"INTEGER\\\"", schema);
+    }
+
     [Theory]
     [InlineData("SqlServer", "global::System.Data.DbType.DateTime2", "global::System.Data.DbType.Guid")]
     [InlineData("Oracle", "global::System.Data.DbType.DateTime", "global::System.Data.DbType.Binary")]

@@ -51,6 +51,72 @@ public sealed partial class InquiryGeneratorTests
         """;
 
     [Fact]
+    public void ProjectionColumnsReadThroughTheirConverters()
+    {
+        const string source = """
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            public readonly record struct Money(decimal Amount);
+
+            public sealed class MoneyConverter : IInquiryValueConverter<Money, decimal>
+            {
+                public decimal ToProvider(Money model) => model.Amount;
+                public Money FromProvider(decimal provider) => new(provider);
+            }
+
+            [InquiryTable("Product")]
+            public sealed class Product
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn(Converter = typeof(MoneyConverter))]
+                public Money Price { get; set; }
+
+                [InquiryColumn, InquiryJson]
+                public List<string>? Tags { get; set; }
+            }
+
+            [InquiryProjection(typeof(Product))]
+            public sealed class ProductPrice
+            {
+                [InquiryColumn]
+                public long Id { get; set; }
+
+                [InquiryColumn(Converter = typeof(MoneyConverter))]
+                public Money Price { get; set; }
+
+                [InquiryColumn, InquiryJson]
+                public List<string>? Tags { get; set; }
+            }
+
+            public partial class ProductStore : Inquiry.Stores.InquiryStore<Demo.Product>
+            {
+                [InquirySelectAll]
+                public partial Task<IReadOnlyList<ProductPrice>> ListPricesAsync(CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ProductPrice.InquiryProjection.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // Without the converter the materializer read the model type straight from the reader,
+        // which throws an invalid cast on the first row.
+        Assert.Contains("Price = global::Inquiry.Entities.InquiryConverterCache<global::Demo.MoneyConverter>.Instance.FromProvider(reader.GetDecimal(1))", text);
+        Assert.Contains("Tags = reader.IsDBNull(2) ? null : global::Inquiry.Entities.InquiryConverterCache<global::Inquiry.Converters.InquiryJsonConverter<global::System.Collections.Generic.List<string>>>.Instance.FromProvider(reader.GetString(2))", text);
+        Assert.DoesNotContain("GetFieldValue<global::Demo.Money>", text);
+    }
+
+    [Fact]
     public void ProjectionEmitsMaterializerReadingDeclaredColumnsByOrdinal()
     {
         var result = RunGenerator(CustomerProjectionSource);

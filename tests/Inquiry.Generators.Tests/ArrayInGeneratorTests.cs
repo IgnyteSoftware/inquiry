@@ -88,7 +88,83 @@ public sealed partial class InquiryGeneratorTests
         var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("EventStore.InquiryStore.g.cs", StringComparison.Ordinal));
         var text = tree.GetText().ToString();
 
-        Assert.Contains("global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@OccurredAt\", dates);", text);
+        // The list compares against the text the driver stored, so each element takes that exact form.
+        Assert.Contains(
+            "global::Inquiry.Parameters.InquiryJsonArrayParameter.Bind(_c, \"@OccurredAt\", dates is null ? null : global::System.Linq.Enumerable.Select(dates, "
+            + "static _e => (_e).ToString(\"yyyy'-'MM'-'dd HH':'mm':'ss.FFFFFFF\", global::System.Globalization.CultureInfo.InvariantCulture)));",
+            text);
+    }
+
+    [Fact]
+    public void SqliteInPredicateBindsEachElementInTheFormTheDriverStores()
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("Reading")]
+            public sealed class Reading
+            {
+                [InquiryKey]
+                public Guid Id { get; set; }
+
+                [InquiryColumn]
+                public DateTimeOffset At { get; set; }
+
+                [InquiryColumn]
+                public TimeOnly Time { get; set; }
+
+                [InquiryColumn]
+                public byte[] Hash { get; set; } = Array.Empty<byte>();
+
+                [InquiryColumn]
+                public float Ratio { get; set; }
+            }
+
+            public partial class ReadingStore : Inquiry.Stores.InquiryStore<Demo.Reading>
+            {
+                [InquirySelectAllByPredicate, InquiryWhere("Id", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByIdsAsync(IReadOnlyList<Guid?> ids, CancellationToken cancellationToken = default);
+
+                [InquirySelectAllByPredicate, InquiryWhere("At", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByOffsetsAsync(IReadOnlyList<DateTimeOffset> offsets, CancellationToken cancellationToken = default);
+
+                [InquirySelectAllByPredicate, InquiryWhere("Time", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByTimesAsync(IReadOnlyList<TimeOnly> times, CancellationToken cancellationToken = default);
+
+                [InquirySelectAllByPredicate, InquiryWhere("Hash", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByHashesAsync(IReadOnlyList<byte[]> hashes, CancellationToken cancellationToken = default);
+
+                [InquirySelectAllByPredicate, InquiryWhere("Ratio", Compare.In)]
+                public partial Task<IReadOnlyList<Reading>> ByRatiosAsync(IReadOnlyList<float> ratios, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("ReadingStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+        const string culture = "global::System.Globalization.CultureInfo.InvariantCulture";
+
+        Assert.Contains("static _e => _e.HasValue ? (global::System.String?)(_e.Value).ToString(\"D\").ToUpperInvariant() : null", text);
+        Assert.Contains($"static _e => (_e).ToString(\"yyyy'-'MM'-'dd HH':'mm':'ss.FFFFFFFzzz\", {culture})", text);
+        Assert.Contains(
+            $"static _e => ((_e) switch {{ var _t when _t.Ticks % 10000000L == 0 => _t.ToString(\"HH':'mm':'ss\", {culture}), var _t => _t.ToString(\"HH':'mm':'ss.fffffff\", {culture}) }})",
+            text);
+        Assert.Contains("static _e => ((_e) is { } _b ? global::System.Convert.ToHexString(_b) : null)", text);
+        Assert.Contains("static _e => (global::System.Double)(_e)", text);
+
+        // A BLOB column compares bytes, which the list carries as hex text.
+        Assert.Contains("\\\"Hash\\\" IN (SELECT unhex(value) FROM json_each(@Hash))", text);
+        Assert.Contains("\\\"Id\\\" IN (SELECT value FROM json_each(@Id))", text);
     }
 
     [Fact]

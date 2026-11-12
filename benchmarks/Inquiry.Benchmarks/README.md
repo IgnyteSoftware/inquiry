@@ -655,18 +655,16 @@ the provider's native bulk API: `SqlBulkCopy` on SQL Server and `MySqlBulkCopy` 
 | Leg | Configuration |
 | --- | --- |
 | `_AdoNet` | Baseline. The native bulk API, fed by a forward-only data reader, with the columns mapped by name |
-| `_AdoNetBuffered` | SQL Server only. The baseline with `EnableStreaming` off, the `SqlBulkCopy` default |
 | `_LinqToDb` | `BulkCopyAsync` with `BulkCopyType.ProviderSpecific` |
 | `_Inquiry` | `ShipperStore.BulkInsertAsync` (`[InquiryBulkInsert]`) |
 
 Each iteration deletes the shippers first. `GlobalSetup` runs every leg once and throws unless the leg
 reports 5 000 rows and the table then holds 5 000 rows.
 
-- **SQL Server.** The Inquiry provider turns on `SqlBulkCopy.EnableStreaming`, so the baseline turns it on
-  too and both legs do the same driver work. `Shippers.Phone` is `NVARCHAR(MAX)`, and with streaming on,
-  `SqlBulkCopy` allocates about twelve times as much for these rows (33.7 MB against 2.75 MB in a Dry
-  run). The extra `_AdoNetBuffered` leg keeps the `SqlBulkCopy` default, which is off, to show that
-  difference. It exists on SQL Server only.
+- **SQL Server.** The baseline uses the same `SqlBulkCopy` settings as the Inquiry provider, so both legs
+  do the same driver work. Both set `CheckConstraints`, `KeepNulls` and `FireTriggers`. Neither turns on
+  `SqlBulkCopy.EnableStreaming`: the provider holds each value in memory, and streaming would run a value
+  converter once for every 4 KB of a `VARBINARY(MAX)` value.
 - **MySQL and MariaDB.** `MySqlBulkCopy` sends `LOAD DATA LOCAL INFILE`. The fixtures start the server
   with `--local-infile=1`, and the ADO.NET and linq2db legs use a connection string with
   `AllowLoadLocalInfile=true`. Inquiry sets the same option on the connection that it opens for a bulk

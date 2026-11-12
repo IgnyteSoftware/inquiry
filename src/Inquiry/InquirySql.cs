@@ -32,7 +32,8 @@ public static class InquirySql
         var args = commandText.GetArguments();
         if (args.Length == 0)
         {
-            return new InquiryCommand(commandText.Format, commandType, commandTimeout);
+            // Format still holds the doubled braces of the interpolated string. Formatting removes them.
+            return new InquiryCommand(commandText.ToString(CultureInfo.InvariantCulture), commandType, commandTimeout);
         }
 
         var placeholders = new object[args.Length];

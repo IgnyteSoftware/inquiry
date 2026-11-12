@@ -56,11 +56,21 @@ internal sealed class SqlServerBulkCopier : IInquiryBulkCopier
         try
         {
             var options = context.Options;
-            var copyOptions = options.TableLock ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
+            // A bulk insert must follow the rules of an ordinary INSERT. Without these options SQL Server
+            // skips FOREIGN KEY and CHECK constraints and marks them untrusted, stores the column default
+            // in place of NULL, and does not fire insert triggers.
+            var copyOptions = SqlBulkCopyOptions.CheckConstraints | SqlBulkCopyOptions.KeepNulls | SqlBulkCopyOptions.FireTriggers;
+            if (options.TableLock)
+            {
+                copyOptions |= SqlBulkCopyOptions.TableLock;
+            }
+
+            // EnableStreaming stays off. With it, SqlBulkCopy reads a VARBINARY(MAX) value in 4 KB chunks,
+            // and the row reader runs the value converter again for each chunk. A converter that returns
+            // different bytes on each call, such as encryption with a fresh nonce, then stores a corrupt value.
             using var bulk = new SqlBulkCopy(sqlConnection, copyOptions, (SqlTransaction?)context.Transaction)
             {
                 DestinationTableName = QualifiedTableName(definition.Schema, definition.Table),
-                EnableStreaming = true,
             };
             if (options.Timeout is { } timeout)
             {

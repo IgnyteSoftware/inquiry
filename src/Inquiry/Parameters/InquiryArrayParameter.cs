@@ -76,6 +76,28 @@ public static class InquiryArrayParameter
             return ReinterpretNullableUInt64((IEnumerable<ulong?>?)(object?)values);
         }
 
+        // A byte[] binds as one bytea value and a char[] as one text value, not as an array, so
+        // "= ANY" rejects both. PostgreSQL stores a byte in SMALLINT and a char in a text type.
+        if (typeof(T) == typeof(byte))
+        {
+            return MapTyped((IEnumerable<byte>?)(object?)values, static value => (short)value);
+        }
+
+        if (typeof(T) == typeof(byte?))
+        {
+            return MapTyped<byte?, short?>((IEnumerable<byte?>?)(object?)values, static value => value);
+        }
+
+        if (typeof(T) == typeof(char))
+        {
+            return MapTyped((IEnumerable<char>?)(object?)values, static value => value.ToString());
+        }
+
+        if (typeof(T) == typeof(char?))
+        {
+            return MapTyped<char?, string?>((IEnumerable<char?>?)(object?)values, static value => value?.ToString());
+        }
+
         var elementType = System.Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         if (elementType.IsEnum)
         {
@@ -86,7 +108,7 @@ public static class InquiryArrayParameter
             return System.Type.GetTypeCode(System.Enum.GetUnderlyingType(elementType)) switch
             {
                 System.TypeCode.SByte => ReinterpretEnumSByte(values),
-                System.TypeCode.Byte => ConvertEnumElements<T, byte>(values),
+                System.TypeCode.Byte => ConvertEnumElements<T, short>(values),
                 System.TypeCode.Int16 => ConvertEnumElements<T, short>(values),
                 System.TypeCode.UInt16 => ReinterpretEnumUInt16(values),
                 System.TypeCode.UInt32 => ReinterpretEnumUInt32(values),

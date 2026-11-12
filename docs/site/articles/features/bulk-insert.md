@@ -33,6 +33,7 @@ The method takes `IEnumerable<T>` (lazy sequences stream end-to-end) and returns
 - **Transactional where the native API permits it**: see [Transactions and connection ownership](#transactions-and-connection-ownership).
 - **Observable without row data**: native bulk insert emits a `BULK_INSERT` client span and duration metrics for the whole operation, connection open/acquisition, and native copy phase. Tags identify enlisted versus dedicated use, affected-row count, cancellation, and failures; values from inserted cells are never recorded. A dedicated connection that fails to open records a `connection.open_failed` event and an `error.type` tag on the open-duration metric, never `connection.opened`.
 - **MySQL prerequisites**: `MySqlBulkCopy` uses `LOAD DATA LOCAL INFILE` under the hood. Inquiry enables `AllowLoadLocalInfile` **only on the dedicated bulk-insert connection** (never on regular pipeline connections — the flag widens what a SQL-injection bug could do, so it stays scoped), and the **server** must run with `local_infile=1`.
+- **MySQL and MariaDB with your own data source**: `AddInquiryMySql(dataSource)` and `AddInquiryMariaDb(dataSource)` open the bulk-insert connection from the data source's connection string, with `AllowLoadLocalInfile` added. Credentials that only the data source holds, such as a periodic password provider or a client certificate callback, are not part of that string, so the bulk-insert connection fails to authenticate. To use them, set `AllowLoadLocalInfile=true` in the data source's own connection string. Inquiry then opens the bulk-insert connection from the data source. Every connection from that data source then allows local infile, not only the bulk-insert one.
 
 ## Per-call options
 
@@ -108,6 +109,17 @@ clear before each attempt, or remove the rows that the failed attempt wrote. See
 
 - **`BulkCopyTimeout` defaults to 30 seconds.** Set `InquiryBulkInsertOptions.Timeout` for larger loads.
 - **`TableLock` is opt-in.** Set it only when the destination and workload make a table-level lock acceptable.
+
+A bulk insert follows the rules of an ordinary `INSERT`, as PostgreSQL `COPY` and `MySqlBulkCopy` do.
+Inquiry sets the `SqlBulkCopy` options `CheckConstraints`, `KeepNulls` and `FireTriggers`:
+
+- `FOREIGN KEY` and `CHECK` constraints are enforced. A row that breaks one fails the copy with error 547,
+  and the constraints stay trusted. Without the option SQL Server accepts such rows and marks the
+  constraint as not trusted.
+- A `null` property stores `NULL`, also on a column that has a default. A column with
+  `UseDatabaseDefault = true` is not part of the copy, so it still takes its default.
+- Insert triggers fire once for each batch. A table with an insert trigger loads more slowly than one
+  without.
 
 PostgreSQL binary `COPY` and `MySqlBulkCopy` expose only the options described above.
 

@@ -299,4 +299,64 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         Assert.Contains(result.RunResult.Diagnostics, d => d.Id == "INQ033" || d.Id == "INQ034");
     }
+
+    [Fact]
+    public void IncludeDeletedByKeyEagerReadsTheReferenceThroughAnUnfilteredParentSubquery()
+    {
+        const string source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+            using Inquiry.Entities;
+            using Inquiry.Stores;
+
+            namespace Demo;
+
+            [InquiryTable("TOwner")]
+            public sealed class Owner
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+            }
+
+            [InquiryTable("TTicket")]
+            public sealed class Ticket
+            {
+                [InquiryKey]
+                public long Id { get; set; }
+
+                [InquiryColumn]
+                public long OwnerId { get; set; }
+
+                [InquiryColumn, InquirySoftDelete]
+                public bool IsDeleted { get; set; }
+
+                [InquiryRelation(nameof(OwnerId))]
+                public Owner? Owner { get; set; }
+            }
+
+            public partial class TicketStore : Inquiry.Stores.InquiryStore<Demo.Ticket>
+            {
+                [InquirySelectOneByKeyEager(IncludeDeleted = true)]
+                public partial Task<Ticket?> GetWithDeletedAsync(long id, CancellationToken cancellationToken = default);
+
+                [InquirySelectOneByKeyEager]
+                public partial Task<Ticket?> GetAsync(long id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        var tree = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("TicketStore.InquiryStore.g.cs", StringComparison.Ordinal));
+        var text = tree.GetText().ToString();
+
+        // The filtered subquery finds no foreign key for a soft-deleted parent, so the reference came back null.
+        Assert.Contains(
+            "private const string _sql_Owner_ByKey = \"SELECT \\\"Id\\\" FROM \\\"TOwner\\\" WHERE \\\"Id\\\" = (SELECT \\\"OwnerId\\\" FROM \\\"TTicket\\\" WHERE \\\"Id\\\" = @Id AND \\\"IsDeleted\\\" = 0)\";",
+            text);
+        Assert.Contains(
+            "private const string _sql_Owner_ByKey_IncludeDeleted = \"SELECT \\\"Id\\\" FROM \\\"TOwner\\\" WHERE \\\"Id\\\" = (SELECT \\\"OwnerId\\\" FROM \\\"TTicket\\\" WHERE \\\"Id\\\" = @Id)\";",
+            text);
+        Assert.Contains("_sqlSelectByKey_GetWithDeletedAsync + \";\" + _sql_Owner_ByKey_IncludeDeleted;", text);
+        Assert.Contains("+ \";\" + _sql_Owner_ByKey;", text);
+    }
 }

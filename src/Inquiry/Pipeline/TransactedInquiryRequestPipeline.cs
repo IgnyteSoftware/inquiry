@@ -1599,12 +1599,15 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
+                // Convert before Executed. A conversion failure must report Failed only.
+                var result = ScalarConvert.From<T>(value);
+
                 if (HasInterceptors)
                 {
                     await InvokeExecutedAsync(command, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 }
 
-                return ScalarConvert.From<T>(value);
+                return result;
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
@@ -1928,12 +1931,15 @@ internal sealed class TransactedInquiryRequestPipeline : IInquiryRequestPipeline
                 await MaybePrepareAsync(dbCommand, cancellationToken).ConfigureAwait(false);
                 var value = await InquiryCancellation.AwaitExecutionAsync(dbCommand.ExecuteScalarAsync(cancellationToken), cancellationToken).ConfigureAwait(false);
 
+                // Convert before Executed. A conversion failure must report Failed only.
+                var result = ScalarConvert.From<T>(value);
+
                 if (interceptorCommand is not null)
                 {
                     await InvokeExecutedAsync(interceptorCommand, dbCommand, null, cancellationToken).ConfigureAwait(false);
                 }
 
-                return ScalarConvert.From<T>(value);
+                return result;
             }
             catch (OperationCanceledException exception)
                 when (InquiryCancellation.RequiresCallerToken(exception, cancellationToken))
