@@ -14,6 +14,7 @@ namespace Inquiry.Commands;
 /// and is only ever constructed by the built-in pipelines and the compatibility default
 /// implementations of <c>ExecuteBatchAsync</c>.
 /// </remarks>
+[System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
 public readonly struct InquiryParameterTarget
 {
     private readonly DbCommand? _command;
