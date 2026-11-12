@@ -46,8 +46,15 @@ each library does internally. Otherwise a wrapper can print a sub-1.00× `Ratio`
 faster than the ADO.NET it is layered on, which is impossible for honest overhead and means
 the **baseline** is wrong, not the wrapper.
 
-Two invariants keep the comparison honest:
+Three invariants keep the comparison honest:
 
+- **Matching columns.** Every read leg reads the same columns. The EF Core, linq2db and RepoDB
+  customer and product entities map every column of the table, as the Inquiry entities do. They once
+  mapped about half of them, which made those legs print 0.70x to 0.87x of the ADO.NET baseline on
+  large reads. The write legs are narrower: the ADO.NET, Dapper, EF Core, linq2db and RepoDB legs set
+  the five customer or six product columns that the handwritten SQL names, and the extra columns are
+  read only in those entities. The Inquiry legs write the whole entity, because a generated insert or
+  update always does.
 - **Matching `CommandBehavior`.** Inquiry's generated stores open readers with
   `CommandBehavior.SingleResult | SequentialAccess` for list reads and
   `SingleResult | SequentialAccess` for validating single-row reads. Generator-proven unique reads

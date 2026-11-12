@@ -37,6 +37,10 @@ public class ProductCrudBenchmarks
     private const int TargetProductId = 1;
     private const int TargetCategoryId = 1;
 
+    // RdProduct maps every column for the read legs. The write legs set these six, as the handwritten SQL does.
+    private static readonly RepoDb.Field[] _repoDbWrittenFields =
+        [.. RepoDb.Field.From("ProductID", "ProductName", "CategoryID", "UnitPrice", "UnitsInStock", "Discontinued")];
+
     [GlobalSetup]
     public void GlobalSetup()
     {
@@ -325,7 +329,7 @@ public class ProductCrudBenchmarks
             UnitPrice = 9.99m,
             UnitsInStock = 42,
             Discontinued = false,
-        }, cancellationToken: CancellationToken.None);
+        }, fields: _repoDbWrittenFields, cancellationToken: CancellationToken.None);
     }
 
     [BenchmarkCategory("Insert"), Benchmark]
@@ -442,7 +446,7 @@ public class ProductCrudBenchmarks
             UnitPrice = price,
             UnitsInStock = stock,
             Discontinued = discontinued,
-        }, cancellationToken: CancellationToken.None));
+        }, fields: _repoDbWrittenFields, cancellationToken: CancellationToken.None));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
@@ -579,7 +583,7 @@ public class ProductCrudBenchmarks
             UnitPrice = 29.99m,
             UnitsInStock = 3,
             Discontinued = false,
-        }, cancellationToken: CancellationToken.None);
+        }, fields: _repoDbWrittenFields, cancellationToken: CancellationToken.None);
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

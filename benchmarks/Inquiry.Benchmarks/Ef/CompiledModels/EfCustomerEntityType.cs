@@ -18,7 +18,7 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 "Inquiry.Benchmarks.Ef.EfCustomer",
                 typeof(EfCustomer),
                 baseEntityType,
-                propertyCount: 5,
+                propertyCount: 11,
                 keyCount: 1);
 
             var customerID = runtimeEntityType.AddProperty(
@@ -28,6 +28,16 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 fieldInfo: typeof(EfCustomer).GetField("<CustomerID>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 afterSaveBehavior: PropertySaveBehavior.Throw);
             customerID.AddAnnotation("Relational:ColumnName", "CustomerID");
+
+            var address = runtimeEntityType.AddProperty(
+                "Address",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("Address", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<Address>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            address.AddAnnotation("Relational:ColumnName", "Address");
 
             var city = runtimeEntityType.AddProperty(
                 "City",
@@ -52,6 +62,16 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 nullable: true);
             contactName.AddAnnotation("Relational:ColumnName", "ContactName");
 
+            var contactTitle = runtimeEntityType.AddProperty(
+                "ContactTitle",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("ContactTitle", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<ContactTitle>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            contactTitle.AddAnnotation("Relational:ColumnName", "ContactTitle");
+
             var country = runtimeEntityType.AddProperty(
                 "Country",
                 typeof(string),
@@ -59,6 +79,46 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 fieldInfo: typeof(EfCustomer).GetField("<Country>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 nullable: true);
             country.AddAnnotation("Relational:ColumnName", "Country");
+
+            var fax = runtimeEntityType.AddProperty(
+                "Fax",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("Fax", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<Fax>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            fax.AddAnnotation("Relational:ColumnName", "Fax");
+
+            var phone = runtimeEntityType.AddProperty(
+                "Phone",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("Phone", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<Phone>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            phone.AddAnnotation("Relational:ColumnName", "Phone");
+
+            var postalCode = runtimeEntityType.AddProperty(
+                "PostalCode",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("PostalCode", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<PostalCode>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            postalCode.AddAnnotation("Relational:ColumnName", "PostalCode");
+
+            var region = runtimeEntityType.AddProperty(
+                "Region",
+                typeof(string),
+                propertyInfo: typeof(EfCustomer).GetProperty("Region", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfCustomer).GetField("<Region>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            region.AddAnnotation("Relational:ColumnName", "Region");
 
             var key = runtimeEntityType.AddKey(
                 new[] { customerID });

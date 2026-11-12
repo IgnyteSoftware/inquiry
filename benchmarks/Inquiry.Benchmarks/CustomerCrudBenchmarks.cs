@@ -32,6 +32,10 @@ public class CustomerCrudBenchmarks
 
     // Fixed targets used by SelectByKey / Update / Upsert. "00000" is the first seeded row.
     private const string TargetCustomerId = "00000";
+
+    // RdCustomer maps every column for the read legs. The write legs set these five, as the handwritten SQL does.
+    private static readonly RepoDb.Field[] _repoDbWrittenFields =
+        [.. RepoDb.Field.From("CustomerID", "CompanyName", "ContactName", "Country", "City")];
     private const string TargetCountry = "USA";
 
     // Monotonic counter so Insert iterations never collide on PK.
@@ -321,7 +325,7 @@ public class CustomerCrudBenchmarks
             ContactName = "Bench Contact",
             Country = "USA",
             City = "Bench City",
-        });
+        }, fields: _repoDbWrittenFields);
     }
 
     [BenchmarkCategory("Insert"), Benchmark]
@@ -423,7 +427,7 @@ public class CustomerCrudBenchmarks
             ContactName = contact,
             Country = country,
             City = city,
-        }));
+        }, fields: _repoDbWrittenFields));
     }
 
     [BenchmarkCategory("Update"), Benchmark]
@@ -531,7 +535,7 @@ public class CustomerCrudBenchmarks
             ContactName = "Upserted Contact",
             Country = "USA",
             City = "Upserted City",
-        });
+        }, fields: _repoDbWrittenFields);
     }
 
     [BenchmarkCategory("Upsert"), Benchmark]

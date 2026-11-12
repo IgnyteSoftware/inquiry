@@ -18,7 +18,7 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 "Inquiry.Benchmarks.Ef.EfProduct",
                 typeof(EfProduct),
                 baseEntityType,
-                propertyCount: 6,
+                propertyCount: 10,
                 keyCount: 1);
 
             var productID = runtimeEntityType.AddProperty(
@@ -54,6 +54,36 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 fieldInfo: typeof(EfProduct).GetField("<ProductName>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly));
             productName.AddAnnotation("Relational:ColumnName", "ProductName");
 
+            var quantityPerUnit = runtimeEntityType.AddProperty(
+                "QuantityPerUnit",
+                typeof(string),
+                propertyInfo: typeof(EfProduct).GetProperty("QuantityPerUnit", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfProduct).GetField("<QuantityPerUnit>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            quantityPerUnit.AddAnnotation("Relational:ColumnName", "QuantityPerUnit");
+
+            var reorderLevel = runtimeEntityType.AddProperty(
+                "ReorderLevel",
+                typeof(short?),
+                propertyInfo: typeof(EfProduct).GetProperty("ReorderLevel", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfProduct).GetField("<ReorderLevel>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            reorderLevel.AddAnnotation("Relational:ColumnName", "ReorderLevel");
+
+            var supplierID = runtimeEntityType.AddProperty(
+                "SupplierID",
+                typeof(int?),
+                propertyInfo: typeof(EfProduct).GetProperty("SupplierID", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfProduct).GetField("<SupplierID>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            supplierID.AddAnnotation("Relational:ColumnName", "SupplierID");
+
             var unitPrice = runtimeEntityType.AddProperty(
                 "UnitPrice",
                 typeof(decimal?),
@@ -69,6 +99,16 @@ namespace Inquiry.Benchmarks.Ef.CompiledModels
                 fieldInfo: typeof(EfProduct).GetField("<UnitsInStock>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
                 nullable: true);
             unitsInStock.AddAnnotation("Relational:ColumnName", "UnitsInStock");
+
+            var unitsOnOrder = runtimeEntityType.AddProperty(
+                "UnitsOnOrder",
+                typeof(short?),
+                propertyInfo: typeof(EfProduct).GetProperty("UnitsOnOrder", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(EfProduct).GetField("<UnitsOnOrder>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                beforeSaveBehavior: PropertySaveBehavior.Ignore,
+                afterSaveBehavior: PropertySaveBehavior.Ignore);
+            unitsOnOrder.AddAnnotation("Relational:ColumnName", "UnitsOnOrder");
 
             var key = runtimeEntityType.AddKey(
                 new[] { productID });
