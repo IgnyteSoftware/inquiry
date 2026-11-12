@@ -223,6 +223,25 @@ public sealed class InquiryRequestPipelineTests
     }
 
     [Fact]
+    public async Task ExecuteScalarReportsOnlyFailureWhenConversionFails()
+    {
+        var connectionString = CreateSharedInMemoryConnectionString();
+        await using var keeperConnection = new SqliteConnection(connectionString);
+        await keeperConnection.OpenAsync();
+
+        var interceptor = new RecordingInterceptor();
+        var pipeline = new InquiryRequestPipeline(
+            new TestConnectionFactory(connectionString),
+            new[] { interceptor });
+
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(
+            () => pipeline.ExecuteScalarAsync<int>(new InquiryCommand("SELECT 'not a number'")));
+
+        Assert.Empty(interceptor.ExecutedRecordsAffected);
+        Assert.Same(thrown, Assert.Single(interceptor.Failures));
+    }
+
+    [Fact]
     public async Task QueryAsyncReportsMaterializerFailures()
     {
         var connectionString = CreateSharedInMemoryConnectionString();
