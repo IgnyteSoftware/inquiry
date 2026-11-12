@@ -12,6 +12,56 @@ internal static class GeneratorHelpers
             a.AttributeClass.ContainingNamespace.ToDisplayString() == KnownSymbols.EntityAttributeNamespace);
     }
 
+    /// <summary>
+    /// The properties an entity can map: those of its base classes, base class first, then its own.
+    /// A base property is left out when a more derived class hides it, or overrides it with an
+    /// Inquiry attribute of its own. The entity's own properties are returned as declared.
+    /// </summary>
+    public static IEnumerable<IPropertySymbol> GetMappableProperties(INamedTypeSymbol type)
+    {
+        var baseTypes = new List<INamedTypeSymbol>();
+        for (var current = type.BaseType; current is not null && current.SpecialType != SpecialType.System_Object; current = current.BaseType)
+        {
+            baseTypes.Add(current);
+        }
+
+        for (var i = baseTypes.Count - 1; i >= 0; i--)
+        {
+            var index = i;
+            foreach (var property in baseTypes[i].GetMembers().OfType<IPropertySymbol>()
+                .Where(property => !IsReplacedInDerivedType(property, type, baseTypes, index)))
+            {
+                yield return property;
+            }
+        }
+
+        foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
+        {
+            yield return property;
+        }
+    }
+
+    // An override without an Inquiry attribute keeps the mapping of the property it overrides.
+    // Any other member with the same name replaces the base property.
+    private static bool IsReplacedInDerivedType(IPropertySymbol property, INamedTypeSymbol type, List<INamedTypeSymbol> baseTypes, int index)
+    {
+        for (var i = index - 1; i >= -1; i--)
+        {
+            var derived = i < 0 ? type : baseTypes[i];
+            if (derived.GetMembers(property.Name).Any(static member =>
+                    member is not IPropertySymbol { IsOverride: true } || HasEntityAttribute(member)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasEntityAttribute(ISymbol symbol)
+        => symbol.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == KnownSymbols.EntityAttributeNamespace);
+
     public static bool IsStoreAttribute(AttributeData attribute)
     {
         return attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace;

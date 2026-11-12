@@ -269,7 +269,7 @@ internal static class EntityProcessor
     {
         var columns = new List<ColumnData>();
 
-        foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var property in GeneratorHelpers.GetMappableProperties(entitySymbol))
         {
             var keyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryKeyAttribute");
             // [InquiryConcurrencyToken] derives InquiryColumnAttribute, so it is discovered as a
@@ -1434,7 +1434,7 @@ internal static class EntityProcessor
         string? firstKey = null;
         var keyCount = 0;
 
-        foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
+        foreach (var member in GeneratorHelpers.GetMappableProperties(targetType))
         {
             var keyAttr = GeneratorHelpers.GetEntityAttribute(member, "InquiryKeyAttribute");
             if (keyAttr is not null)
@@ -1504,7 +1504,7 @@ internal static class EntityProcessor
     {
         var relations = new List<RelationData>();
 
-        foreach (var property in entitySymbol.GetMembers().OfType<IPropertySymbol>())
+        foreach (var property in GeneratorHelpers.GetMappableProperties(entitySymbol))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
