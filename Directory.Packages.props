@@ -46,7 +46,7 @@
     <PackageVersion Include="Testcontainers.MySql" Version="4.14.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.14.0" />
     <PackageVersion Include="Testcontainers.Oracle" Version="4.14.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
     <!-- Transitive pin: SSH.NET is pulled by Testcontainers and fixes GHSA-q939-rpr3-3284
          (CVE-2026-48798), which affects versions through 2025.1.0. -->
