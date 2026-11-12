@@ -16,15 +16,23 @@
          generated-key upserts that Oracle intentionally cannot implement. Suppressing INQ039 at
          project scope opts those unused benchmark methods into compile-safe throwing stubs. -->
     <NoWarn>$(NoWarn);INQ039</NoWarn>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <PackageReference Include="Dapper" />
+    <!-- Source-generated Dapper. Only methods marked [DapperAot] are intercepted. -->
+    <PackageReference Include="Dapper.AOT" />
+    <PackageReference Include="linq2db" />
+    <PackageReference Include="RepoDb" />
+    <PackageReference Include="RepoDb.Oracle" />
     <PackageReference Include="Oracle.ManagedDataAccess.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Oracle.EntityFrameworkCore" />
+    <!-- Design-time only: `dotnet ef dbcontext optimize` generates the compiled model under Ef/CompiledModels. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Testcontainers.Oracle" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
@@ -41,6 +49,12 @@
     <Compile Include="..\..\samples\Inquiry.Northwind\Models\**\*.cs" LinkBase="Northwind\Models" />
     <Compile Include="..\..\samples\Inquiry.Northwind\Stores\**\*.cs" LinkBase="Northwind\Stores" />
     <Compile Include="..\..\samples\Inquiry.Northwind\NorthwindSchema.cs" LinkBase="Northwind" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- EF Core 9 generates this [assembly: DbContextModel] file, which makes every OracleShipperContext use the
+         compiled model. Only the tuned legs may use it, through UseModel, so the plain legs stay plain. -->
+    <Compile Remove="Ef\CompiledModels\OracleShipperContextAssemblyAttributes.cs" />
   </ItemGroup>
 
   <Import Project="..\Inquiry.Benchmarks.Contracts\BenchmarkSelectedAssets.targets" />

@@ -178,9 +178,8 @@ through the alias `L2Async`, for example `L2Async.FirstOrDefaultAsync(dc.GetTabl
 #### On PostgreSQL
 
 `benchmarks/Inquiry.Benchmarks.PostgreSql` has a `ShipperReadCompetitorBenchmarks` class with the same legs and
-the same `GlobalSetup` check. MySQL, MariaDB and SQL Server have it too (see below); Oracle follows in a later
-change. It differs from the SQLite class in
-these ways:
+the same `GlobalSetup` check. MySQL, MariaDB, SQL Server and Oracle have it too (see below). It differs from the
+SQLite class in these ways:
 
 - It has one row tier, `Rows = 1000`. The PostgreSQL container is shared by the whole process and seeded once
   by the first class that starts it.
@@ -268,6 +267,43 @@ Regenerate the compiled model from a Release build:
 ```powershell
 dotnet build benchmarks/Inquiry.Benchmarks.SqlServer -c Release -f net10.0
 dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.SqlServer --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.SqlServer.Ef.SqlServerShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.SqlServer.Ef.CompiledModels
+```
+
+#### On Oracle
+
+`benchmarks/Inquiry.Benchmarks.Oracle` has a `ShipperReadCompetitorBenchmarks` class with the same legs and the
+same `GlobalSetup` check as the PostgreSQL class. No leg is left out, but the RepoDB legs differ (see below). The
+PostgreSQL notes apply: one row tier, `Rows = 1000`, and under `--inProcess` run the class with its own filter.
+Here the other classes seed 1000 rows too, but `ShipperBenchmarks` inserts rows, so the setup check throws after
+it. These parts differ:
+
+- The SQL and the competitor entities use the uppercase names that Oracle stores for the unquoted DDL
+  (`SHIPPERS`, `SHIPPERID`, `COMPANYNAME`, `PHONE`). The point read binds `:id`.
+- The tuned EF Core legs use `OracleShipperContext` with the compiled model in
+  `benchmarks/Inquiry.Benchmarks.Oracle/Ef/CompiledModels`. The project file excludes
+  `OracleShipperContextAssemblyAttributes.cs` for the same reason as above.
+- linq2db uses `UseOracle(connectionString, OracleVersion.v12, OracleProvider.Managed)`.
+- RepoDB uses `RepoDb.Oracle`. Its setup sets `OracleConfiguration.BindByName` for the whole process, and
+  ODP.NET rejects that after the first connection opens (`ORA-50099`). `OracleBenchmarkDatabase` therefore
+  calls `GlobalConfiguration.Setup().UseOracle()` before it starts the shared container, whichever class
+  runs first. Every other leg binds by name already, so the setting changes no other leg.
+- `SelectAll_RepoDb` calls `ExecuteQueryAsync<RdShipper>` with the ADO.NET statement. The `QueryAllAsync`
+  statement of `RepoDb.Oracle` 1.16.0 ends with a semicolon, which Oracle rejects (`ORA-00933`), and `QueryAsync`
+  does not accept an empty filter. RepoDB still maps the rows. `SelectByKey_RepoDb` uses `QueryAsync` as on
+  the other providers.
+
+Run and check it as for PostgreSQL:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.Oracle -c Release
+dotnet benchmarks/Inquiry.Benchmarks.Oracle/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.Oracle.dll --filter "*ShipperReadCompetitorBenchmarks*" --inProcess --exporters json
+```
+
+Regenerate the compiled model from a Release build:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.Oracle -c Release -f net10.0
+dotnet tool run dotnet-ef dbcontext optimize --project benchmarks/Inquiry.Benchmarks.Oracle --framework net10.0 --configuration Release --no-build --context Inquiry.Benchmarks.Oracle.Ef.OracleShipperContext --output-dir Ef/CompiledModels --namespace Inquiry.Benchmarks.Oracle.Ef.CompiledModels
 ```
 
 ### Feature benchmarks (Inquiry vs Dapper vs ADO.NET)
