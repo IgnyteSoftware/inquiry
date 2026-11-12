@@ -45,7 +45,7 @@ public sealed partial class InquiryGeneratorTests
                 public partial Task<int> InsertAllAsync(IEnumerable<Event> @params, CancellationToken cancellationToken = default);
 
                 [InquiryUpdate]
-                public partial Task<bool> UpdateAsync(Event @class, CancellationToken cancellationToken = default);
+                public partial Task<bool> UpdateAsync(Event @await, CancellationToken cancellationToken = default);
 
                 [InquiryUpsert]
                 public partial Task<int> UpsertAsync(Event @object, CancellationToken cancellationToken = default);

@@ -209,7 +209,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_sqlInsert = \"INSERT INTO [TDoc] ([Id], [Name]) VALUES (@Id, @Name)\";", text);
         // No version bump in SET (DB advances it); WHERE composes the token; OUTPUT INTO @_out for trigger safety.
         Assert.Contains("OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[RowVer] INTO @_out WHERE [Id] = @Id AND [RowVer] = @RowVer", text);
-        Assert.Contains("DECLARE @_out TABLE ([Id] BIGINT, [Name] NVARCHAR(MAX), [RowVer] BINARY(8));", text);
+        Assert.Contains("DECLARE @_out TABLE ([Id] BIGINT NULL, [Name] NVARCHAR(MAX) NULL, [RowVer] BINARY(8) NULL);", text);
         Assert.Contains("SELECT [Id], [Name], [RowVer] FROM @_out", text);
         // The rowversion IS bound for the UPDATE (its WHERE compares the original value) but never SET.
         Assert.Contains("_p2.ParameterName = \"@RowVer\";", text);

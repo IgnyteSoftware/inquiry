@@ -1454,10 +1454,12 @@ internal static class EntityProcessor
     private static string? ResolveTargetColumn(INamedTypeSymbol targetType, string propertyName)
     {
         // nameof(Target.Property) also compiles for an inherited property. The most derived
-        // declaration wins, as it does in C#.
+        // declaration wins, as it does in C#. An override without an Inquiry attribute keeps the
+        // base mapping, as it does in column discovery.
         for (var type = targetType; type is not null; type = type.BaseType)
         {
-            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().FirstOrDefault() is { } property)
+            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().FirstOrDefault() is { } property
+                && !(property.IsOverride && !GeneratorHelpers.HasEntityAttribute(property)))
             {
                 return ResolveMappedColumnName(property);
             }

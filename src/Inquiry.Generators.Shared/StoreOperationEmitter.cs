@@ -2356,7 +2356,7 @@ internal static class StoreOperationEmitter
         bool usesProviderType = true)
     {
         var name = GeneratorHelpers.Escape(sqlParameterName);
-        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg, elementIsNullable);
+        var projected = ProjectedCollectionExpression(sqlBuilder, column, arg, elementIsNullable, isNegatedCollection);
         // Stamp the same DbType the scalar binder resolves for this column so an IN element binds with
         // the right type (e.g. DateTime2 on SQL Server, not legacy datetime). The array path leaves it
         // to the provider, which infers the element type from the typed native array.
@@ -2421,7 +2421,8 @@ internal static class StoreOperationEmitter
         SqlBuilder sqlBuilder,
         ColumnData column,
         string arg,
-        bool elementIsNullable)
+        bool elementIsNullable,
+        bool bindsEachElement)
     {
         var nullableModelElement = elementIsNullable
             || (column.Converter is not null && !column.Type.IsValueType);
@@ -2458,7 +2459,7 @@ internal static class StoreOperationEmitter
         }
 
         var storage = sqlBuilder.BuildCollectionElementExpression(new CollectionElementExpressionContext(
-            providerValue, providerTypeName, providerSpecialType));
+            providerValue, providerTypeName, providerSpecialType, bindsEachElement));
         requiresProjection |= storage.IsTransformed;
         if (!requiresProjection)
         {

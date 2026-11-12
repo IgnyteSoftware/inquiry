@@ -119,6 +119,12 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
         const string text = "global::System.String";
         var value = context.ValueExpression;
 
+        // A NOT IN list binds each element as a scalar parameter, and the driver stores that itself.
+        if (context.BindsEachElement)
+        {
+            return base.BuildCollectionElementExpression(context);
+        }
+
         if (context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime)
         {
             return new($"({value}).ToString(\"yyyy'-'MM'-'dd HH':'mm':'ss.FFFFFFF\", {culture})", text, true);

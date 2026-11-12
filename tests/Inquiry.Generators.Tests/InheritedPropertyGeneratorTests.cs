@@ -38,6 +38,9 @@ public sealed partial class InquiryGeneratorTests
         {
             [InquiryKey]
             public TKey Id { get; set; } = default!;
+
+            [InquiryRelation(nameof(OrderLine.OrderId))]
+            public List<OrderLine> Lines { get; set; } = new();
         }
 
         [InquiryTable("TOrder")]
@@ -55,9 +58,6 @@ public sealed partial class InquiryGeneratorTests
 
             // A property that hides the base property replaces it, and this one is not mapped.
             public new int Tag { get; set; }
-
-            [InquiryRelation(nameof(OrderLine.OrderId))]
-            public List<OrderLine> Lines { get; set; } = new();
         }
 
         [InquiryTable("TOrderLine")]
@@ -68,12 +68,18 @@ public sealed partial class InquiryGeneratorTests
 
             [InquiryForeignKey(typeof(Order))]
             public long OrderId { get; set; }
+
+            [InquiryForeignKey(typeof(Order), nameof(Order.Code))]
+            public string OrderCode { get; set; } = string.Empty;
         }
 
         public partial class OrderStore : InquiryStore<Order>
         {
             [InquirySelectOneByKey]
             public partial Task<Order?> GetAsync(long id, CancellationToken cancellationToken = default);
+
+            [InquirySelectOneByKeyEager]
+            public partial Task<Order?> GetWithLinesAsync(long id, CancellationToken cancellationToken = default);
 
             [InquiryInsert]
             public partial Task<int> InsertAsync(Order order, CancellationToken cancellationToken = default);
@@ -101,6 +107,16 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void RelationDeclaredOnABaseClassIsLoaded()
+    {
+        var result = RunGenerator(InheritedPropertySource);
+        AssertNoErrors(result);
+
+        var store = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("OrderStore.InquiryStore.g.cs", StringComparison.Ordinal)).GetText().ToString();
+        Assert.Contains("private const string _sql_Lines = ", store);
+    }
+
+    [Fact]
     public void TypedForeignKeyResolvesAKeyTheTargetInherits()
     {
         var result = RunGenerator(InheritedPropertySource);
@@ -109,5 +125,7 @@ public sealed partial class InquiryGeneratorTests
         var schema = Assert.Single(result.RunResult.GeneratedTrees, static t => t.FilePath.EndsWith("InquiryGeneratedSchema.g.cs", StringComparison.Ordinal)).GetText().ToString();
         // The one-argument typed form needs the single key of the target, which Order inherits.
         Assert.Contains("REFERENCES \"\"TOrder\"\"(\"\"Id\"\")", schema);
+        // An explicit target that is an override without an attribute takes the base column name.
+        Assert.Contains("REFERENCES \"\"TOrder\"\"(\"\"base_code\"\")", schema);
     }
 }

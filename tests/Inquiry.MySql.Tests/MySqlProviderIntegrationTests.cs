@@ -60,7 +60,7 @@ public sealed class MySqlProviderIntegrationTests
         using var stop = new CancellationTokenSource();
         var accepting = Task.Run(async () =>
         {
-            while (!stop.IsCancellationRequested)
+            while (true)
             {
                 using var client = await listener.AcceptTcpClientAsync(stop.Token);
                 Interlocked.Increment(ref attempts);

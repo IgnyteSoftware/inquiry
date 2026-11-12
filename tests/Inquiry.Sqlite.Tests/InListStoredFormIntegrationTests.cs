@@ -49,6 +49,12 @@ public partial class StoredFormItemStore : InquiryStore<StoredFormItem>
     [InquirySelectAllByPredicate, InquiryWhere(nameof(StoredFormItem.Ratio), Compare.In)]
     public partial Task<IReadOnlyList<StoredFormItem>> ByRatiosAsync(IReadOnlyList<float> ratios, CancellationToken cancellationToken = default);
 
+    [InquirySelectAllByPredicate, InquiryWhere(nameof(StoredFormItem.Hash), Compare.NotIn)]
+    public partial Task<IReadOnlyList<StoredFormItem>> ExceptHashesAsync(IReadOnlyList<byte[]> hashes, CancellationToken cancellationToken = default);
+
+    [InquirySelectAllByPredicate, InquiryWhere(nameof(StoredFormItem.Id), Compare.NotIn)]
+    public partial Task<IReadOnlyList<StoredFormItem>> ExceptIdsAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
+
     [InquiryDelete, InquiryWhere(nameof(StoredFormItem.Id), Compare.In)]
     public partial Task<int> DeleteAllAsync(IReadOnlyList<Guid> ids, CancellationToken cancellationToken = default);
 }
@@ -98,6 +104,11 @@ public sealed class InListStoredFormIntegrationTests
         // Whole seconds and midnight take the driver's short forms.
         Assert.Equal(second.Id, Assert.Single(await store.ByTimestampsAsync([second.At])).Id);
         Assert.Equal(second.Id, Assert.Single(await store.ByTimesAsync([second.Time])).Id);
+        Assert.Equal(second.Id, Assert.Single(await store.ByOffsetsAsync([second.AtOffset])).Id);
+
+        // A NOT IN list binds scalar parameters, so its elements keep their own types.
+        Assert.Equal(second.Id, Assert.Single(await store.ExceptHashesAsync([first.Hash])).Id);
+        Assert.Equal(second.Id, Assert.Single(await store.ExceptIdsAsync([first.Id])).Id);
 
         Assert.Equal(2, await store.DeleteAllAsync([first.Id, second.Id]));
     }

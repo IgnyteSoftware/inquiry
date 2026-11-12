@@ -58,13 +58,16 @@ internal static class GeneratorHelpers
         return false;
     }
 
-    private static bool HasEntityAttribute(ISymbol symbol)
+    internal static bool HasEntityAttribute(ISymbol symbol)
         => symbol.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == KnownSymbols.EntityAttributeNamespace);
 
-    /// <summary>Returns <paramref name="name"/> with the <c>@</c> prefix when it is a reserved C# word.</summary>
+    /// <summary>
+    /// Returns <paramref name="name"/> with the <c>@</c> prefix when it is a reserved C# word, or
+    /// <c>await</c>, which is reserved inside the async methods that the generator emits.
+    /// </summary>
     public static string EscapeIdentifier(string name)
-        => SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : "@" + name;
+        => SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None && name != "await" ? name : "@" + name;
 
     public static bool IsStoreAttribute(AttributeData attribute)
     {

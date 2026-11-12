@@ -1,3 +1,5 @@
+using Inquiry.Generators.Infrastructure;
+
 namespace Inquiry.Generators.Models;
 
 /// <summary>
@@ -18,7 +20,7 @@ internal sealed record ParameterData(
     /// prefix, because <see cref="Name"/> holds the name without it. SQL parameter names, diagnostics
     /// and documentation use <see cref="Name"/>.
     /// </summary>
-    public string Identifier => Inquiry.Generators.Infrastructure.GeneratorHelpers.EscapeIdentifier(Name);
+    public string Identifier => GeneratorHelpers.EscapeIdentifier(Name);
 
     /// <summary>
     /// When the parameter is an <c>IEnumerable&lt;T&gt;</c> (used by <c>Compare.In</c>), the

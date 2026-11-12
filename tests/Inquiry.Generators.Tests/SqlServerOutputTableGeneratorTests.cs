@@ -43,6 +43,6 @@ public sealed partial class InquiryGeneratorTests
 
         // The inferred DECIMAL(18,2) would round Amount on its way back to the caller. A rowversion
         // column in a table variable cannot receive a value, so it stays BINARY(8).
-        Assert.Contains("DECLARE @_out TABLE ([Id] INT, [Amount] decimal(19,4), [Tax] DECIMAL(18,2), [Stamp] BINARY(8));", text);
+        Assert.Contains("DECLARE @_out TABLE ([Id] INT NULL, [Amount] decimal(19,4) NULL, [Tax] DECIMAL(18,2) NULL, [Stamp] BINARY(8) NULL);", text);
     }
 }

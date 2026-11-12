@@ -222,20 +222,29 @@ public sealed class InquiryRequestPipelineTests
         Assert.Empty(interceptor.Failures);
     }
 
-    [Fact]
-    public async Task ExecuteScalarReportsOnlyFailureWhenConversionFails()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ExecuteScalarReportsOnlyFailureWhenConversionFails(bool transacted, bool generated)
     {
         var connectionString = CreateSharedInMemoryConnectionString();
         await using var keeperConnection = new SqliteConnection(connectionString);
         await keeperConnection.OpenAsync();
 
         var interceptor = new RecordingInterceptor();
-        var pipeline = new InquiryRequestPipeline(
-            new TestConnectionFactory(connectionString),
-            new[] { interceptor });
+        var factory = new TestConnectionFactory(connectionString);
+        await using var connection = await factory.OpenConnectionAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        IInquiryRequestPipeline pipeline = transacted
+            ? new TransactedInquiryRequestPipeline(connection, transaction, new[] { interceptor }, factory, options: null)
+            : new InquiryRequestPipeline(factory, new[] { interceptor });
 
-        var thrown = await Assert.ThrowsAnyAsync<Exception>(
-            () => pipeline.ExecuteScalarAsync<int>(new InquiryCommand("SELECT 'not a number'")));
+        const string sql = "SELECT 'not a number'";
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(() => generated
+            ? pipeline.ExecuteScalarAsync<int, int>(sql, 0, static (_, _) => { })
+            : pipeline.ExecuteScalarAsync<int>(new InquiryCommand(sql)));
 
         Assert.Empty(interceptor.ExecutedRecordsAffected);
         Assert.Same(thrown, Assert.Single(interceptor.Failures));

@@ -121,7 +121,8 @@ $immutableTagRuleset = @{
 
 $existing = gh api "repos/$owner/$repo/rulesets" | ConvertFrom-Json
 
-foreach ($ruleset in @($branchRuleset, $tagRuleset, $immutableTagRuleset)) {
+# The immutable ruleset goes first. A failure then never leaves a tag without update and deletion rules.
+foreach ($ruleset in @($branchRuleset, $immutableTagRuleset, $tagRuleset)) {
     $bodyPath = Join-Path ([System.IO.Path]::GetTempPath()) ("inquiry-ruleset-" + [guid]::NewGuid().ToString('N') + '.json')
     try {
         [System.IO.File]::WriteAllText($bodyPath, ($ruleset | ConvertTo-Json -Depth 8))

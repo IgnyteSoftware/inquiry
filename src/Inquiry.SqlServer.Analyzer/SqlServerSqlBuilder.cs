@@ -276,11 +276,12 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // triggered tables).
     private string DeclareOutputTable(SqlBuildContext context)
         => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
-            QuoteIdentifier(c.ColumnName) + " " + OutputColumnType(c))) + ");";
+            QuoteIdentifier(c.ColumnName) + " " + OutputColumnType(c) + " NULL")) + ");";
 
     // The table variable must hold each value without loss, so it takes the declared SqlType. The
     // inferred type differs: decimal(19,4) would pass through DECIMAL(18,2) and come back rounded.
     // A rowversion column cannot receive a value, so its eight bytes go into BINARY(8).
+    // Each column is declared NULL, because an alias type can carry NOT NULL of its own.
     private string OutputColumnType(IColumn column)
     {
         var sqlType = column.SqlType?.Trim();

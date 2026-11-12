@@ -5,7 +5,8 @@ namespace Inquiry.Generators.Abstractions;
 public readonly record struct CollectionElementExpressionContext(
     string ValueExpression,
     string ProviderTypeName,
-    SpecialType ProviderSpecialType);
+    SpecialType ProviderSpecialType,
+    bool BindsEachElement = false);
 
 public readonly record struct CollectionElementExpression(
     string ValueExpression,

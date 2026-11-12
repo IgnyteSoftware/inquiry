@@ -25,24 +25,24 @@ public static class InquiryTelemetryServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
 
+        var registered = false;
+        InquiryTelemetryOptions? existingOptions = null;
         foreach (var descriptor in services)
+        {
+            registered |= descriptor.ServiceType == typeof(InquiryTelemetryInterceptor);
+            existingOptions = descriptor.ImplementationInstance as InquiryTelemetryOptions ?? existingOptions;
+        }
+
+        if (registered)
         {
             // A repeat call configures the options of the first registration. The Aspire integration
             // registers telemetry itself, so a later call from the application must still take effect.
-            if (descriptor.ServiceType == typeof(InquiryTelemetryOptions)
-                && descriptor.ImplementationInstance is InquiryTelemetryOptions existingOptions)
+            if (existingOptions is not null)
             {
                 configure?.Invoke(existingOptions);
-                return services;
             }
-        }
 
-        foreach (var descriptor in services)
-        {
-            if (descriptor.ServiceType == typeof(InquiryTelemetryInterceptor))
-            {
-                return services;
-            }
+            return services;
         }
 
         var options = new InquiryTelemetryOptions();
