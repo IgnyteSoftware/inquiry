@@ -797,6 +797,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -805,7 +806,10 @@
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
-          "Testcontainers.MsSql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.SqlServer": "[1.16.1, )",
+          "Testcontainers.MsSql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.northwind": {
@@ -1117,6 +1121,16 @@
         "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
           "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
+        }
+      },
+      "RepoDb.SqlServer": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.1, )",
+        "resolved": "1.16.1",
+        "contentHash": "ZxWLxEUQh6jtp69mR25KezbC3OPLlaeAPdwg00fgwSAmWFFET/SY+PbnOsMqpkBIepPBmdqG/441OSonUyLgFg==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "7.0.2",
           "RepoDb": "1.16.0"
         }
       },
@@ -1914,6 +1928,7 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
           "Inquiry.Benchmarks.Contracts": "[1.0.0, )",
@@ -1922,7 +1937,10 @@
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
-          "Testcontainers.MsSql": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.SqlServer": "[1.16.1, )",
+          "Testcontainers.MsSql": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.northwind": {
@@ -2183,6 +2201,16 @@
         "contentHash": "INfaIn5249g4Yz2LIwydXtfY67uK0hGhEBAkRgdZNLuhKh0n8qHg2nerSKTvglMUcpuAK+HnNxKy2VLoiDYmuw==",
         "dependencies": {
           "Microsoft.Data.Sqlite": "10.0.11",
+          "RepoDb": "1.16.0"
+        }
+      },
+      "RepoDb.SqlServer": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.1, )",
+        "resolved": "1.16.1",
+        "contentHash": "ZxWLxEUQh6jtp69mR25KezbC3OPLlaeAPdwg00fgwSAmWFFET/SY+PbnOsMqpkBIepPBmdqG/441OSonUyLgFg==",
+        "dependencies": {
+          "Microsoft.Data.SqlClient": "7.0.2",
           "RepoDb": "1.16.0"
         }
       },

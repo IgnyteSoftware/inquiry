@@ -203,3 +203,17 @@ dotnet_diagnostic.CA1707.severity = none
 generated_code = true
 # Sonar does not read generated_code, so its rules are turned off here explicitly.
 dotnet_analyzer_diagnostic.severity = none
+
+# Dapper.AOT also checks the T-SQL of plain ADO.NET commands on SqlClient. These files build fixture DDL,
+# catalog queries and eager-load SQL from constants in code and do not use Dapper. docs/decisions.md
+# records this exception.
+[benchmarks/Inquiry.Benchmarks.SqlServer/SqlServerCollectionBenchmarkDatabase.cs]
+dotnet_diagnostic.DAP200.severity = none
+dotnet_diagnostic.DAP241.severity = none
+dotnet_diagnostic.DAP242.severity = none
+
+[benchmarks/Inquiry.Benchmarks.SqlServer/SqlServerCollectionEvidenceCollector.cs]
+dotnet_diagnostic.DAP225.severity = none
+
+[benchmarks/Inquiry.Benchmarks.SqlServer/{EagerLoadingBenchmarks,SqlServerBenchmarkDatabase}.cs]
+dotnet_diagnostic.DAP242.severity = none
