@@ -489,6 +489,43 @@ dotnet run -c Release -f net10.0 -r win-x64 --project benchmarks\Inquiry.Benchma
 
 Run each provider project the same way. `--inProcess` lets the cases share one container.
 
+### Wide rows and large objects (`WideRowLobBenchmarks`)
+
+`WideRowLobBenchmarks` exists in the SQLite suite and in each provider project (SQL Server, PostgreSQL,
+MySQL, MariaDB, Oracle). It reads the 17 mapped columns of `Employees`: all 100 rows (`WideList`) and one
+row by key (`WideByKey`). `NotesLength` sets the size of the `Notes` value in each row. At 256 characters
+the row is wide but small. At 65 536 characters `Notes` is a large object and dominates the row. The
+column is `TEXT` on SQLite and PostgreSQL, `NVARCHAR(MAX)` on SQL Server, `LONGTEXT` on MySQL and MariaDB,
+and `CLOB` on Oracle.
+
+| Leg | Configuration |
+| --- | --- |
+| `_AdoNet` | Baseline. Reads every column in ordinal order with `SequentialAccess`, as the generated store does |
+| `_Dapper` | Reflection-based Dapper into the Inquiry `Employee` type |
+| `_DapperAot` | The same Dapper call, intercepted by Dapper.AOT |
+| `_Inquiry` | Generated `EmployeeStore` |
+
+Every leg buffers `WideList` into a list. Each `GlobalSetup` deletes the `Employees` rows, inserts 100 rows
+through `EmployeeStore.InsertAsync`, and throws unless every leg reads the same number of `Notes`
+characters and the same row by key. No other class reads `Employees`, so on the provider projects the class
+can share a process with other classes.
+
+Left out:
+
+- EF Core, linq2db and RepoDB have no legs. The benchmark projects map only customers, products and
+  shippers for them (shippers only on most provider projects), so each leg needs a new 17-column entity
+  in each of the six projects.
+- The mapped `Employee` type has no binary column, so no leg reads `Photo`. On SQL Server,
+  `GeneratedAdHocSequentialAccessBenchmarks` reads a 64 KiB `VARBINARY(MAX)` column.
+
+```powershell
+dotnet run -c Release -f net10.0 --project benchmarks\Inquiry.Benchmarks -- --filter "*WideRowLobBenchmarks*"
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*WideRowLobBenchmarks*" --inProcess
+```
+
+Run each provider project the same way.
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,

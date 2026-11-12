@@ -43,6 +43,7 @@ public sealed class PostgreSqlBenchmarkDatabase : IAsyncDisposable
     public IDbContextFactory<PgShipperContext> DbContextFactory => _dbContextFactory!;
 
     public ShipperStore Shippers => GetRequiredService<ShipperStore>(PreparedStatementMode.None);
+    public EmployeeStore Employees => GetRequiredService<EmployeeStore>(PreparedStatementMode.None);
     public BatchMutationBenchmarkStore BatchMutations => GetRequiredService<BatchMutationBenchmarkStore>(PreparedStatementMode.Auto);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]

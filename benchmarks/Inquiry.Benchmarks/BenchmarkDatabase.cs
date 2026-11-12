@@ -57,6 +57,7 @@ public sealed class BenchmarkDatabase : IAsyncDisposable
     public RegionStore Regions => _services.GetRequiredService<RegionStore>();
     public TerritoryStore Territories => _services.GetRequiredService<TerritoryStore>();
     public CategoryStore Categories => _services.GetRequiredService<CategoryStore>();
+    public EmployeeStore Employees => _services.GetRequiredService<EmployeeStore>();
     public BatchMutationBenchmarkStore BatchMutations => _services.GetRequiredService<BatchMutationBenchmarkStore>();
     public MixedBenchPostStore MixedPosts => _services.GetRequiredService<MixedBenchPostStore>();
 

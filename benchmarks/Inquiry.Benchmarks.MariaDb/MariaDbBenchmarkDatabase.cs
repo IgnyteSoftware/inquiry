@@ -33,6 +33,9 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     public ShipperStore Shippers => _services!.GetRequiredService<ShipperStore>();
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
+    public EmployeeStore Employees => _services!.GetRequiredService<EmployeeStore>();
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Minor Code Smell", "S2325", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Benchmarks reach the process-wide database through the handle that CreateAsync returns, so this member stays on the instance.")]
