@@ -36,8 +36,8 @@ internal static class StoreOperationEmitter
         // materializer; all other operations use the store's entity.
         var entityType = resultTypeOverride ?? entity.FullyQualifiedName;
         var structMat = structMatOverride ?? entity.StructMaterializerFullName;
-        var cancellation = method.Parameters[method.Parameters.Count - 1].Name;
-        var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Name : "entity";
+        var cancellation = method.Parameters[method.Parameters.Count - 1].Identifier;
+        var firstParameter = method.Parameters.Count > 1 ? method.Parameters[0].Identifier : "entity";
         var parameters = GetParameterDeclaration(method.Parameters);
         // Non-null when this method's SQL composes runtime-parameterized filters; every READ binder
         // below must call it or the command executes with a missing @__gf_* parameter.
@@ -350,7 +350,7 @@ internal static class StoreOperationEmitter
                 {
                     // one string search-term parameter bound to @searchTerm; the SQL is the dialect's
                     // full-text predicate over the searched columns.
-                    var searchArg = method.Parameters[0].Name;
+                    var searchArg = method.Parameters[0].Identifier;
                     AppendHeader(source, method, parameters, isAsync: false);
                     var ftsQueryMethod = method.ReturnsList ? "QueryListAsync" : "QueryAsync";
                     source.AppendLine($"        return Inquiry.{ftsQueryMethod}<{entityType}, string, {structMat}>(");
@@ -394,7 +394,7 @@ internal static class StoreOperationEmitter
                         AppendHeader(source, method, parameters, isAsync: true);
                         if (method.Parameters.Count == 3)
                         {
-                            source.AppendLine($"        if ({method.Parameters[1].Name} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
+                            source.AppendLine($"        if ({method.Parameters[1].Identifier} is not null) throw new global::System.InvalidOperationException(\"Native bulk-insert options are not supported by this provider's batch-SQL fallback.\");");
                         }
                         source.AppendLine($"        return await Inquiry.ExecuteBatchAsync({batchDescriptor}, {itemsExpression}, {cancellation}).ConfigureAwait(false);");
                     }
@@ -796,7 +796,7 @@ internal static class StoreOperationEmitter
             return null;
         }
 
-        var accessor = parameter.IsNullable ? parameter.Name + ".Value" : parameter.Name;
+        var accessor = parameter.IsNullable ? parameter.Identifier + ".Value" : parameter.Identifier;
         var bridged = sqlBuilder.BuildParameterValueExpression(new ParameterValueExpressionContext(
             accessor,
             parameter.NonNullableComparisonDisplay,
@@ -809,7 +809,7 @@ internal static class StoreOperationEmitter
         }
 
         return parameter.IsNullable
-            ? $"{parameter.Name}.HasValue ? (object){bridged} : global::System.DBNull.Value"
+            ? $"{parameter.Identifier}.HasValue ? (object){bridged} : global::System.DBNull.Value"
             : $"(object){bridged}";
     }
 
@@ -953,7 +953,7 @@ internal static class StoreOperationEmitter
         {
             var columns = keyColumns.AsImmutableArray().Concat(new[] { rotatedToken }).ToArray();
             var newStamp = rotatedToken.Type.IsGuid ? "global::System.Guid.NewGuid()" : "global::System.Guid.NewGuid().ToString(\"D\")";
-            var arguments = Take(methodParameters, keyColumns.Count).Select(p => p.Name).Concat(new[] { newStamp });
+            var arguments = Take(methodParameters, keyColumns.Count).Select(p => p.Identifier).Concat(new[] { newStamp });
             var types = Take(methodParameters, keyColumns.Count).Select(p => p.TypeDisplay).Concat(new[] { rotatedToken.Type.DisplayName });
             var stateType = "(" + string.Join(", ", types) + ")";
             source.AppendLine($"{indent}return await Inquiry.ExecuteAsync(");
@@ -973,7 +973,7 @@ internal static class StoreOperationEmitter
 
         if (keyColumns.Count == 1)
         {
-            var keyParamName = methodParameters[0].Name;
+            var keyParamName = methodParameters[0].Identifier;
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{methodParameters[0].TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
@@ -984,7 +984,7 @@ internal static class StoreOperationEmitter
         }
         else
         {
-            var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Name));
+            var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Identifier));
             var tupleType = "(" + string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.TypeDisplay)) + ")";
             source.AppendLine($"{indent}{capture}");
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
@@ -1083,7 +1083,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {keyParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{keyParam.TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
-            source.AppendLine($"{indent}        {keyParam.Name},");
+            source.AppendLine($"{indent}        {keyParam.Identifier},");
             AppendBinderLambda(source, sqlBuilder, "_key", keyColumns.AsImmutableArray(), _ => "_key", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    default,");
@@ -1091,7 +1091,7 @@ internal static class StoreOperationEmitter
             return;
         }
 
-        var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Name));
+        var tupleArgs = string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.Identifier));
         var tupleType = "(" + string.Join(", ", Take(methodParameters, keyColumns.Count).Select(p => p.TypeDisplay)) + ")";
         source.AppendLine($"{indent}return await Inquiry.QueryGeneratedSingleOrDefaultAsync<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
@@ -1124,7 +1124,7 @@ internal static class StoreOperationEmitter
             source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
             source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{fieldParam.TypeDisplay}>(");
             source.AppendLine($"{indent}        {sqlField},");
-            source.AppendLine($"{indent}        {fieldParam.Name},");
+            source.AppendLine($"{indent}        {fieldParam.Identifier},");
             AppendBinderLambda(source, sqlBuilder, "_arg", fieldColumns, _ => "_arg", indent + "        ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
             source.AppendLine($"{indent}    ),");
             source.AppendLine($"{indent}    default,");
@@ -1132,7 +1132,7 @@ internal static class StoreOperationEmitter
             return;
         }
 
-        var tupleArgs = string.Join(", ", Take(methodParameters, fieldColumns.Count).Select(p => p.Name));
+        var tupleArgs = string.Join(", ", Take(methodParameters, fieldColumns.Count).Select(p => p.Identifier));
         var tupleType = "(" + string.Join(", ", Take(methodParameters, fieldColumns.Count).Select(p => p.TypeDisplay)) + ")";
         source.AppendLine($"{indent}return Inquiry.{queryMethod}<{entityType}, {tupleType}, {structMat}>(");
         source.AppendLine($"{indent}    new global::Inquiry.Commands.InquiryGeneratedCommand<{tupleType}>(");
@@ -1165,8 +1165,8 @@ internal static class StoreOperationEmitter
         var sqlField = selectPlan?.SqlFieldName ?? "_sqlPredicate_" + method.MemberName;
         if (paged)
         {
-            var offsetArg = method.Parameters[method.Parameters.Count - 3].Name;
-            var limitArg = method.Parameters[method.Parameters.Count - 2].Name;
+            var offsetArg = method.Parameters[method.Parameters.Count - 3].Identifier;
+            var limitArg = method.Parameters[method.Parameters.Count - 2].Identifier;
             source.AppendLine($"        if ({offsetArg} < 0) throw new global::System.ArgumentOutOfRangeException(nameof({offsetArg}), {offsetArg}, \"Pagination offset must be >= 0.\");");
             source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
         }
@@ -1180,7 +1180,7 @@ internal static class StoreOperationEmitter
         EmitPredicateBoundCommand(source, sqlBuilder, method, plan, sqlField, filterBinder, includePaging: paged);
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
 
-        var capacity = paged ? $", capacityHint: {method.Parameters[method.Parameters.Count - 2].Name}" : string.Empty;
+        var capacity = paged ? $", capacityHint: {method.Parameters[method.Parameters.Count - 2].Identifier}" : string.Empty;
         if (method.ReturnsPagedResult)
         {
             AppendPagedResultGridReads(source, state, entityType, structMat, cancellation);
@@ -1247,7 +1247,7 @@ internal static class StoreOperationEmitter
         for (var i = 0; i < plan.Bindings.Count; i++)
         {
             var binding = plan.Bindings[i];
-            var arg = method.Parameters[binding.MethodParameterIndex].Name;
+            var arg = method.Parameters[binding.MethodParameterIndex].Identifier;
             if (binding.IsCollection)
             {
                 source.AppendLine(CollectionBindingExpression(
@@ -1275,8 +1275,8 @@ internal static class StoreOperationEmitter
         if (includePaging)
         {
             var pi = plan.Bindings.Count;
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.OffsetParameterName!, method.Parameters[method.Parameters.Count - 3].Name);
-            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.LimitParameterName!, method.Parameters[method.Parameters.Count - 2].Name);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.OffsetParameterName!, method.Parameters[method.Parameters.Count - 3].Identifier);
+            AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.LimitParameterName!, method.Parameters[method.Parameters.Count - 2].Identifier);
         }
         source.AppendLine("            });");
     }
@@ -1402,8 +1402,8 @@ internal static class StoreOperationEmitter
         // silent empty result). nameof() in the throw preserves the caller-visible argument name.
         if (paged)
         {
-            var offsetArg = method.Parameters[fieldColumns.Count].Name;
-            var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
+            var offsetArg = method.Parameters[fieldColumns.Count].Identifier;
+            var limitArg = method.Parameters[fieldColumns.Count + 1].Identifier;
             source.AppendLine($"        if ({offsetArg} < 0) throw new global::System.ArgumentOutOfRangeException(nameof({offsetArg}), {offsetArg}, \"Pagination offset must be >= 0.\");");
             source.AppendLine($"        if ({limitArg} <= 0) throw new global::System.ArgumentOutOfRangeException(nameof({limitArg}), {limitArg}, \"Pagination limit must be > 0.\");");
         }
@@ -1426,7 +1426,7 @@ internal static class StoreOperationEmitter
         var pi = 0;
         for (var i = 0; i < fieldColumns.Count; i++)
         {
-            var arg = method.Parameters[i].Name;
+            var arg = method.Parameters[i].Identifier;
             source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
             source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(fieldColumns[i].PropertyName))}\";");
             AppendColumnParameterMetadata(source, fieldColumns[i], sqlBuilder, $"_p{pi}", "                ", predicate: true);
@@ -1438,12 +1438,12 @@ internal static class StoreOperationEmitter
         var pagedCapacityArg = string.Empty;
         if (paged)
         {
-            var offsetArg = method.Parameters[fieldColumns.Count].Name;
-            var limitArg = method.Parameters[fieldColumns.Count + 1].Name;
+            var offsetArg = method.Parameters[fieldColumns.Count].Identifier;
+            var limitArg = method.Parameters[fieldColumns.Count + 1].Identifier;
             AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.OffsetParameterName!, offsetArg);
             AppendScalarIntParameter(source, sqlBuilder, ref pi, plan.LimitParameterName!, limitArg);
             // The limit is the exact maximum row count, so pre-size the result list (#61).
-            pagedCapacityArg = $", capacityHint: {method.Parameters[fieldColumns.Count + 1].Name}";
+            pagedCapacityArg = $", capacityHint: {method.Parameters[fieldColumns.Count + 1].Identifier}";
         }
 
         if (filterBinder is not null)
@@ -1494,8 +1494,8 @@ internal static class StoreOperationEmitter
         string cancellation,
         string? filterBinder = null)
     {
-        var cursorParam = method.Parameters[0].Name;
-        var pageSizeParam = method.Parameters[1].Name;
+        var cursorParam = method.Parameters[0].Identifier;
+        var pageSizeParam = method.Parameters[1].Identifier;
         var cursorType = method.Parameters[0].TypeDisplay;
         var single = plan.KeysetColumns.Count == 1;
         var state = new GeneratedCommandState(method.Parameters);
@@ -1709,7 +1709,7 @@ internal static class StoreOperationEmitter
                 var tvpParamName = refCursorCall is not null
                     ? sqlBuilder.RuntimeParameterName(p.Name)
                     : sqlBuilder.StoredProcedureParameterName(p.Name);
-                source.AppendLine($"                {tvpBinding.Resolution.BinderFqn}.Bind(_c, \"{GeneratorHelpers.Escape(tvpParamName)}\", {p.Name}, \"{GeneratorHelpers.Escape(p.TvpTypeName!)}\", {tvpBinding.FieldName});");
+                source.AppendLine($"                {tvpBinding.Resolution.BinderFqn}.Bind(_c, \"{GeneratorHelpers.Escape(tvpParamName)}\", {p.Identifier}, \"{GeneratorHelpers.Escape(p.TvpTypeName!)}\", {tvpBinding.FieldName});");
                 continue;
             }
             source.AppendLine($"                var _p{i} = _c.CreateParameter();");
@@ -1753,7 +1753,7 @@ internal static class StoreOperationEmitter
             }
             var valueExpr = p.ProcedureValueExpression
                 ?? BridgeProcedureValue(sqlBuilder, p)
-                ?? $"(object?){p.Name} ?? global::System.DBNull.Value";
+                ?? $"(object?){p.Identifier} ?? global::System.DBNull.Value";
             source.AppendLine($"                _p{i}.Value = {valueExpr};");
             source.AppendLine($"                _c.Parameters.Add(_p{i});");
         }
@@ -1874,7 +1874,7 @@ internal static class StoreOperationEmitter
     {
         var elementType = parameter.ElementComparisonDisplay
             ?? throw new InvalidOperationException("A batch collection parameter must expose its element type.");
-        return $"((global::System.Collections.Generic.IEnumerable<{elementType}>?){parameter.Name}) ?? global::System.Array.Empty<{elementType}>()";
+        return $"((global::System.Collections.Generic.IEnumerable<{elementType}>?){parameter.Identifier}) ?? global::System.Array.Empty<{elementType}>()";
     }
 
     /// <summary>
@@ -2580,7 +2580,7 @@ internal static class StoreOperationEmitter
     // a hand-written two-result-set ADO command do.
     private static void EmitSelectOneByKeyEagerGrid(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, List<RelationData> emittedRelations, string parentSelectField)
     {
-        var keyParamName = method.Parameters[0].Name;
+        var keyParamName = method.Parameters[0].Identifier;
         var parentStructMat = entity.StructMaterializerFullName;
         var keyDbType = ResolveDbType(entity.Keys[0], sqlBuilder);
         var parentKeyProp = entity.Keys[0].PropertyName;
@@ -2661,7 +2661,7 @@ internal static class StoreOperationEmitter
     private static void EmitSelectOneByKeyEagerSeparate(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string entityType, string cancellation, EntityData entity, Dictionary<string, EntityData> relationChildEntities, string parentSelectField)
     {
         // Eager-on-composite is rejected in validation, so entity.Keys.Count == 1 here.
-        var keyParamName = method.Parameters[0].Name;
+        var keyParamName = method.Parameters[0].Identifier;
         // Bind the key/FK predicate parameters with their resolved DbType (e.g. AnsiString for a
         // non-unicode varchar key) so the eager-load lookups SEEK the varchar index instead of scanning —
         // mirroring the main (non-eager) param path. Without this the params default to inferred nvarchar.
@@ -3381,7 +3381,7 @@ internal static class StoreOperationEmitter
         var insertable = SelectMutationColumns(entity, includeKey: false);
         var itemsExpression = NonNullBatchItemsExpression(method.Parameters[0]);
         var definitionField = $"_bulkDef_{method.MemberName}";
-        var optionsExpression = method.Parameters.Count == 3 ? method.Parameters[1].Name : "null";
+        var optionsExpression = method.Parameters.Count == 3 ? method.Parameters[1].Identifier : "null";
 
         var dbTypeExprs = insertable.Select(c => ResolveDbType(c, sqlBuilder)).ToArray();
         var hasColumnTypes = dbTypeExprs.All(e => e is not null);
@@ -3541,7 +3541,7 @@ internal static class StoreOperationEmitter
             var prefix = enumeratorCancellation && isCt
                 ? "[global::System.Runtime.CompilerServices.EnumeratorCancellation] "
                 : string.Empty;
-            parts.Add($"{prefix}{parameter.TypeDisplay} {parameter.Name}");
+            parts.Add($"{prefix}{parameter.TypeDisplay} {parameter.Identifier}");
         }
 
         return string.Join(", ", parts);
@@ -3560,7 +3560,7 @@ internal static class StoreOperationEmitter
         {
             var parameter = parameters[i];
             var suffix = parameter.DefaultValueLiteral is null ? string.Empty : " = " + parameter.DefaultValueLiteral;
-            parts.Add($"{parameter.TypeDisplay} {parameter.Name}{suffix}");
+            parts.Add($"{parameter.TypeDisplay} {parameter.Identifier}{suffix}");
         }
 
         return string.Join(", ", parts);
@@ -3633,12 +3633,12 @@ internal static class StoreOperationEmitter
             else if (_count == 1 && !includeMaxParameters)
             {
                 Type = parameters[0].TypeDisplay;
-                Value = parameters[0].Name;
+                Value = parameters[0].Identifier;
             }
             else
             {
                 var types = Take(parameters, _count).Select((p, i) => p.TypeDisplay + " Arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
-                var values = Take(parameters, _count).Select((p, i) => "Arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ": " + p.Name).ToList();
+                var values = Take(parameters, _count).Select((p, i) => "Arg" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ": " + p.Identifier).ToList();
                 if (includeMaxParameters)
                 {
                     types.Add("int MaxParameters");
@@ -3940,7 +3940,7 @@ internal static class StoreOperationEmitter
             : parameters.Count;
         for (var i = 0; i < count; i++)
         {
-            source.AppendLine($"{indent}var {parameters[i].Name} = {state.Reference(i)};");
+            source.AppendLine($"{indent}var {parameters[i].Identifier} = {state.Reference(i)};");
         }
     }
 }

@@ -62,6 +62,10 @@ internal static class GeneratorHelpers
         => symbol.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == KnownSymbols.EntityAttributeNamespace);
 
+    /// <summary>Returns <paramref name="name"/> with the <c>@</c> prefix when it is a reserved C# word.</summary>
+    public static string EscapeIdentifier(string name)
+        => SyntaxFacts.GetKeywordKind(name) == SyntaxKind.None ? name : "@" + name;
+
     public static bool IsStoreAttribute(AttributeData attribute)
     {
         return attribute.AttributeClass?.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace;
@@ -264,9 +268,11 @@ internal static class GeneratorHelpers
         }
 
         var typeIdentity = string.Join("+", containingTypes);
+        // A namespace segment that is a reserved word displays with the @ prefix, as in Acme.@internal.
+        // A hint name cannot contain @, and the generator stops when one does.
         var namespacePrefix = symbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
-            : symbol.ContainingNamespace.ToDisplayString() + ".";
+            : symbol.ContainingNamespace.ToDisplayString().Replace("@", string.Empty) + ".";
         return namespacePrefix + typeIdentity + "." + generatedKind + ".g.cs";
     }
 

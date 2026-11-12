@@ -818,7 +818,7 @@ internal static class StoreProcessor
             DeclaredPrecision = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Precision") : null) ?? 0,
             IsInputOutput = paramAttr is not null && GeneratorHelpers.GetNamedBool(paramAttr, "IsInputOutput"),
             DeclaredScale = (paramAttr is not null ? GeneratorHelpers.GetNamedInt(paramAttr, "Scale") : null) ?? 0,
-            ProcedureValueExpression = BuildProcedureValueExpression(parameter.Name, typeData),
+            ProcedureValueExpression = BuildProcedureValueExpression(GeneratorHelpers.EscapeIdentifier(parameter.Name), typeData),
             TvpTypeName = paramAttr is not null ? GeneratorHelpers.GetNamedString(paramAttr, "TvpTypeName") : null,
             ElementDbTypeClass = elementTypeData is not null ? MapElementDbTypeClass(elementTypeData) : null,
         };
