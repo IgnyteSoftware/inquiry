@@ -34,6 +34,7 @@ public sealed class TvpFacetItem
     [InquiryColumn] public double FloatValue { get; set; }
     [InquiryColumn] public Guid ExternalId { get; set; }
     [InquiryColumn(Scale = 0)] public DateTime OccurredAt { get; set; }
+    [InquiryColumn(SqlType = "datetime")] public DateTime LegacyAt { get; set; }
     [InquiryColumn] public DateOnly OccurredOn { get; set; }
     [InquiryColumn(Scale = 7)] public TimeOnly LocalTime { get; set; }
     [InquiryColumn] public TvpFacetState State { get; set; }
@@ -75,6 +76,7 @@ public partial class TvpFacetStore : InquiryStore<TvpFacetItem>
     [InquiryExists, InquiryWhere("FloatValue", Compare.In)] public partial Task<bool> HasFloatAsync(IReadOnlyList<double> values, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("ExternalId", Compare.In)] public partial Task<bool> HasGuidAsync(IReadOnlyList<Guid> values, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("OccurredAt", Compare.In)] public partial Task<bool> HasDateTimeAsync(IReadOnlyList<DateTime> values, CancellationToken cancellationToken = default);
+    [InquiryExists, InquiryWhere("LegacyAt", Compare.In)] public partial Task<bool> HasLegacyDateTimeAsync(IReadOnlyList<DateTime> values, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("OccurredOn", Compare.In)] public partial Task<bool> HasDateOnlyAsync(IReadOnlyList<DateOnly> values, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("LocalTime", Compare.In)] public partial Task<bool> HasTimeOnlyAsync(IReadOnlyList<TimeOnly> values, CancellationToken cancellationToken = default);
     [InquiryExists, InquiryWhere("State", Compare.In)] public partial Task<bool> HasStateAsync(IReadOnlyList<TvpFacetState> values, CancellationToken cancellationToken = default);
@@ -107,6 +109,7 @@ public sealed class TvpFacetIntegrationTests
             [FloatValue] FLOAT NOT NULL,
             [ExternalId] UNIQUEIDENTIFIER NOT NULL,
             [OccurredAt] DATETIME2(0) NOT NULL,
+            [LegacyAt] DATETIME NOT NULL,
             [OccurredOn] DATE NOT NULL,
             [LocalTime] TIME(7) NOT NULL,
             [State] INT NOT NULL,
@@ -116,12 +119,12 @@ public sealed class TvpFacetIntegrationTests
         INSERT [TvpFacetItem]
             ([Id], [AnsiCode], [FixedCode], [Amount], [Payload], [FixedPayload], [CapturedAt], [OptionalNumber],
              [UnicodeCode], [UnicodeMax], [AnsiMax], [Flag], [Tiny], [Small], [Big], [RealValue], [FloatValue],
-             [ExternalId], [OccurredAt], [OccurredOn], [LocalTime], [State], [Token], [OptionalToken])
+             [ExternalId], [OccurredAt], [LegacyAt], [OccurredOn], [LocalTime], [State], [Token], [OptionalToken])
         VALUES
             (1, 'alpha', 'fixed', 123.4567000, 0x010203, 0x01020304, '2026-07-13T12:34:56.123+00:00', 42,
              N'κόσμε', N'unbounded-unicode', 'unbounded-ansi', 1, 255, -123, 9223372036854775806,
              CAST(1.5 AS REAL), CAST(2.5 AS FLOAT), '11111111-2222-3333-4444-555555555555',
-             '2026-07-13T12:34:56', '2026-07-13', '12:34:56.1234567', -1, -1, -1);
+             '2026-07-13T12:34:56', '2026-07-13T12:34:56', '2026-07-13', '12:34:56.1234567', -1, -1, -1);
         """;
 
     private readonly SqlServerContainerFixture _fixture;
@@ -152,6 +155,7 @@ public sealed class TvpFacetIntegrationTests
         Assert.False(await store.HasFloatAsync([]));
         Assert.False(await store.HasGuidAsync([]));
         Assert.False(await store.HasDateTimeAsync([]));
+        Assert.False(await store.HasLegacyDateTimeAsync([]));
         Assert.False(await store.HasDateOnlyAsync([]));
         Assert.False(await store.HasTimeOnlyAsync([]));
         Assert.False(await store.HasStateAsync([]));
@@ -184,10 +188,32 @@ public sealed class TvpFacetIntegrationTests
         Assert.True(await store.HasFloatAsync([2.5]));
         Assert.True(await store.HasGuidAsync([Guid.Parse("11111111-2222-3333-4444-555555555555")]));
         Assert.True(await store.HasDateTimeAsync([new DateTime(2026, 7, 13, 12, 34, 56, DateTimeKind.Unspecified)]));
+        Assert.True(await store.HasLegacyDateTimeAsync([new DateTime(2026, 7, 13, 12, 34, 56, DateTimeKind.Unspecified)]));
         Assert.True(await store.HasDateOnlyAsync([new DateOnly(2026, 7, 13)]));
         Assert.True(await store.HasTimeOnlyAsync([new TimeOnly(12, 34, 56).Add(TimeSpan.FromTicks(1234567))]));
         Assert.True(await store.HasStateAsync([TvpFacetState.Maximum]));
         Assert.True(await store.HasTokenAsync([new TvpFacetToken(uint.MaxValue)]));
         Assert.True(await store.HasOptionalTokenAsync([null, new TvpFacetToken(uint.MaxValue)]));
+    }
+
+    [SkippableFact]
+    public async Task ProvisionedTableTypesPassValidationForEveryFacetFamily()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "tvpfacetvalid");
+
+        // The validation query returns one row for each table type that is missing or does not match.
+        await using var connection = new Microsoft.Data.SqlClient.SqlConnection(harness.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = Inquiry.Generated.InquiryGeneratedSchema.ProviderArtifactsValidationSql;
+        await using var reader = await command.ExecuteReaderAsync();
+        var mismatches = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            mismatches.Add(reader.GetString(1) + ": " + reader.GetString(2));
+        }
+
+        Assert.Empty(mismatches);
     }
 }
