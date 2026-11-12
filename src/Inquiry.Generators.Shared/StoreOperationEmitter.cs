@@ -783,6 +783,36 @@ internal static class StoreOperationEmitter
             : $"(object){castExpr}";
     }
 
+    /// <summary>
+    /// Returns the value expression for a DateOnly or TimeOnly procedure input when the dialect binds it
+    /// as another CLR type (Oracle: DateTime and TimeSpan), or null when the value binds as it is.
+    /// </summary>
+    private static string? BridgeProcedureValue(SqlBuilder sqlBuilder, ParameterData parameter)
+    {
+        var isDateOnly = parameter.DbTypeExpression == "global::System.Data.DbType.Date";
+        var isTimeOnly = parameter.DbTypeExpression == "global::System.Data.DbType.Time";
+        if (!isDateOnly && !isTimeOnly)
+        {
+            return null;
+        }
+
+        var accessor = parameter.IsNullable ? parameter.Name + ".Value" : parameter.Name;
+        var bridged = sqlBuilder.BuildParameterValueExpression(new ParameterValueExpressionContext(
+            accessor,
+            parameter.NonNullableComparisonDisplay,
+            SpecialType.None,
+            ProviderIsDateOnly: isDateOnly,
+            ProviderIsTimeOnly: isTimeOnly));
+        if (bridged == accessor)
+        {
+            return null;
+        }
+
+        return parameter.IsNullable
+            ? $"{parameter.Name}.HasValue ? (object){bridged} : global::System.DBNull.Value"
+            : $"(object){bridged}";
+    }
+
     private static string BridgeProviderValue(SqlBuilder sqlBuilder, TypeData? providerType, SpecialType specialType, string providerTypeName, string valueExpression)
         => sqlBuilder.BuildParameterValueExpression(new ParameterValueExpressionContext(
             valueExpression,
@@ -1682,9 +1712,11 @@ internal static class StoreOperationEmitter
                 ? sqlBuilder.RuntimeParameterName(p.Name)
                 : sqlBuilder.StoredProcedureParameterName(p.Name);
             source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(paramName)}\";");
-            if (p.DbTypeExpression is not null)
+            // Use the dialect's DbType, as entity binders do. ODP.NET rejects the portable choices
+            // for Guid and DateTime.
+            if (sqlBuilder.MapPortableDbTypeExpression(p.DbTypeExpression) is { } dbTypeExpression)
             {
-                source.AppendLine($"                _p{i}.DbType = {p.DbTypeExpression};");
+                source.AppendLine($"                _p{i}.DbType = {dbTypeExpression};");
             }
             if (p.DeclaredLength > 0 && (p.IsStringType || p.IsBinaryType) && !p.IsInputOutput)
             {
@@ -1714,7 +1746,9 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"                _p{i}.Scale = {scale.ToString(CultureInfo.InvariantCulture)};");
                 }
             }
-            var valueExpr = p.ProcedureValueExpression ?? $"(object?){p.Name} ?? global::System.DBNull.Value";
+            var valueExpr = p.ProcedureValueExpression
+                ?? BridgeProcedureValue(sqlBuilder, p)
+                ?? $"(object?){p.Name} ?? global::System.DBNull.Value";
             source.AppendLine($"                _p{i}.Value = {valueExpr};");
             source.AppendLine($"                _c.Parameters.Add(_p{i});");
         }

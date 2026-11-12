@@ -274,6 +274,24 @@ public abstract class SqlBuilder
     }
 
     /// <summary>
+    /// Applies the dialect's substitutions to an expression that the portable
+    /// <see cref="DbTypeMapper"/> produced. Stored-procedure parameters are modelled before the dialect
+    /// is known, so they carry the portable expression. Each portable expression below comes from
+    /// exactly one CLR type, so the expression identifies the type.
+    /// </summary>
+    internal string? MapPortableDbTypeExpression(string? portableExpression)
+        => portableExpression switch
+        {
+            "global::System.Data.DbType.Guid" => GuidDbTypeExpression,
+            "global::System.Data.DbType.Boolean" => BooleanDbTypeExpression,
+            "global::System.Data.DbType.DateTime2" => DateTimeDbTypeExpression,
+            "global::System.Data.DbType.Date" => DateOnlyDbTypeExpression,
+            "global::System.Data.DbType.Time" => TimeOnlyDbTypeExpression,
+            "global::System.Data.DbType.DateTimeOffset" => DateTimeOffsetDbTypeExpression,
+            _ => portableExpression,
+        };
+
+    /// <summary>
     /// As <see cref="MapDbTypeExpression"/> but for a value converter's provider
     /// <see cref="SpecialType"/>; the same dialect substitutions for <see cref="System.Boolean"/> and
     /// <see cref="System.DateTime"/> apply.
