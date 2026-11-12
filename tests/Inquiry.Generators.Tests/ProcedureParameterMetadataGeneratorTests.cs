@@ -51,6 +51,62 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p0.DbType = global::System.Data.DbType.Int32;", text);
     }
 
+    // #547: procedure inputs use the dialect's DbType, as entity binders do. ODP.NET rejects
+    // DbType.Guid and DbType.DateTime2.
+    [Theory]
+    [InlineData("SqlServer", "Guid", "Guid")]
+    [InlineData("SqlServer", "Guid?", "Guid")]
+    [InlineData("SqlServer", "DateTime", "DateTime2")]
+    [InlineData("SqlServer", "DateTime?", "DateTime2")]
+    [InlineData("SqlServer", "bool", "Boolean")]
+    [InlineData("SqlServer", "DateOnly", "Date")]
+    [InlineData("SqlServer", "TimeOnly", "Time")]
+    [InlineData("Oracle", "Guid", "Binary")]
+    [InlineData("Oracle", "Guid?", "Binary")]
+    [InlineData("Oracle", "DateTime", "DateTime")]
+    [InlineData("Oracle", "DateTime?", "DateTime")]
+    [InlineData("Oracle", "bool", "Int32")]
+    [InlineData("Oracle", "DateOnly", "Date")]
+    public void ProcParam_UsesTheDialectDbType(string dialect, string parameterType, string expectedDbType)
+    {
+        var source = ProcParamHeader + $$"""
+                [InquiryStoredProcedure("usp_Test")]
+                public partial Task<int> TestAsync({{parameterType}} value, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
+        var text = GetProcParamStore(result);
+
+        Assert.Contains($"_p0.DbType = global::System.Data.DbType.{expectedDbType};", text);
+    }
+
+    [Theory]
+    [InlineData("DateOnly", "_p0.Value = (object)value.ToDateTime(global::System.TimeOnly.MinValue);")]
+    [InlineData("DateOnly?", "_p0.Value = value.HasValue ? (object)value.Value.ToDateTime(global::System.TimeOnly.MinValue) : global::System.DBNull.Value;")]
+    [InlineData("TimeOnly", "_p0.Value = (object)value.ToTimeSpan();")]
+    [InlineData("TimeOnly?", "_p0.Value = value.HasValue ? (object)value.Value.ToTimeSpan() : global::System.DBNull.Value;")]
+    public void ProcParam_OracleBindsDateOnlyAndTimeOnlyAsEntityBindersDo(string parameterType, string expectedValue)
+    {
+        var source = ProcParamHeader + $$"""
+                [InquiryStoredProcedure("usp_Test")]
+                public partial Task<int> TestAsync({{parameterType}} value, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: "Oracle");
+        AssertNoErrors(result);
+        var text = GetProcParamStore(result);
+
+        Assert.Contains(expectedValue, text);
+        if (parameterType.StartsWith("TimeOnly", StringComparison.Ordinal))
+        {
+            // Oracle sets no DbType for TimeOnly; ODP.NET infers INTERVAL DAY TO SECOND from the TimeSpan.
+            Assert.DoesNotContain("_p0.DbType", text);
+        }
+    }
+
     [Fact]
     public void ProcParam_InfersDbTypeFromClrType_String()
     {

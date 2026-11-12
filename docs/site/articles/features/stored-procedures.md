@@ -50,8 +50,9 @@ On Oracle:
   Return a string or `byte[]` through an INOUT parameter with
   `[InquiryParameter(IsInputOutput = true, Length = n)]`, where `n` is the size the procedure declares.
 - Guid, DateTime and bool values cannot be read back from a procedure. Return them in a result set.
-  Guid and DateTime IN parameters also fail in ODP.NET today, because procedure parameters do not use
-  Oracle's type mapping.
+  As IN parameters they bind with Oracle's type mapping, the same as entity columns: `Guid` as
+  `RAW(16)`, `DateTime` as `TIMESTAMP`, `bool` as `NUMBER(1)`, `DateOnly` as `DATE` and `TimeOnly` as
+  `INTERVAL DAY TO SECOND`.
 - Methods that read back a value or return `Task<int>` bind arguments by name, so the C# parameter
   names must match the procedure's parameter names. Row-returning methods pass arguments by position
   (see [Oracle stored procedures](#oracle-stored-procedures)).
