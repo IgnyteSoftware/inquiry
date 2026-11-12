@@ -276,7 +276,23 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // triggered tables).
     private string DeclareOutputTable(SqlBuildContext context)
         => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
-            QuoteIdentifier(c.ColumnName) + " " + (c.IsDatabaseGeneratedToken ? "BINARY(8)" : MapColumnType(c)))) + ");";
+            QuoteIdentifier(c.ColumnName) + " " + OutputColumnType(c))) + ");";
+
+    // The table variable must hold each value without loss, so it takes the declared SqlType. The
+    // inferred type differs: decimal(19,4) would pass through DECIMAL(18,2) and come back rounded.
+    // A rowversion column cannot receive a value, so its eight bytes go into BINARY(8).
+    private string OutputColumnType(IColumn column)
+    {
+        var sqlType = column.SqlType?.Trim();
+        if (column.IsDatabaseGeneratedToken ||
+            string.Equals(sqlType, "rowversion", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sqlType, "timestamp", StringComparison.OrdinalIgnoreCase))
+        {
+            return "BINARY(8)";
+        }
+
+        return string.IsNullOrEmpty(sqlType) ? MapColumnType(column) : sqlType!;
+    }
 
     private static string SelectFromOutput(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM @_out";
