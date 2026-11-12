@@ -110,10 +110,10 @@ Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
 (e.g. `dotnet test tests/Inquiry.MySql.Tests -f net10.0`). The provider-restoration gate in
-[#171](https://github.com/IgnyteSoftware/inquiry/issues/171) is closed. Two consecutive full CI runs
-are green at 20/20 required checks each, including every one of the 15 PostgreSQL, MySQL, MariaDB,
-SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated suites skip locally
-(not in CI) when Docker is unavailable.
+[#171](https://github.com/IgnyteSoftware/inquiry/issues/171) is closed: two consecutive full CI runs
+were green on every required check, including every PostgreSQL, MySQL, MariaDB, SQL Server, and Oracle
+integration leg of the matrix at that time (15 legs across net8.0, net9.0 and net10.0). The current
+matrix is described below. Docker-gated suites skip locally (not in CI) when Docker is unavailable.
 
 The normal CI workflow runs on pull requests targeting `main`, and on merge-queue events:
 **build-and-unit** (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and

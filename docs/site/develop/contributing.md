@@ -81,9 +81,9 @@ checked-in workflow cannot enforce them by itself.
 
 ## Commit messages
 
-Commit messages are written to a BOM-free file and committed via `git commit -F <file>`, ending with the
-`Co-Authored-By: Claude …` trailer. (PowerShell here-strings bind unreliably to native `git`; the file
-approach is the convention.)
+Commit messages are written to a BOM-free file and committed via `git commit -F <file>`. (PowerShell
+here-strings bind unreliably to native `git`; the file approach is the convention.) Commits carry no
+agent attribution trailer: the configured git user is the only author.
 
 ## CI
 
