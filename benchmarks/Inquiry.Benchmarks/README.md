@@ -171,6 +171,48 @@ points keep BenchmarkDotNet out of the probe path for the same reason. The probe
 the driver and, for a provider project, with the database container, so use enough launches and a quiet
 machine for numbers that you compare.
 
+### NativeAOT startup, size and throughput (`Inquiry.Benchmarks.Aot`)
+
+`benchmarks/Inquiry.Benchmarks.Aot` is a small SQLite program that is published twice, as NativeAOT and as
+a JIT build. Its `--compare` mode then measures each published program. It does not use BenchmarkDotNet,
+because the same measured code must run in both builds.
+
+```powershell
+# Restore without -r. A runtime identifier on the restore rewrites the lock files of the referenced libraries.
+dotnet restore benchmarks/Inquiry.Benchmarks.Aot
+dotnet publish benchmarks/Inquiry.Benchmarks.Aot -c Release -r win-x64 --no-restore -o artifacts/aot-bench/aot
+dotnet publish benchmarks/Inquiry.Benchmarks.Aot -c Release -r win-x64 --no-restore -p:PublishAot=false -o artifacts/aot-bench/jit
+artifacts/aot-bench/jit/Inquiry.Benchmarks.Aot.exe --compare artifacts/aot-bench/jit artifacts/aot-bench/aot
+```
+
+On Linux use `-r linux-x64` and the program name without `.exe`. The NativeAOT publish needs the native
+toolchain of the platform (the C++ build tools on Windows, `clang` on Linux). On Windows the link step
+also calls `vswhere.exe`; if it reports that the command is not recognized, add
+`C:\Program Files (x86)\Microsoft Visual Studio\Installer` to `PATH`. The JIT build is
+framework-dependent, so its directory does not hold the .NET runtime. Add `--self-contained` to that
+publish to compare a directory that does.
+
+For each directory, `--compare` prints:
+
+- **Size.** The size of the executable and of the whole directory.
+- **Startup.** The process cold start of each leg, 20 launches each, from process launch to process exit.
+  It is the same measurement as `--process-cold-start` (see above), with a `Startup` leg that makes no
+  database call.
+- **Throughput.** 20 000 shipper point reads for each leg, after 2 000 warmup calls. The published program
+  times them on itself and reports calls per second, time per call and allocated bytes per call.
+
+The driver seeds one SQLite file with 1 000 shippers, and every probe reads it.
+
+| Leg | Configuration |
+| --- | --- |
+| `AdoNet` | Baseline. The same reader code as the SQLite `ShipperCrudBenchmarks` point read |
+| `DapperAot` | Dapper with the Dapper.AOT interceptors |
+| `Inquiry` | Generated `ShipperStore`, registered with `AddInquiryGeneratedStores` |
+
+Reflection-based Dapper, EF Core, linq2db and RepoDB have no legs. They build their readers or queries at
+run time, which NativeAOT does not support. The other providers are left out too: `samples/Inquiry.AotSmoke`
+proves the NativeAOT path for SQLite only.
+
 ### Tuned and source-generated competitors (`ShipperReadCompetitorBenchmarks`)
 
 `SelectAll` and `SelectByKey` on `Shippers` (1 000 and 100 000 rows) against every competitor, each in its
