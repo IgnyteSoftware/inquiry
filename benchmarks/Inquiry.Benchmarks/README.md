@@ -662,8 +662,9 @@ Each iteration deletes the shippers first. `GlobalSetup` runs every leg once and
 reports 5 000 rows and the table then holds 5 000 rows.
 
 - **SQL Server.** The baseline uses the same `SqlBulkCopy` settings as the Inquiry provider, so both legs
-  do the same driver work. Neither turns on `SqlBulkCopy.EnableStreaming`: the provider holds each value
-  in memory, and streaming would run a value converter once for every 4 KB of a `VARBINARY(MAX)` value.
+  do the same driver work. Both set `CheckConstraints`, `KeepNulls` and `FireTriggers`. Neither turns on
+  `SqlBulkCopy.EnableStreaming`: the provider holds each value in memory, and streaming would run a value
+  converter once for every 4 KB of a `VARBINARY(MAX)` value.
 - **MySQL and MariaDB.** `MySqlBulkCopy` sends `LOAD DATA LOCAL INFILE`. The fixtures start the server
   with `--local-infile=1`, and the ADO.NET and linq2db legs use a connection string with
   `AllowLoadLocalInfile=true`. Inquiry sets the same option on the connection that it opens for a bulk

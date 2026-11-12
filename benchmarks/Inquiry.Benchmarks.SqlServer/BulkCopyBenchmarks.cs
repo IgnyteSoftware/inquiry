@@ -17,9 +17,9 @@ namespace Inquiry.Benchmarks.SqlServer;
 /// iteration deletes the shippers first, so table growth does not skew the timings. Requires Docker.
 /// </summary>
 /// <remarks>
-/// The baseline feeds the rows through a data reader and maps the columns by name, as the Inquiry
-/// provider does, so both legs do the same <c>SqlBulkCopy</c> work. Neither leg turns on
-/// <c>EnableStreaming</c>. Dapper and EF Core have no bulk-copy API, and RepoDB has it in a
+/// The baseline feeds the rows through a data reader, maps the columns by name and sets the same copy
+/// options as the Inquiry provider, so both legs do the same <c>SqlBulkCopy</c> work. Neither leg turns
+/// on <c>EnableStreaming</c>. Dapper and EF Core have no bulk-copy API, and RepoDB has it in a
 /// package that this project does not reference, so they have no legs. The container is shared by the
 /// whole process, and this class deletes the shippers that other classes read. Under
 /// <c>--inProcess</c> run it with its own filter.
@@ -83,7 +83,8 @@ public class BulkCopyBenchmarks
     {
         await using var connection = new SqlConnection(_db.ConnectionString);
         await connection.OpenAsync();
-        using var bulk = new SqlBulkCopy(connection) { DestinationTableName = "[Shippers]" };
+        const SqlBulkCopyOptions options = SqlBulkCopyOptions.CheckConstraints | SqlBulkCopyOptions.KeepNulls | SqlBulkCopyOptions.FireTriggers;
+        using var bulk = new SqlBulkCopy(connection, options, null) { DestinationTableName = "[Shippers]" };
         bulk.ColumnMappings.Add(0, "CompanyName");
         bulk.ColumnMappings.Add(1, "Phone");
         using var reader = new ShipperReader(_rows);

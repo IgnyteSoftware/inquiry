@@ -109,6 +109,17 @@ clear before each attempt, or remove the rows that the failed attempt wrote. See
 - **`BulkCopyTimeout` defaults to 30 seconds.** Set `InquiryBulkInsertOptions.Timeout` for larger loads.
 - **`TableLock` is opt-in.** Set it only when the destination and workload make a table-level lock acceptable.
 
+A bulk insert follows the rules of an ordinary `INSERT`, as PostgreSQL `COPY` and `MySqlBulkCopy` do.
+Inquiry sets the `SqlBulkCopy` options `CheckConstraints`, `KeepNulls` and `FireTriggers`:
+
+- `FOREIGN KEY` and `CHECK` constraints are enforced. A row that breaks one fails the copy with error 547,
+  and the constraints stay trusted. Without the option SQL Server accepts such rows and marks the
+  constraint as not trusted.
+- A `null` property stores `NULL`, also on a column that has a default. A column with
+  `UseDatabaseDefault = true` is not part of the copy, so it still takes its default.
+- Insert triggers fire once for each batch. A table with an insert trigger loads more slowly than one
+  without.
+
 PostgreSQL binary `COPY` and `MySqlBulkCopy` expose only the options described above.
 
 ## When to use which tier
