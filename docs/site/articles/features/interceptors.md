@@ -175,8 +175,10 @@ parameter values never are.
   method, around the awaited work, with `using`. A scope begun inside an `async` helper method does
   not cover the caller: when the helper returns, the caller's async context no longer has that scope
   active.
-- **Disposal order.** Dispose nested scopes innermost first; nested `using` blocks do this. Other
-  orders leave the wrong scope active.
+- **Disposal order.** Dispose nested scopes innermost first; nested `using` blocks do this.
+  Disposing a scope while a nested scope is still active throws `InvalidOperationException` and
+  changes nothing: both scopes stay as they were. Disposing a scope twice does nothing the second
+  time.
 
 A warning means the same statement ran repeatedly. It does not prove a defect: some loops are
 intended. Use the logged SQL to find the loop, then decide whether a batch query or

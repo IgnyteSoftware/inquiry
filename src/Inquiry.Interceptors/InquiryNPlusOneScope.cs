@@ -17,7 +17,6 @@ public sealed class InquiryNPlusOneScope : IDisposable
     internal ConcurrentDictionary<string, byte> Warned { get; } = new(StringComparer.Ordinal);
 
     private readonly InquiryNPlusOneScope? _previous;
-    private int _disposed;
 
     private InquiryNPlusOneScope(InquiryNPlusOneScope? previous) => _previous = previous;
 
@@ -35,12 +34,31 @@ public sealed class InquiryNPlusOneScope : IDisposable
         return scope;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Ends detection for this scope and makes the enclosing scope active again. Repeated disposal is a
+    /// no-op, and so is disposal in an async flow where this scope is not active.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// A nested scope is still active. Dispose nested scopes first, then retry.
+    /// </exception>
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        var current = _current.Value;
+        if (ReferenceEquals(current, this))
         {
             _current.Value = _previous;
+            return;
+        }
+
+        for (var scope = current; scope is not null; scope = scope._previous)
+        {
+            if (ReferenceEquals(scope, this))
+            {
+                // Disposing out of order would leave the wrong scope active, so misuse fails loudly.
+#pragma warning disable S3877
+                throw new InvalidOperationException("Dispose nested N+1 detection scopes before their parent scope.");
+#pragma warning restore S3877
+            }
         }
     }
 }
