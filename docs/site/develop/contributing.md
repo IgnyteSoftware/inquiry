@@ -112,7 +112,7 @@ code get read-only permissions in every context. A skipped provenance job does n
 
 A separate **scheduled weekly workflow**
 ([`scheduled.yml`](https://github.com/IgnyteSoftware/inquiry/blob/main/.github/workflows/scheduled.yml))
-runs every Monday and repeats the full three-TFM integration matrix, re-verifying every provider against
+runs every Monday and repeats the full two-TFM integration matrix, re-verifying every provider against
 current container images.
 
 **Benchmarks do not run in CI.** Run them on a development machine, or to produce numbers for the
