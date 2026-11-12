@@ -607,6 +607,39 @@ dotnet build benchmarks/Inquiry.Benchmarks.SqlServer -c Release
 dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --filter "*BulkCopyBenchmarks*" --inProcess
 ```
 
+### Connection-pool pressure (`PoolPressureBenchmarks`)
+
+`PoolPressureBenchmarks` exists in each provider project (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle).
+In one operation, 16 concurrent callers each run one shipper point read. `MaxPoolSize` caps the connection
+pool in the connection string that every leg uses:
+
+- `MaxPoolSize = 2`: eight callers for each connection, so callers wait for the pool.
+- `MaxPoolSize = 16`: one connection for each caller, so no caller waits. Compare a leg with itself at this
+  tier to see what the pressure costs it.
+
+The legs are the nine point reads of `ShipperReadCompetitorBenchmarks`: `_AdoNet` (baseline), `_Dapper`,
+`_DapperAot`, `_EfCore`, `_EfCoreTuned`, `_LinqToDb`, `_LinqToDbCompiled`, `_RepoDb` and `_Inquiry`. Each
+caller opens and closes its own connection or context. The plain EF Core leg constructs a context for each
+call, and the tuned leg takes one from a context pool, as in that class. The Inquiry leg has its own
+service provider, because the fixture's provider uses the connection string without the cap.
+`GlobalSetup` checks that every leg reads the same row and that every leg finds a row for all 16 callers.
+
+A library that builds its own data source from the connection string has its own pool with the same cap.
+With Npgsql, EF Core and Inquiry do that. So the legs do not all share one pool, and the idle connections
+of earlier legs stay open. The tiers are small for that reason: the PostgreSQL container accepts 100
+connections and the MySQL and MariaDB containers 151. With 64 callers the class failed with
+`53300: sorry, too many clients already`.
+
+SQLite is left out. Microsoft.Data.Sqlite has no maximum pool size, so a caller never waits for a
+connection. `ConcurrencyBenchmarks` measures concurrent point reads there.
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.PostgreSql -c Release
+dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.PostgreSql.dll --filter "*PoolPressureBenchmarks*" --inProcess
+```
+
+Run each provider project the same way.
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,
