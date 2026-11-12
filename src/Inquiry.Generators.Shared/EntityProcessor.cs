@@ -1000,7 +1000,7 @@ internal static class EntityProcessor
     /// Returns null when neither applies; reports INQ037 when an explicit converter type does not
     /// implement the converter interface.
     /// </summary>
-    private static ConverterData? ResolveConverter(
+    internal static ConverterData? ResolveConverter(
         IPropertySymbol property,
         AttributeData? columnAttribute,
         TypeData typeData,

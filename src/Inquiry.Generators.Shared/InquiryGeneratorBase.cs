@@ -67,7 +67,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             .ForAttributeWithMetadataName(
                 KnownSymbols.EntityAttributeNamespace + ".InquiryProjectionAttribute",
                 predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
-                transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ct))
+                transform: static (ctx, ct) => ProjectionProcessor.Extract((INamedTypeSymbol)ctx.TargetSymbol, ctx.SemanticModel.Compilation, ct))
             .WithTrackingName(ProjectionsTrackingName);
 
         // Ad-hoc DTOs: each [InquiryAdHoc] class is projected into an equatable AdHocData. Its

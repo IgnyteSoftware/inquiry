@@ -17,7 +17,7 @@ namespace Inquiry.Generators;
 /// </summary>
 internal static class ProjectionProcessor
 {
-    public static ProjectionData Extract(INamedTypeSymbol symbol, CancellationToken cancellationToken)
+    public static ProjectionData Extract(INamedTypeSymbol symbol, Compilation compilation, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = symbol.Locations.FirstOrDefault();
@@ -28,7 +28,7 @@ internal static class ProjectionProcessor
             ? entitySymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : string.Empty;
 
-        var columns = DiscoverColumns(symbol, diagnostics, cancellationToken);
+        var columns = DiscoverColumns(symbol, compilation, diagnostics, cancellationToken);
         var isMapped = columns.Count > 0;
         if (!isMapped)
         {
@@ -91,6 +91,7 @@ internal static class ProjectionProcessor
 
     private static List<ColumnData> DiscoverColumns(
         INamedTypeSymbol symbol,
+        Compilation compilation,
         ImmutableArray<DiagnosticData>.Builder diagnostics,
         CancellationToken cancellationToken)
     {
@@ -111,13 +112,15 @@ internal static class ProjectionProcessor
                 GeneratorHelpers.GetEntityAttribute(property, "InquiryEnumAsStringAttribute") is not null;
 
             // Only the fields MaterializerEmitter reads are populated (projections never feed DDL or
-            // mutations); the rest default.
+            // mutations); the rest default. The converter is resolved as it is for an entity column, so
+            // a projected column reads the same provider value the entity does.
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
                 ColumnName = columnName,
                 Type = typeData,
                 EnumAsString = enumAsString,
+                Converter = EntityProcessor.ResolveConverter(property, columnAttribute, typeData, symbol, compilation, diagnostics),
             });
 
             // The materializer assigns through an object initializer, so a get-only or private-setter
