@@ -565,6 +565,48 @@ dotnet benchmarks/Inquiry.Benchmarks.PostgreSql/bin/Release/net10.0/linux-x64/In
 
 Run each provider project the same way.
 
+### Bulk copy (`BulkCopyBenchmarks`)
+
+`BulkCopyBenchmarks` exists in the SQL Server, MySQL and MariaDB projects. It copies 5 000 shippers through
+the provider's native bulk API: `SqlBulkCopy` on SQL Server and `MySqlBulkCopy` on MySQL and MariaDB.
+
+| Leg | Configuration |
+| --- | --- |
+| `_AdoNet` | Baseline. The native bulk API, fed by a forward-only data reader, with the columns mapped by name |
+| `_AdoNetBuffered` | SQL Server only. The baseline with `EnableStreaming` off, the `SqlBulkCopy` default |
+| `_LinqToDb` | `BulkCopyAsync` with `BulkCopyType.ProviderSpecific` |
+| `_Inquiry` | `ShipperStore.BulkInsertAsync` (`[InquiryBulkInsert]`) |
+
+Each iteration deletes the shippers first. `GlobalSetup` runs every leg once and throws unless the leg
+reports 5 000 rows and the table then holds 5 000 rows.
+
+- **SQL Server.** The Inquiry provider turns on `SqlBulkCopy.EnableStreaming`, so the baseline turns it on
+  too and both legs do the same driver work. `Shippers.Phone` is `NVARCHAR(MAX)`, and with streaming on,
+  `SqlBulkCopy` allocates about twelve times as much for these rows (33.7 MB against 2.75 MB in a Dry
+  run). The extra `_AdoNetBuffered` leg keeps the `SqlBulkCopy` default, which is off, to show that
+  difference. It exists on SQL Server only.
+- **MySQL and MariaDB.** `MySqlBulkCopy` sends `LOAD DATA LOCAL INFILE`. The fixtures start the server
+  with `--local-infile=1`, and the ADO.NET and linq2db legs use a connection string with
+  `AllowLoadLocalInfile=true`. Inquiry sets the same option on the connection that it opens for a bulk
+  insert.
+
+Left out:
+
+- Dapper and EF Core have no bulk-copy API. RepoDB has one for SQL Server only, in
+  `RepoDb.SqlServer.BulkOperations`, which no project references.
+- PostgreSQL already has `BulkInsertBenchmarks`, which compares chunked `[InquiryInsert]` batches with one
+  binary `COPY` (`[InquiryBulkInsert]`).
+- SQLite and Oracle have no bulk path. `[InquiryBulkInsert]` compiles to the multi-row batch `INSERT`
+  there, which `BatchBenchmarks` and `BatchMutationStrategyBenchmarks` measure.
+
+The class deletes the shippers that other classes read from the shared container. Under `--inProcess`
+run it with its own filter:
+
+```powershell
+dotnet build benchmarks/Inquiry.Benchmarks.SqlServer -c Release
+dotnet benchmarks/Inquiry.Benchmarks.SqlServer/bin/Release/net10.0/linux-x64/Inquiry.Benchmarks.SqlServer.dll --filter "*BulkCopyBenchmarks*" --inProcess
+```
+
 ## Dataset size (`[Params(1000, 100000)]`)
 
 The read-oriented classes — both CRUD classes and `PaginationBenchmarks`,

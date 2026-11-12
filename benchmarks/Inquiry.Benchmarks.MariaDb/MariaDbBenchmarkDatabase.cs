@@ -54,7 +54,8 @@ public sealed class MariaDbBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
-                var container = new MariaDbBuilder("mariadb:11.4").Build();
+                // MySqlBulkCopy sends LOAD DATA LOCAL INFILE, which the server rejects unless local_infile is on.
+                var container = new MariaDbBuilder("mariadb:11.4").WithCommand("--local-infile=1").Build();
                 await container.StartAsync().ConfigureAwait(false);
                 var connectionString = container.GetConnectionString();
 
