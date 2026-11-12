@@ -422,6 +422,8 @@ public sealed class InquiryTelemetryTests
     {
         var services = new ServiceCollection();
         services.AddInquiryTelemetry();
+        // An options instance that the application registers is not the one the interceptor reads.
+        services.AddSingleton(new InquiryTelemetryOptions());
         services.AddInquiryTelemetry(options => options.RecordCommandText = false);
 
         using var provider = services.BuildServiceProvider();

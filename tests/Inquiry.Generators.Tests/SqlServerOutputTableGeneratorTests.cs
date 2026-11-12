@@ -25,6 +25,9 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryColumn]
                 public decimal Tax { get; set; }
 
+                [InquiryColumn(SqlType = "nvarchar(20) NOT NULL")]
+                public string Code { get; set; } = string.Empty;
+
                 [InquiryColumn(SqlType = " RowVersion ", UseDatabaseDefault = true)]
                 public byte[] Stamp { get; set; } = System.Array.Empty<byte>();
             }
@@ -42,7 +45,8 @@ public sealed partial class InquiryGeneratorTests
         var text = tree.GetText().ToString();
 
         // The inferred DECIMAL(18,2) would round Amount on its way back to the caller. A rowversion
-        // column in a table variable cannot receive a value, so it stays BINARY(8).
-        Assert.Contains("DECLARE @_out TABLE ([Id] INT NULL, [Amount] decimal(19,4) NULL, [Tax] DECIMAL(18,2) NULL, [Stamp] BINARY(8) NULL);", text);
+        // column in a table variable cannot receive a value, so it stays BINARY(8). A SqlType with
+        // its own nullability gets no second one.
+        Assert.Contains("DECLARE @_out TABLE ([Id] INT NULL, [Amount] decimal(19,4) NULL, [Tax] DECIMAL(18,2) NULL, [Code] nvarchar(20) NOT NULL, [Stamp] BINARY(8) NULL);", text);
     }
 }
