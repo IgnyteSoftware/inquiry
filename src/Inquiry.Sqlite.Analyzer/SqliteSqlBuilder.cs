@@ -104,8 +104,45 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     public override bool UseArrayInParameters => true;
 
+    // json_each yields text for a JSON string. A BLOB column needs the bytes, which the list carries as hex.
     protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
-        => quotedColumn + " IN (SELECT value FROM json_each(" + parameterName + "))";
+        => quotedColumn + " IN (SELECT " + (elementType == DbTypeClass.ByteArray ? "unhex(value)" : "value")
+            + " FROM json_each(" + parameterName + "))";
+
+    // The IN list compares against the text or number that Microsoft.Data.Sqlite stored for a scalar
+    // parameter, with no conversion. Each element must therefore take the exact stored form. The JSON
+    // transport writes lower-case GUIDs, ISO 8601 timestamps and the shortest float text, which
+    // never equal the stored values, so the list matched no row.
+    public override CollectionElementExpression BuildCollectionElementExpression(CollectionElementExpressionContext context)
+    {
+        const string culture = "global::System.Globalization.CultureInfo.InvariantCulture";
+        const string text = "global::System.String";
+        var value = context.ValueExpression;
+
+        if (context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime)
+        {
+            return new($"({value}).ToString(\"yyyy'-'MM'-'dd HH':'mm':'ss.FFFFFFF\", {culture})", text, true);
+        }
+
+        if (context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_Single)
+        {
+            // The driver stores a float as a double. The widened value keeps the same digits.
+            return new($"(global::System.Double)({value})", "global::System.Double", true);
+        }
+
+        return context.ProviderTypeName switch
+        {
+            "global::System.Guid" => new($"({value}).ToString(\"D\").ToUpperInvariant()", text, true),
+            "global::System.DateTimeOffset" => new($"({value}).ToString(\"yyyy'-'MM'-'dd HH':'mm':'ss.FFFFFFFzzz\", {culture})", text, true),
+            // The driver writes whole seconds without a fraction and any other time with seven digits.
+            "global::System.TimeOnly" => new(
+                $"(({value}) switch {{ var _t when _t.Ticks % 10000000L == 0 => _t.ToString(\"HH':'mm':'ss\", {culture}), var _t => _t.ToString(\"HH':'mm':'ss.fffffff\", {culture}) }})",
+                text,
+                true),
+            "byte[]" => new($"(({value}) is {{ }} _b ? global::System.Convert.ToHexString(_b) : null)", text, true),
+            _ => base.BuildCollectionElementExpression(context),
+        };
+    }
 
     public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
 
