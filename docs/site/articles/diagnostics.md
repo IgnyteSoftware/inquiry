@@ -1457,3 +1457,15 @@ Failing shape: `[InquiryForeignKey(typeof(Category), "CategoryId")]` when the pr
 Smallest correction: Name the property with `nameof(Category.CategoryID)`. To reference a table and column by their physical names, use the string form, `[InquiryForeignKey("Category", "CATEGORY_ID")]`.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ117
+
+UseDatabaseDefault column has no default in generated DDL. Default: warning, enabled.
+
+Trigger: A non-nullable column sets `UseDatabaseDefault = true` with no `DefaultExpression`, on an entity that generates DDL. Generated inserts omit the column, and the generated table declares it `NOT NULL` with no `DEFAULT`, so every generated insert into that table fails. Key, generated, computed and database-generated token columns are excluded, and so is a nullable column, which stores `NULL`.
+
+Failing shape: `[InquiryColumn(UseDatabaseDefault = true)] public string Status { get; set; } = "";`
+
+Smallest correction: Add the default, `[InquiryColumn(DefaultExpression = "'New'", UseDatabaseDefault = true)]`. If the deployed table has its own default and Inquiry does not create the table, set `GenerateDdl = false` on the entity's `[InquiryTable]`.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

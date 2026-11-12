@@ -553,4 +553,52 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source, enableDiagnostics: _enableDdlLints);
         Assert.DoesNotContain(result.RunResult.Diagnostics, d => d.Id == "INQ067");
     }
+
+    // ---- INQ117: UseDatabaseDefault with no default in generated DDL (#545) -----------------------
+
+    private static string DatabaseDefaultSource(string columnArguments, string propertyType = "string", string tableOptions = "") => $$"""
+        using Inquiry.Entities;
+
+        namespace Demo;
+
+        [InquiryTable("Ticket"{{tableOptions}})]
+        public sealed class Ticket
+        {
+            [InquiryKey(IsGenerated = true)]
+            public long Id { get; set; }
+
+            [InquiryColumn({{columnArguments}})]
+            public {{propertyType}} Status { get; set; } = default!;
+        }
+        """;
+
+    // An empty DefaultExpression emits no DEFAULT either.
+    [Theory]
+    [InlineData("UseDatabaseDefault = true")]
+    [InlineData("UseDatabaseDefault = true, DefaultExpression = \"\"")]
+    public void NonNullableDatabaseDefaultWithoutDefaultExpressionReportsINQ117AsWarning(string columnArguments)
+    {
+        var result = RunGenerator(DatabaseDefaultSource(columnArguments));
+
+        // Every provider generator in the harness reports the schema lints, so the ID repeats.
+        var warning = result.RunResult.Diagnostics.First(static d => d.Id == "INQ117");
+        Assert.Equal(DiagnosticSeverity.Warning, warning.Severity);
+        var message = warning.GetMessage(CultureInfo.InvariantCulture);
+        Assert.Contains("'Ticket' column 'Status'", message);
+        Assert.Contains("Add a DefaultExpression", message);
+        // The warning points at the UseDatabaseDefault argument, on the attribute's line.
+        Assert.Equal(10, warning.Location.GetLineSpan().StartLinePosition.Line);
+    }
+
+    [Theory]
+    [InlineData("UseDatabaseDefault = true", "string?", "")]
+    [InlineData("DefaultExpression = \"'New'\", UseDatabaseDefault = true", "string", "")]
+    [InlineData("UseDatabaseDefault = true", "string", ", GenerateDdl = false")]
+    [InlineData("Length = 20", "string", "")]
+    public void DatabaseDefaultThatCanSucceedDoesNotReportINQ117(string columnArguments, string propertyType, string tableOptions)
+    {
+        var result = RunGenerator(DatabaseDefaultSource(columnArguments, propertyType, tableOptions));
+
+        Assert.DoesNotContain(result.RunResult.Diagnostics, static d => d.Id == "INQ117");
+    }
 }

@@ -88,7 +88,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryColumn]
                 public string Action { get; set; } = string.Empty;
 
-                [InquiryColumn(UseDatabaseDefault = true)]
+                [InquiryColumn(DefaultExpression = "CURRENT_TIMESTAMP", UseDatabaseDefault = true)]
                 public DateTime CreatedAt { get; set; }
 
                 [InquiryColumn(Computed = "Action + ' done'")]
