@@ -1378,7 +1378,8 @@ public sealed class EvidenceContractTests
 #if DEBUG
             // The test host and its referenced contracts are Debug assemblies. Production Release runs
             // retain DefaultConfig's optimization validator; only this Debug smoke execution disables it.
-            config.WithOptions(config.Options | ConfigOptions.DisableOptimizationsValidator);
+            // Fully qualified: a using directive for this one name would be unused in Release, which fails the build.
+            config.WithOptions(config.Options | BenchmarkDotNet.Configs.ConfigOptions.DisableOptimizationsValidator);
 #endif
             var summary = BenchmarkRunner.Run<TinyAllocationBenchmark>(config);
             Assert.DoesNotContain(summary.ValidationErrors, static error => error.IsCritical);
