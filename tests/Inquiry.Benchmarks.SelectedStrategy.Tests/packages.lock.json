@@ -764,13 +764,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.Oracle": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Oracle.EntityFrameworkCore": "[9.23.26300, )",
           "Oracle.ManagedDataAccess.Core": "[23.26.300, )",
-          "Testcontainers.Oracle": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.Oracle": "[1.16.0, )",
+          "Testcontainers.Oracle": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.postgresql": {
@@ -1101,6 +1105,16 @@
         "contentHash": "w2IRQKgNmGfg0oD+tnml/m1/Xmuu89iU28zNokh5uUj6a8eno7qjMVlflw6MGOL6gwSSiGdTrOPp1zZpp3XEkQ==",
         "dependencies": {
           "MySqlConnector": "2.6.1",
+          "RepoDb": "1.16.0"
+        }
+      },
+      "RepoDb.Oracle": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "5jKsozC/CWaeLDhXYEH6haZbxRpYifzVIZ3mCa5ni5mQNXZb3qEwK3x8hQeEOkle9aK3+cEa/sWKhFpHwHkPDQ==",
+        "dependencies": {
+          "Oracle.ManagedDataAccess.Core": "23.9.1",
           "RepoDb": "1.16.0"
         }
       },
@@ -1895,13 +1909,17 @@
         "dependencies": {
           "BenchmarkDotNet": "[0.15.8, )",
           "Dapper": "[2.1.89, )",
+          "Dapper.AOT": "[1.1.0, )",
           "Ignyte.Inquiry": "[1.0.0, )",
           "Ignyte.Inquiry.Oracle": "[1.0.0, )",
           "Microsoft.EntityFrameworkCore": "[9.0.22, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.11, )",
           "Oracle.EntityFrameworkCore": "[9.23.26300, )",
           "Oracle.ManagedDataAccess.Core": "[23.26.300, )",
-          "Testcontainers.Oracle": "[4.14.0, )"
+          "RepoDb": "[1.16.0, )",
+          "RepoDb.Oracle": "[1.16.0, )",
+          "Testcontainers.Oracle": "[4.14.0, )",
+          "linq2db": "[6.5.0, )"
         }
       },
       "inquiry.benchmarks.postgresql": {
@@ -2181,6 +2199,16 @@
         "contentHash": "w2IRQKgNmGfg0oD+tnml/m1/Xmuu89iU28zNokh5uUj6a8eno7qjMVlflw6MGOL6gwSSiGdTrOPp1zZpp3XEkQ==",
         "dependencies": {
           "MySqlConnector": "2.6.1",
+          "RepoDb": "1.16.0"
+        }
+      },
+      "RepoDb.Oracle": {
+        "type": "CentralTransitive",
+        "requested": "[1.16.0, )",
+        "resolved": "1.16.0",
+        "contentHash": "5jKsozC/CWaeLDhXYEH6haZbxRpYifzVIZ3mCa5ni5mQNXZb3qEwK3x8hQeEOkle9aK3+cEa/sWKhFpHwHkPDQ==",
+        "dependencies": {
+          "Oracle.ManagedDataAccess.Core": "23.9.1",
           "RepoDb": "1.16.0"
         }
       },

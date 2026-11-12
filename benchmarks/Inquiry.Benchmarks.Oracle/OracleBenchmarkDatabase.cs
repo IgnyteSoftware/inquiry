@@ -6,6 +6,7 @@ using Inquiry.Oracle.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Oracle.ManagedDataAccess.Client;
+using RepoDb;
 using Testcontainers.Oracle;
 
 namespace Inquiry.Benchmarks.Oracle;
@@ -62,6 +63,12 @@ public sealed class OracleBenchmarkDatabase : IAsyncDisposable
         {
             if (_container is null)
             {
+                // RepoDB sets OracleConfiguration.BindByName for the process, and ODP.NET rejects that
+                // after the first connection opens (ORA-50099). Every benchmark class gets its first
+                // connection here, so the RepoDB leg works whichever class runs first. Every other leg
+                // binds by name already.
+                GlobalConfiguration.Setup().UseOracle();
+
                 // Use the XE image whose service name (XEPDB1) matches what Testcontainers.Oracle bakes
                 // into its connection string. The oracle-free image serves FREEPDB1 instead, so its
                 // generated connection string fails with ORA-12514 (service not known).
