@@ -70,10 +70,12 @@ pushes, force-pushes, branch deletion, and merge commits are not part of the sup
 Repository rulesets (applied by [`eng/configure-branch-protection.ps1`](https://github.com/IgnyteSoftware/inquiry/blob/main/eng/configure-branch-protection.ps1))
 protect `main`: linear history, an up-to-date branch, resolved conversations, one human approval with
 code-owner review and last-push approval, and the final `ci-required-v1` status pinned to GitHub Actions.
-A second ruleset governs `v*` release tags: creation is restricted to organization admins (pushing a
-release tag *is* the release act), and update/deletion are blocked for everyone, so a release tag is
-immutable once pushed. Organization admins are a named, audited bypass actor (a solo-maintainer
-necessity — remove that bypass once a second reviewer exists). Copilot and other automated reviews
+Two more rulesets govern `v*` release tags. The first restricts creation to organization admins
+(pushing a release tag *is* the release act). The second blocks update and deletion for everyone and
+has no bypass actor, so a release tag is immutable once pushed. Organization admins are a named,
+audited bypass actor on the `main` ruleset and on tag creation (a solo-maintainer necessity — remove
+that bypass once a second reviewer exists). A bypass actor bypasses every rule of its ruleset, which
+is why the update and deletion rules are in a ruleset of their own. Copilot and other automated reviews
 supplement, but do not replace, the human approval. These are repository-setting requirements: the
 checked-in workflow cannot enforce them by itself.
 
