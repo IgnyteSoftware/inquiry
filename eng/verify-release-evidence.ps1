@@ -38,6 +38,10 @@ if ($evidence.schemaVersion -cne 'inquiry-package-consumers-v1' -or $evidence.st
 $expectedChecks = @(
     'net10.0/sqlite/docs-recipe-getting-started'
     'net10.0/sqlite/docs-recipe-partial-updates'
+    'net10.0/sqlite/docs-recipe-entity-mapping'
+    'net10.0/sqlite/docs-recipe-aggregates'
+    'net10.0/sqlite/docs-recipe-n-plus-one'
+    'net10.0/sqlserver/docs-sample-schema-evolution'
     foreach ($tfm in @('net10.0', 'net11.0')) {
         foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) { "$tfm/$provider/analyzer-and-generated-crud-build" }
         "$tfm/sqlite/crud"
