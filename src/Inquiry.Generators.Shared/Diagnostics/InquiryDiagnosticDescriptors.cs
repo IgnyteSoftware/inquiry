@@ -544,13 +544,14 @@ internal static class InquiryDiagnosticDescriptors
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq065");
 
     // INQ066 (Info — a DDL "lint", off by default): a nullable column that also carries a non-null
-    // DEFAULT expression. New rows always receive the default, so NULL is unreachable via INSERT —
-    // keeping the column nullable adds ambiguity (does NULL mean "never set" or "explicitly cleared"?)
-    // without serving a purpose. Either drop the default or make the column NOT NULL.
+    // DEFAULT expression. Generated inserts send the property value, so a null property stores NULL.
+    // The default applies only to an insert that omits the column (UseDatabaseDefault = true, or
+    // handwritten SQL). The pairing is usually unintentional: make the column NOT NULL, or drop the
+    // default if NULL is meaningful.
     public static readonly DiagnosticDescriptor NullableColumnWithDefault = new(
         "INQ066",
         "Nullable column has a default value",
-        "Entity '{0}' column '{1}' is nullable but carries a DEFAULT expression. New rows will never be NULL — consider making it NOT NULL, or remove the default if NULL is intentional.",
+        "Entity '{0}' column '{1}' is nullable but carries a DEFAULT expression. Generated inserts send the property value, so a null property stores NULL. The default applies only when an insert omits the column (UseDatabaseDefault = true, or handwritten SQL). Make the column NOT NULL if it must always have a value, or remove the default if NULL is intentional.",
         "Inquiry",
         DiagnosticSeverity.Info,
         isEnabledByDefault: false,

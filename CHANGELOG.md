@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The optional lint `INQ066` no longer says that new rows of a nullable column with a `DefaultExpression` can never be `NULL`. Generated inserts send the property value, so a `null` property stores `NULL`, and the default applies only when an insert omits the column. The message now says so. When the lint fires is unchanged.
 - Table names, column names and other attribute strings that contain a line break, tab, NUL or another control character now produce generated code that compiles. Before, a line break produced a compile error in the generated file, and a NUL stopped the generator with warning `CS8785`, so the store had no generated code. The generated string constants keep the exact value you wrote. In the generated documentation, the characters that would break it show as C# escapes, such as `\0`.
 - A SQL Server stored procedure with a `byte[]` `OutputParameter` now runs. Before, SqlClient rejected the call with "the Size property has an invalid size of 0".
 - `[InquiryCount]` applies its `[InquiryWhere]` criteria, including criteria from a specification attribute. Before, a criterion that takes no value, such as `Compare.IsNull`, compiled and the method counted every row. A criterion that takes a value, such as `[InquiryWhere("CategoryID")]` on `CountInCategoryAsync(int? categoryID, ...)`, now binds to the method parameter like a predicate select. Before, it reported `INQ006`. Counts without criteria are unchanged.

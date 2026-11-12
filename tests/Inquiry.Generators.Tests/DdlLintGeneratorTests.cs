@@ -382,7 +382,11 @@ public sealed partial class InquiryGeneratorTests
 
         var lint = Assert.Single(result.RunResult.Diagnostics, d => d.Id == "INQ066");
         Assert.Equal(DiagnosticSeverity.Info, lint.Severity);
-        Assert.Contains("Locale", lint.GetMessage(CultureInfo.CurrentCulture));
+        var message = lint.GetMessage(CultureInfo.CurrentCulture);
+        Assert.Contains("Locale", message);
+        Assert.Contains("a null property stores NULL", message);
+        Assert.Contains("only when an insert omits the column", message);
+        Assert.DoesNotContain("never be NULL", message);
     }
 
     [Fact]

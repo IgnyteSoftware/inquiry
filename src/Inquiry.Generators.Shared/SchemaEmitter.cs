@@ -502,9 +502,10 @@ internal static class SchemaEmitter
                         InquiryDiagnosticDescriptors.DecimalWithoutPrecision, location: null, entity.TableName, column.PropertyName, builder.DialectName));
                 }
 
-                // INQ066: a nullable column with a DEFAULT expression — new rows always receive the
-                // default, so NULL is unreachable via INSERT and the nullable + default pairing is
-                // likely unintentional. Computed columns are excluded (their value is always derived).
+                // INQ066: a nullable column with a DEFAULT expression. Generated inserts send the
+                // property value, so a null property stores NULL and the default applies only when an
+                // insert omits the column. The pairing is likely unintentional. Computed columns are
+                // excluded (their value is always derived).
                 if (column.IsNullable && column.DefaultExpression is not null &&
                     !column.IsKey && string.IsNullOrEmpty(column.ComputedExpression))
                 {
