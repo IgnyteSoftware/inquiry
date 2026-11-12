@@ -237,7 +237,7 @@ public sealed partial class InquiryGeneratorTests
                 [InquiryColumn]
                 public string Name { get; set; } = string.Empty;
 
-                [InquiryColumn(UseDatabaseDefault = true)]
+                [InquiryColumn(DefaultExpression = "CURRENT_TIMESTAMP", UseDatabaseDefault = true)]
                 public DateTime CreatedAt { get; set; }
             }
 

@@ -13,7 +13,7 @@ public sealed class DefaultedItem
     [InquiryColumn]
     public string Name { get; set; } = string.Empty;
 
-    [InquiryColumn(UseDatabaseDefault = true)]
+    [InquiryColumn(DefaultExpression = "'New'", UseDatabaseDefault = true)]
     public string Status { get; set; } = string.Empty;
 }
 

@@ -467,6 +467,7 @@ internal static class SchemaEmitter
     /// Reports advisory DDL "lints" (Info severity, off by default — raise them in <c>.editorconfig</c>
     /// to enforce). INQ061: unindexed FK column. INQ062: decimal without explicit precision. INQ066:
     /// nullable column with a DEFAULT expression. INQ067: unbounded string column (no Length or SqlType).
+    /// Also reports INQ117, a warning that is on by default.
     /// </summary>
     private static void ReportSchemaLints(SourceProductionContext context, IReadOnlyList<EntityData> entities, SqlBuilder builder)
     {
@@ -511,6 +512,19 @@ internal static class SchemaEmitter
                 {
                     context.ReportDiagnostic(Diagnostic.Create(
                         InquiryDiagnosticDescriptors.NullableColumnWithDefault, location: null, entity.TableName, column.PropertyName));
+                }
+
+                // INQ117: generated inserts omit a UseDatabaseDefault column, and this DDL creates it
+                // NOT NULL with no DEFAULT, so those inserts fail. Only entities that generate DDL
+                // reach this method.
+                if (column.UseDatabaseDefault && !column.IsNullable && string.IsNullOrEmpty(column.DefaultExpression) &&
+                    !column.IsKey && !column.IsGenerated && !column.IsDatabaseGeneratedToken &&
+                    string.IsNullOrEmpty(column.ComputedExpression))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        InquiryDiagnosticDescriptors.DatabaseDefaultWithoutDefaultExpression,
+                        column.UseDatabaseDefaultLocation?.ToLocation() ?? column.Location?.ToLocation(),
+                        entity.TableName, column.PropertyName));
                 }
 
                 // INQ067: a string column with no Length and no SqlType override — it takes the

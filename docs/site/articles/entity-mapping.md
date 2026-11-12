@@ -371,7 +371,8 @@ the column out, such as an import script. The one runtime use is on MySQL, which
 `UseDatabaseDefault = true` controls the statements: generated inserts leave the column out. It does
 not create a default. With generated DDL, also set `DefaultExpression`. With a table you do not own,
 the deployed table must have the default. Without one, the database stores `NULL` in a nullable
-column and rejects the insert for a `NOT NULL` column.
+column and rejects the insert for a `NOT NULL` column. The build warns about that last case when
+Inquiry generates the table (`INQ117`).
 
 To stamp a row with the database clock, combine both, with an expression for your provider:
 
