@@ -2135,7 +2135,12 @@ internal sealed class InquiryRequestPipeline : IInquiryRequestPipeline
                     await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 }
             }
-            catch (Exception exception) { cleanupExceptions = InquiryCleanup.Add(cleanupExceptions, exception); }
+            catch
+            {
+                // This rollback is best effort. A driver rejects it after a failed commit or on a lost
+                // connection, and that error must not turn the primary failure into an aggregate.
+                // Disposal below still releases the transaction.
+            }
             try
             {
                 if (transaction is not null)

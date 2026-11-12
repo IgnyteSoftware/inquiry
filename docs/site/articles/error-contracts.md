@@ -45,6 +45,15 @@ multiple failures produce `AggregateException`. On paths that capture both execu
 failures, the aggregate contains the original execution exception first, followed by cleanup failures.
 Inspect inner exceptions to retain provider error identity.
 
+A transaction's cleanup rollback is best effort. Inquiry attempts it when a transaction is disposed
+without a commit, and after `CommitAsync` or `RollbackAsync` fails. Generated batch methods that own
+their transaction attempt it after a failure too. Drivers reject that rollback when the transaction
+has already ended or the connection is lost, so its failure is not reported. A failed `CommitAsync`
+or `RollbackAsync` therefore throws the provider's exception itself, and disposal does not replace an
+exception that is already unwinding through `await using` or `ExecuteInTransactionAsync`. A cleanup
+rollback that does not finish within five seconds still reports `TimeoutException`. Failures to
+dispose the transaction or the connection are still reported as described above.
+
 A grid keeps the first read failure. If a later `DisposeAsync` then fails, it throws
 `AggregateException` with the read failure first, followed by the cleanup failures, even when only one
 cleanup step failed. The read failure includes a cancellation: the `OperationCanceledException`, with the
