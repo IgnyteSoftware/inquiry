@@ -1,8 +1,8 @@
 # Generator build and edit evidence
 
-Issue #396 remains open. This work supplies repeatable measurements and a
-[comparison research note](generator-benchmark-comparisons.md). It does not accept
-a supported consumer scale, numeric release budget, or candidate disposition.
+This page supplies repeatable measurements and a
+[comparison research note](generator-benchmark-comparisons.md). 1.0.0 ships without a numeric
+clean-build or edit-latency threshold; see [Release disposition](#release-disposition).
 
 ## Fixture and measurement boundaries
 
@@ -68,8 +68,8 @@ hashes. It is not a clean-host candidate report.
 At 500 entities, fresh generation allocated 115,800,482 bytes, the unrelated edit
 9,873,755 bytes, the model edit 115,127,414 bytes, and the relation/filter edit
 115,231,091 bytes. Allocation and latency deserve separate review. These numbers
-do not prove which generator stage causes the work; larger restructuring remains
-in #182.
+do not prove which generator stage causes the work. They were taken before the
+restructure in #182, which the next section measures.
 
 The real-build report contains 45 samples. Median wall times in milliseconds from
 three independent project directories are below. The control always ran before
@@ -148,16 +148,23 @@ using an exported microbenchmark report; a zero process exit code alone is not
 enough. Require 15 build samples for each size: three repetitions of five
 scenarios, including the emitted-source control. The default three sizes give 45.
 
-## Remaining release evidence
+## Release disposition
 
-- Approve the consumer scale and shape. The research proposes 100 entities as
-  the primary workload, with 25 small and 500 stress cases; that is not accepted.
-- Collect matched Dapper AOT command/materializer comparisons and a
-  relationship-rich consumer on a quiet reference host. Entity counts alone do
-  not equalize ORM generation work.
-- Propose absolute and baseline-regression limits from those measurements, then
-  obtain acceptance. No portable industry latency limit was found.
-- Verify the candidate against accepted limits with retained raw evidence.
-  Capture actual editor behavior separately before making any IDE latency claim.
+The maintainers decided on 2026-11-05 that 1.0.0 ships without a numeric clean-build or
+edit-latency threshold. That decision is the candidate-release disposition for #396. Benchmark
+results are for internal testing and do not gate the release. New results are not committed. The
+reports under `benchmarks/evidence/issue-396-generator` and `issue-182-generator` are from before
+that decision and are kept as history.
 
-Diagnostic results and research do not close #396 or waive #393.
+The generator restructure in #182 gives each materializer and each store its own incremental
+output. Its last slice built real consumers at 10, 100, 1,000 and 5,000 entities, three
+repetitions each, with every generated file checked against fresh generation. The summary is on
+#182. The run was on a busy development machine, so it is diagnostic, not a clean-host report.
+
+These items were proposed during the research and are not part of 1.0.0:
+
+- A matched Dapper AOT command and materializer comparison, and a relationship-rich consumer on a
+  quiet reference host. Entity counts alone do not equalize ORM generation work.
+- Absolute and baseline-regression limits. No portable industry latency limit was found.
+- Measurements of actual editor behavior. Command-line builds run the generator from scratch and
+  do not show the incremental benefit; make no IDE latency claim from them.

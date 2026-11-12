@@ -1,6 +1,6 @@
 # Generator benchmark comparisons
 
-Research for #396, collected 2026-09-09. These are recommendations for measurement and release review, not accepted 1.0 limits or evidence that Inquiry has passed them.
+Research for #396, collected 2026-09-09. These are recommendations for measurement and release review, not accepted 1.0 limits or evidence that Inquiry has passed them. The maintainers later decided that 1.0.0 ships without a numeric threshold; see the [release disposition](generator-build-evidence.md#release-disposition). The recommendations below are kept as written.
 
 ## Recommendation
 
@@ -8,7 +8,7 @@ Use 25, 100, and 500 entities **per consumer project**. Treat 100 as the propose
 
 Use Dapper AOT as the closest external comparison for generating database command and row-reading code. Use Mapperly to check source-generator measurement methods. Use EF Core for model complexity and consumer-build context, but do not borrow its application-startup numbers as generator latency limits.
 
-The sources reviewed do not establish a portable millisecond budget for a 25-, 100-, or 500-entity generator. Collect matched measurements before proposing numeric limits. #396 must remain open until the supported workload and candidate acceptance limits are approved and verified.
+The sources reviewed do not establish a portable millisecond budget for a 25-, 100-, or 500-entity generator. Collect matched measurements before proposing numeric limits. When this was written, #396 was to stay open until the supported workload and candidate acceptance limits were approved and verified; the release disposition replaced that condition.
 
 ## What the comparisons actually measure
 
