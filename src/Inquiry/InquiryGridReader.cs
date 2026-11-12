@@ -71,13 +71,13 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             TEntity? result = null;
-            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
                 result = materializer.Materialize(_reader);
                 // Match QuerySingleOrDefaultAsync: a "single" read rejects a second row rather than silently
                 // truncating the set. SequentialAccess only forbids re-reading columns, not advancing rows, so
                 // the materializer has already consumed row 1's columns and this Read just probes for a second.
-                if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                if (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
                 {
                     throw new InvalidOperationException(
                         "ReadSingleOrDefaultAsync expected zero or one row, but the result set returned multiple rows.");
@@ -110,7 +110,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             TEntity? result = null;
-            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
                 result = materializer.Materialize(_reader);
             }
@@ -142,7 +142,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         try
         {
             materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
-            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            while (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
                 action(materializer.Materialize(_reader));
             }
@@ -174,7 +174,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
         EnsureResultSet();
         try
         {
-            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            while (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
                 onRow(_reader);
             }
@@ -251,7 +251,7 @@ public sealed class InquiryGridReader : IAsyncDisposable
             bool hasRow;
             try
             {
-                hasRow = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+                hasRow = await ReadRowAsync(cancellationToken).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -305,18 +305,13 @@ public sealed class InquiryGridReader : IAsyncDisposable
         {
             materializer = InquiryMaterializerBinding.Bind<TEntity, TMaterializer>(materializer, _reader);
             rows = InquiryBufferedList<TEntity>.Start(-1);
-            while (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            while (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
                 InquiryBufferedList<TEntity>.Add(ref rows, materializer.Materialize(_reader));
             }
 
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return InquiryBufferedList<TEntity>.Complete(rows);
-        }
-        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
-        {
-            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
-            throw normalized;
         }
         catch (Exception exception)
         {
@@ -339,18 +334,13 @@ public sealed class InquiryGridReader : IAsyncDisposable
         try
         {
             var result = default(T);
-            if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (await ReadRowAsync(cancellationToken).ConfigureAwait(false))
             {
-                result = ScalarConvert.From<T>(_reader.GetValue(0));
+                result = ScalarConvert.From<T>(GetScalarValue(cancellationToken));
             }
 
             await AdvanceAsync(cancellationToken).ConfigureAwait(false);
             return result!;
-        }
-        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
-        {
-            await FailAsync(normalized, cancellationToken).ConfigureAwait(false);
-            throw normalized;
         }
         catch (Exception exception)
         {
@@ -359,10 +349,53 @@ public sealed class InquiryGridReader : IAsyncDisposable
         }
     }
 
-    // Generated paged results read their page and COUNT here (#403). Before, the COUNT ran through the
-    // scalar path, so cancellation must surface the same way: as a cancellation with the caller's token,
-    // whether the provider reports its own token or a native error. Like the batch boundary, this checks
-    // the token when the exception is caught, so it adds no work per row.
+    // Every provider call reports cancellation as the single-command paths do: as a cancellation with
+    // the caller's token, whether the provider reports its own token or a native error. Materializers
+    // and callbacks run outside these calls, so their failures surface unchanged. The token is checked
+    // only when an exception is caught, and a row that is already available completes synchronously,
+    // so this adds no work per row.
+    private ValueTask<bool> ReadRowAsync(CancellationToken cancellationToken)
+    {
+        Task<bool> read;
+        try
+        {
+            read = _reader.ReadAsync(cancellationToken);
+        }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            throw normalized;
+        }
+
+        return read.IsCompletedSuccessfully
+            ? new ValueTask<bool>(read)
+            : new ValueTask<bool>(AwaitProviderAsync(read, cancellationToken));
+    }
+
+    // GetValue is a driver call too. The conversion that follows it is not, so it stays outside.
+    private object GetScalarValue(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return _reader.GetValue(0);
+        }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            throw normalized;
+        }
+    }
+
+    private static async Task<bool> AwaitProviderAsync(Task<bool> providerCall, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await providerCall.ConfigureAwait(false);
+        }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            throw normalized;
+        }
+    }
+
     private static OperationCanceledException? NormalizeCancellation(Exception exception, CancellationToken cancellationToken)
         => exception switch
         {
@@ -394,7 +427,19 @@ public sealed class InquiryGridReader : IAsyncDisposable
     }
 
     private async Task AdvanceAsync(CancellationToken cancellationToken)
-        => _hasResultSet = await _reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
+    {
+        Task<bool> next;
+        try
+        {
+            next = _reader.NextResultAsync(cancellationToken);
+        }
+        catch (Exception exception) when (NormalizeCancellation(exception, cancellationToken) is { } normalized)
+        {
+            throw normalized;
+        }
+
+        _hasResultSet = await AwaitProviderAsync(next, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// One-shot gate for a streaming read. Async iterators hand out a fresh state machine on every

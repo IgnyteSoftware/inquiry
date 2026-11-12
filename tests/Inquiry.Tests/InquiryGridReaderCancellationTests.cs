@@ -7,9 +7,9 @@ namespace Inquiry.Tests;
 /// <summary>
 /// Generated paged results read their page and total through <see cref="InquiryGridReader"/> (#403). A
 /// provider can report cancellation with its own token, or with a native error such as SqlClient's
-/// "operation cancelled by user". The list and scalar reads must rethrow either one as a cancellation with
-/// the caller's token, as the single-command list and scalar paths do. A read failure must also survive a
-/// failing disposal, as it does on those paths.
+/// "operation cancelled by user". Every grid read must rethrow either one as a cancellation with the
+/// caller's token, as the single-command paths do (#542). A read failure must also survive a failing
+/// disposal, as it does on those paths.
 /// </summary>
 public sealed class InquiryGridReaderCancellationTests
 {
@@ -100,6 +100,164 @@ public sealed class InquiryGridReaderCancellationTests
         Assert.Same(disposeFailure, exception.InnerExceptions[1]);
     }
 
+    public enum GridRead
+    {
+        SingleOrDefault,
+        GeneratedSingleOrDefault,
+        ForEach,
+        Rows,
+        Stream,
+        List,
+    }
+
+    public static TheoryData<GridRead, bool> EveryReadAtBothFailurePoints()
+    {
+        var data = new TheoryData<GridRead, bool>();
+        foreach (var read in Enum.GetValues<GridRead>().Where(static read => read != GridRead.List))
+        {
+            data.Add(read, false);
+            data.Add(read, true);
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryReadAtBothFailurePoints))]
+    public async Task EveryReadRethrowsForeignCancellationWithTheCallerToken(GridRead read, bool failOnNextResult)
+    {
+        using var caller = new CancellationTokenSource();
+        await using var grid = await CreateGridAsync(caller, failOnRead: !failOnNextResult, failOnNextResult);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ReadGridAsync(grid, read, caller.Token));
+
+        Assert.Equal(caller.Token, exception.CancellationToken);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryReadAtBothFailurePoints))]
+    public async Task EveryReadRethrowsANativeErrorAfterCancellationAsCallerCancellation(GridRead read, bool failOnNextResult)
+    {
+        using var caller = new CancellationTokenSource();
+        var native = new InvalidOperationException("Operation cancelled by user.");
+        await using var grid = await CreateGridAsync(caller, failOnRead: !failOnNextResult, failOnNextResult, native);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ReadGridAsync(grid, read, caller.Token));
+
+        Assert.Equal(caller.Token, exception.CancellationToken);
+        Assert.Same(native, exception.InnerException);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryReadAtBothFailurePoints))]
+    public async Task EveryReadLeavesADriverErrorUnchangedWithoutCancellation(GridRead read, bool failOnNextResult)
+    {
+        using var caller = new CancellationTokenSource();
+        var driverError = new InvalidOperationException("Connection lost.");
+        await using var grid = await CreateGridAsync(caller, failOnRead: !failOnNextResult, failOnNextResult, driverError, cancel: false);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ReadGridAsync(grid, read, caller.Token));
+
+        Assert.Same(driverError, exception);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadScalarAsyncNormalizesAFailureFromReadingTheValue(bool nativeError)
+    {
+        using var caller = new CancellationTokenSource();
+        Exception? native = nativeError ? new InvalidOperationException("Operation cancelled by user.") : null;
+        await using var grid = await CreateGridAsync(caller, failOnRead: false, failOnNextResult: false, native, failOnGetValue: true);
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => grid.ReadScalarAsync<long>(caller.Token));
+
+        Assert.Equal(caller.Token, exception.CancellationToken);
+        if (nativeError)
+        {
+            Assert.Same(native, exception.InnerException);
+        }
+    }
+
+    // A materializer or callback failure is not a provider error, so it is never relabelled as a
+    // cancellation, even when the token is already cancelled.
+    [Theory]
+    [InlineData(GridRead.SingleOrDefault)]
+    [InlineData(GridRead.GeneratedSingleOrDefault)]
+    [InlineData(GridRead.ForEach)]
+    [InlineData(GridRead.Rows)]
+    [InlineData(GridRead.Stream)]
+    [InlineData(GridRead.List)]
+    public async Task ApplicationFailureAfterCancellationSurfacesUnchanged(GridRead read)
+    {
+        using var caller = new CancellationTokenSource();
+        await using var grid = await CreateGridAsync(caller, failOnRead: false, failOnNextResult: false);
+
+        var exception = await Assert.ThrowsAsync<FormatException>(() => ReadGridAsync(grid, read, caller.Token, failInApplicationCode: true));
+
+        Assert.Equal("bad row", exception.Message);
+    }
+
+    [Fact]
+    public async Task StreamCancelledBetweenRowsRethrowsWithTheCallerToken()
+    {
+        using var caller = new CancellationTokenSource();
+        await using var grid = await CreateGridAsync(
+            caller, failOnRead: true, failOnNextResult: false, cancel: false,
+            commandText: "SELECT 1 UNION ALL SELECT 2; SELECT 3;", rowsBeforeReadFailure: 1);
+        var rows = new List<int>();
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+        {
+            await foreach (var box in grid.ReadStreamAsync<Box, BoxMaterializer>(default, caller.Token))
+            {
+                rows.Add(box.Value);
+                await caller.CancelAsync();
+            }
+        });
+
+        Assert.Equal([1], rows);
+        Assert.Equal(caller.Token, exception.CancellationToken);
+    }
+
+    private static async Task ReadGridAsync(InquiryGridReader grid, GridRead read, CancellationToken cancellationToken, bool failInApplicationCode = false)
+    {
+        var materializer = new BoxMaterializer(failInApplicationCode);
+        switch (read)
+        {
+            case GridRead.SingleOrDefault:
+                await grid.ReadSingleOrDefaultAsync<Box, BoxMaterializer>(materializer, cancellationToken);
+                break;
+            case GridRead.GeneratedSingleOrDefault:
+                await grid.ReadGeneratedSingleOrDefaultAsync<Box, BoxMaterializer>(materializer, cancellationToken);
+                break;
+            case GridRead.ForEach:
+                await grid.ReadForEachAsync<Box, BoxMaterializer>(default, _ => ThrowIf(failInApplicationCode), cancellationToken);
+                break;
+            case GridRead.Rows:
+                await grid.ReadRowsAsync(_ => ThrowIf(failInApplicationCode), cancellationToken);
+                break;
+            case GridRead.List:
+                await grid.ReadListAsync<Box, BoxMaterializer>(materializer, cancellationToken);
+                break;
+            default:
+                await foreach (var _ in grid.ReadStreamAsync<Box, BoxMaterializer>(materializer, cancellationToken))
+                {
+                    // Enumerate to the end.
+                }
+
+                break;
+        }
+    }
+
+    private static void ThrowIf(bool fail)
+    {
+        if (fail)
+        {
+            throw new FormatException("bad row");
+        }
+    }
+
     // The shape generated paged methods emit: the grid is disposed by await using after the read throws.
     private static async Task ReadThenDisposeAsync(CancellationTokenSource caller, bool scalar, bool failOnNextResult, Exception? failure, Exception disposeFailure, bool cancel)
     {
@@ -115,19 +273,19 @@ public sealed class InquiryGridReaderCancellationTests
     }
 
     // The provider sees the caller cancel, then throws with a token of its own, or a native error.
-    private static async Task<InquiryGridReader> CreateGridAsync(CancellationTokenSource caller, bool failOnRead, bool failOnNextResult, Exception? failure = null, Exception? disposeFailure = null, bool cancel = true)
+    private static async Task<InquiryGridReader> CreateGridAsync(CancellationTokenSource caller, bool failOnRead, bool failOnNextResult, Exception? failure = null, Exception? disposeFailure = null, bool cancel = true, string commandText = "SELECT 1; SELECT 2;", int rowsBeforeReadFailure = 0, bool failOnGetValue = false)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync(CancellationToken.None);
         var command = connection.CreateCommand();
-        command.CommandText = "SELECT 1; SELECT 2;";
+        command.CommandText = commandText;
         var inner = await command.ExecuteReaderAsync(CancellationToken.None);
         if (cancel)
         {
             await caller.CancelAsync();
         }
 
-        var reader = new FailingReader(inner, failOnRead, failOnNextResult, failure, disposeFailure);
+        var reader = new FailingReader(inner, failOnRead, failOnNextResult, failure, disposeFailure, rowsBeforeReadFailure, failOnGetValue);
         return new InquiryGridReader(reader, command, ownedConnection: connection, lease: null);
     }
 
@@ -136,14 +294,19 @@ public sealed class InquiryGridReaderCancellationTests
         public int Value { get; init; }
     }
 
-    private readonly struct BoxMaterializer : IInquiryEntityMaterializer<Box>
+    private readonly struct BoxMaterializer(bool fail) : IInquiryEntityMaterializer<Box>
     {
-        public Box Materialize(DbDataReader reader) => new() { Value = reader.GetInt32(0) };
+        public Box Materialize(DbDataReader reader)
+        {
+            ThrowIf(fail);
+            return new() { Value = reader.GetInt32(0) };
+        }
     }
 
-    private sealed class FailingReader(DbDataReader inner, bool failOnRead, bool failOnNextResult, Exception? failure, Exception? disposeFailure) : DbDataReader
+    private sealed class FailingReader(DbDataReader inner, bool failOnRead, bool failOnNextResult, Exception? failure, Exception? disposeFailure, int rowsBeforeReadFailure, bool failOnGetValue) : DbDataReader
     {
         private static readonly CancellationToken _foreignToken = new(canceled: true);
+        private int _rowsRead;
 
         public override object this[int ordinal] => inner[ordinal];
         public override object this[string name] => inner[name];
@@ -170,7 +333,7 @@ public sealed class InquiryGridReaderCancellationTests
         public override string GetName(int ordinal) => inner.GetName(ordinal);
         public override int GetOrdinal(string name) => inner.GetOrdinal(name);
         public override string GetString(int ordinal) => inner.GetString(ordinal);
-        public override object GetValue(int ordinal) => inner.GetValue(ordinal);
+        public override object GetValue(int ordinal) => failOnGetValue ? throw Failure() : inner.GetValue(ordinal);
         public override int GetValues(object[] values) => inner.GetValues(values);
         public override bool IsDBNull(int ordinal) => inner.IsDBNull(ordinal);
         public override bool NextResult() => inner.NextResult();
@@ -178,7 +341,7 @@ public sealed class InquiryGridReaderCancellationTests
         public override System.Collections.IEnumerator GetEnumerator() => ((System.Collections.IEnumerable)inner).GetEnumerator();
 
         public override Task<bool> ReadAsync(CancellationToken cancellationToken)
-            => failOnRead ? throw Failure() : inner.ReadAsync(CancellationToken.None);
+            => failOnRead && _rowsRead++ >= rowsBeforeReadFailure ? throw Failure() : inner.ReadAsync(CancellationToken.None);
 
         public override Task<bool> NextResultAsync(CancellationToken cancellationToken)
             => failOnNextResult ? throw Failure() : inner.NextResultAsync(CancellationToken.None);
