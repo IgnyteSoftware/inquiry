@@ -27,6 +27,18 @@ public static class InquiryTelemetryServiceCollectionExtensions
 
         foreach (var descriptor in services)
         {
+            // A repeat call configures the options of the first registration. The Aspire integration
+            // registers telemetry itself, so a later call from the application must still take effect.
+            if (descriptor.ServiceType == typeof(InquiryTelemetryOptions)
+                && descriptor.ImplementationInstance is InquiryTelemetryOptions existingOptions)
+            {
+                configure?.Invoke(existingOptions);
+                return services;
+            }
+        }
+
+        foreach (var descriptor in services)
+        {
             if (descriptor.ServiceType == typeof(InquiryTelemetryInterceptor))
             {
                 return services;
@@ -36,6 +48,7 @@ public static class InquiryTelemetryServiceCollectionExtensions
         var options = new InquiryTelemetryOptions();
         configure?.Invoke(options);
 
+        services.AddSingleton(options);
         services.AddSingleton(
             provider => new InquiryTelemetryInterceptor(options, provider.GetService<ILoggerFactory>()));
         services.AddSingleton<IInquiryCommandInterceptor>(
