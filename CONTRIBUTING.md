@@ -26,7 +26,7 @@ feature branch ──PR──▶ main ──tag vX.Y.Z-preview.N──▶ Ignyte
 3. **Write the failing test first**, then the fix/feature. Generator changes start with an
    emission test asserting the exact generated SQL/`const string`.
 4. **Open a PR into `main`.** CI must pass: build + unit + SQLite suites, NativeAOT
-   smoke, the 15-leg live-database integration matrix (5 providers × 3 TFMs), and the
+   smoke, the 10-leg live-database integration matrix (5 providers × 2 TFMs), and the
    package contract producer/verifier. At least one human review is required.
 
 ## Releases (tag-driven)

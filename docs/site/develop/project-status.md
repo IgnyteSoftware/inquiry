@@ -29,8 +29,8 @@ shared analyzer dependency). See [Design notes](design-notes.md) for the archite
 ## Target frameworks
 
 All shipped packages — the core `Inquiry` runtime, the provider runtime libraries, and the companion
-packages — target **net8.0; net9.0; net10.0**, as do the test projects; the floor is **.NET 8**.
-(EOL net6.0/net7.0 were dropped.)
+packages — target **net10.0; net11.0**, as do the test projects; the floor is **.NET 10**.
+(EOL net6.0/net7.0/net8.0/net9.0 were dropped.)
 
 ## Feature completeness
 
@@ -110,7 +110,7 @@ Every live dialect exercises the full supported feature set via a shared, linked
 Northwind stores.
 
 **For current test counts**, run the whole suite (`dotnet test`) or a single project
-(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net8.0`). The provider-restoration gate in
+(e.g. `dotnet test tests/Inquiry.MySql.Tests -f net10.0`). The provider-restoration gate in
 [#171](https://github.com/IgnyteSoftware/inquiry/issues/171) is closed. Two consecutive full CI runs
 are green at 20/20 required checks each, including every one of the 15 PostgreSQL, MySQL, MariaDB,
 SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated suites skip locally
@@ -119,11 +119,11 @@ SQL Server, and Oracle × net8.0/net9.0/net10.0 integration legs. Docker-gated s
 The normal CI workflow runs on pull requests targeting `main`, and on merge-queue events:
 **build-and-unit** (generator, runtime, and SQLite suites — no Docker), **aot-smoke** (publishes and
 runs the NativeAOT smoke app), an **integration** matrix (PostgreSQL, MySQL, MariaDB, SQL Server,
-Oracle × net8.0/net9.0/net10.0 via Testcontainers — exactly 15 required legs), **package-producer**,
+Oracle × net10.0/net11.0 via Testcontainers — exactly 10 required legs), **package-producer**,
 the independent **package-verifier**, and **docs** (strict DocFX build and local-link check). The
 optional **package-provenance** job attests the package bundle only in trusted contexts, never for fork
 pull requests. The `ci-required-v1` aggregator runs even after failures and
 fails unless all required jobs and matrix legs succeed. Direct merging has been retired; repository
 rulesets protect `main` with this context and the review requirements documented under
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89). A separate **scheduled weekly workflow**
-(`scheduled.yml`) repeats the full provider × net8.0/net9.0/net10.0 matrix every Monday.
+(`scheduled.yml`) repeats the full provider × net10.0/net11.0 matrix every Monday.

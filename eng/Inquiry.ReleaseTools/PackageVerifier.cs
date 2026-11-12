@@ -36,7 +36,7 @@ public static class PackageVerifier
         "Ignyte.Inquiry.Testing"
     ];
 
-    private static readonly string[] _requiredTfms = ["net8.0", "net9.0", "net10.0"];
+    private static readonly string[] _requiredTfms = ["net10.0", "net11.0"];
     private static readonly char[] _pathSeparators = ['/', '\\'];
     private static readonly EnumerationOptions _projectEnumerationOptions = new()
     {
@@ -78,7 +78,6 @@ public static class PackageVerifier
             Require(frameworkReferences.Distinct(StringComparer.Ordinal).Count() == frameworkReferences.Count, $"{package.Id} has duplicate framework references.");
             foreach (var pruned in package.PrunedDependencies ?? new Dictionary<string, IReadOnlyList<string>>())
             {
-                Require(frameworkReferences.Count > 0, $"{package.Id} prunedDependencies requires a framework reference to prune against.");
                 Require(package.LibTfms.Contains(pruned.Key, StringComparer.Ordinal), $"{package.Id} prunes dependencies for unknown TFM {pruned.Key}.");
                 Require(pruned.Value is not null && pruned.Value.All(id => package.Dependencies.ContainsKey(id)),
                     $"{package.Id} prunes dependencies that are not declared for {pruned.Key}.");

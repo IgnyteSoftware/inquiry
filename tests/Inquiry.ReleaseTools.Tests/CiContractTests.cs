@@ -112,11 +112,11 @@ public sealed class CiContractTests
         }
         else
         {
-            Assert.Contains("tfm: [net8.0, net9.0, net10.0]", workflow, StringComparison.Ordinal);
-            matrix["tfm"]!.AsArray()[2] = "net9.0";
+            Assert.Contains("tfm: [net10.0, net11.0]", workflow, StringComparison.Ordinal);
+            matrix["tfm"]!.AsArray()[1] = "net10.0";
             workflow = workflow.Replace(
-                "tfm: [net8.0, net9.0, net10.0]",
-                "tfm: [net8.0, net9.0, net9.0]",
+                "tfm: [net10.0, net11.0]",
+                "tfm: [net10.0, net10.0]",
                 StringComparison.Ordinal);
         }
 
@@ -164,13 +164,13 @@ public sealed class CiContractTests
     [Theory]
     [InlineData("if: always()", "if: success()")]
     [InlineData("branches: [main]", "branches: [main, prerelease]")]
-    [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0]")]
+    [InlineData("tfm: [net10.0, net11.0]", "tfm: [net10.0]")]
     [InlineData("fail-fast: false", "fail-fast: \"false\"")]
     [InlineData("name: CI", "name: &workflow-name CI")]
     [InlineData("actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", "actions/upload-artifact@v7")]
     [InlineData("if-no-files-found: error", "if-no-files-found: warn")]
     [InlineData("name: CI", "name: CI\nname: CI")]
-    [InlineData("tfm: [net8.0, net9.0, net10.0]", "tfm: [net8.0, net9.0, net10.0]\n        exclude: []")]
+    [InlineData("tfm: [net10.0, net11.0]", "tfm: [net10.0, net11.0]\n        exclude: []")]
     [InlineData("      - run: dotnet restore Inquiry.slnx", "      - run: dotnet restore Inquiry.slnx\n        continue-on-error: true")]
     [InlineData("      - run: dotnet restore Inquiry.slnx", "      - if: success()\n        run: dotnet restore Inquiry.slnx")]
     [InlineData("      - run: dotnet restore Inquiry.slnx", "      - shell: bash -c 'exit 0' {0}\n        run: dotnet restore Inquiry.slnx")]

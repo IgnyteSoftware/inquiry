@@ -21,8 +21,8 @@ public sealed record ReleasePackage(
     // DLLs live under analyzers/dotnet/cs. VerifyNupkg checks the embedded PDB and its SourceLink.
     [property: JsonRequired] IReadOnlyList<string> Analyzers,
     [property: JsonRequired] IReadOnlyList<string> FrameworkReferences,
-    // Dependencies the SDK prunes from specific TFM groups because a declared framework
-    // reference supplies them (e.g. Microsoft.Extensions.* on net10.0 via AspNetCore.App).
+    // Dependencies the SDK prunes from specific TFM groups because the target framework or a
+    // declared framework reference supplies them (e.g. Microsoft.Extensions.* on net10.0 via AspNetCore.App).
     IReadOnlyDictionary<string, IReadOnlyList<string>>? PrunedDependencies = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

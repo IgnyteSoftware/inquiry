@@ -20,14 +20,13 @@ export PATH="$DOTNET_DIR:$PATH"
 
 # Idempotent: the container image is cached after the hook completes, so skip the
 # download when the SDK is already present.
-if ! command -v dotnet >/dev/null 2>&1 || ! dotnet --list-sdks 2>/dev/null | grep -q '^10\.'; then
+if ! command -v dotnet >/dev/null 2>&1 || ! dotnet --list-sdks 2>/dev/null | grep -q '^11\.'; then
   curl -fsSL https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
   chmod +x /tmp/dotnet-install.sh
-  # SDK 10 builds every TFM in the repo (net8.0/net9.0/net10.0); the 8.0 and 9.0
-  # runtimes are additionally needed to *run* the net8.0/net9.0 test targets.
-  /tmp/dotnet-install.sh --channel 10.0 --install-dir "$DOTNET_DIR"
-  /tmp/dotnet-install.sh --channel 9.0 --runtime dotnet --install-dir "$DOTNET_DIR"
-  /tmp/dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir "$DOTNET_DIR"
+  # SDK 11 builds every TFM in the repo (net10.0/net11.0); the 10.0 runtimes are
+  # additionally needed to *run* the net10.0 test targets.
+  /tmp/dotnet-install.sh --channel 11.0 --install-dir "$DOTNET_DIR"
+  /tmp/dotnet-install.sh --channel 10.0 --runtime aspnetcore --install-dir "$DOTNET_DIR"
 fi
 
 # Persist environment for the session.

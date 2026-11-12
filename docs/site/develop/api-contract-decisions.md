@@ -230,7 +230,7 @@ This page recommends deferring it because it is additive.
    cannot reach parameters.
 3. **Add an explicit parameter reference to each method-level criterion.** Attribute order keeps
    defining the Boolean structure. The reference defines the value. C# 11 and later allow
-   `nameof(parameter)` in an attribute on the same method, and Inquiry consumers target .NET 8 or
+   `nameof(parameter)` in an attribute on the same method, and Inquiry consumers target .NET 10 or
    later, so the default language version supports it.
 4. **Infer bindings from parameter names.** Rejected. Names are not intent. A rename would change
    SQL meaning, which #386 already ruled out for method names.

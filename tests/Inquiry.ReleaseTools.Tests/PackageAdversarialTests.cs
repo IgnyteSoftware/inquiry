@@ -39,7 +39,7 @@ public sealed class PackageAdversarialTests
                     Mutate(nupkg, archive => Write(archive, "unexpected.txt", "bypass"u8));
                     break;
                 case "wrong-case":
-                    Mutate(nupkg, archive => Replace(archive, "lib/net8.0/Inquiry.dll", "Lib/net8.0/Inquiry.dll"));
+                    Mutate(nupkg, archive => Replace(archive, "lib/net10.0/Inquiry.dll", "Lib/net10.0/Inquiry.dll"));
                     break;
                 case "readme-bytes":
                     Mutate(nupkg, archive => Replace(archive, "README.md", "README.md", "not canonical"u8));
@@ -54,7 +54,7 @@ public sealed class PackageAdversarialTests
                     Mutate(nupkg, archive => ReplaceText(archive, "Ignyte.Inquiry.nuspec", "exclude=\"Build,Analyzers\"", "exclude=\"Build,Analyzers\" unexpected=\"true\""));
                     break;
                 case "pdb-dll-mismatch":
-                    Mutate(snupkg, archive => Replace(archive, "lib/net8.0/Inquiry.pdb", "lib/net8.0/Inquiry.pdb", Read(archive, "lib/net9.0/Inquiry.pdb")));
+                    Mutate(snupkg, archive => Replace(archive, "lib/net10.0/Inquiry.pdb", "lib/net10.0/Inquiry.pdb", Read(archive, "lib/net11.0/Inquiry.pdb")));
                     break;
                 case "symlink-entry":
                     Mutate(nupkg, archive => archive.GetEntry("README.md")!.ExternalAttributes = unchecked((int)0xA1FF0000));
@@ -80,7 +80,7 @@ public sealed class PackageAdversarialTests
     public void Provider_snupkg_contains_only_lib_pdbs_and_the_pair_verifies()
     {
         // The exact layout nuget.org rejected in 1.0.0-preview.6: analyzer PDBs riding in the snupkg
-        // at lib/net8.0 with no matching lib/ DLL in the nupkg. Analyzer symbols are embedded in the
+        // at lib/net10.0 with no matching lib/ DLL in the nupkg. Analyzer symbols are embedded in the
         // analyzer assemblies instead, so the snupkg must carry lib PDBs ONLY — and the unmutated
         // pair must still pass the verifier, which now checks the embedded PDBs.
         var fixture = _providerFixture.Value;
@@ -90,7 +90,7 @@ public sealed class PackageAdversarialTests
                 .Where(path => path.EndsWith(".pdb", StringComparison.Ordinal))
                 .Order(StringComparer.Ordinal).ToArray();
             Assert.Equal(
-                ["lib/net10.0/Inquiry.Sqlite.pdb", "lib/net8.0/Inquiry.Sqlite.pdb", "lib/net9.0/Inquiry.Sqlite.pdb"],
+                ["lib/net10.0/Inquiry.Sqlite.pdb", "lib/net11.0/Inquiry.Sqlite.pdb"],
                 pdbs);
         }
 
@@ -243,7 +243,7 @@ public sealed class PackageAdversarialTests
                     case "analyzer-content-not-an-analyzer":
                         // A lib assembly has an external (not embedded) PDB and a different assembly
                         // name; either property must reject it standing in for the analyzer.
-                        Replace(archive, providerAnalyzer, providerAnalyzer, Read(archive, "lib/net8.0/Inquiry.Sqlite.dll"));
+                        Replace(archive, providerAnalyzer, providerAnalyzer, Read(archive, "lib/net10.0/Inquiry.Sqlite.dll"));
                         break;
                     case "analyzer-shared-swap":
                         // Content-swapped analyzer DLLs pass every version and SourceLink check on

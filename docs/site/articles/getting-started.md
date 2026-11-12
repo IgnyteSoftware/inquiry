@@ -1,12 +1,12 @@
 # Getting started
 
 This example creates a SQLite database, inserts a shipper, and reads it back using generated store
-methods. It targets .NET 8; Inquiry also supports .NET 9 and .NET 10.
+methods. It targets .NET 10; Inquiry also supports .NET 11.
 
 ## Create the project
 
 ```bash
-dotnet new console -n InquiryGettingStarted --framework net8.0
+dotnet new console -n InquiryGettingStarted --framework net10.0
 cd InquiryGettingStarted
 dotnet add package Ignyte.Inquiry.Sqlite --prerelease
 dotnet add package Microsoft.Extensions.DependencyInjection --version 10.0.2

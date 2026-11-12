@@ -37,8 +37,9 @@ public static class BenchmarkDotNetConfigFactory
 
         var runtime = contract.RuntimeTfm switch
         {
-            "net8.0" => CoreRuntime.Core80,
             "net10.0" => CoreRuntime.Core10_0,
+            // BenchmarkDotNet 0.15.8 has no .NET 11 moniker.
+            "net11.0" => CoreRuntime.CreateForNewVersion("net11.0", ".NET 11.0"),
             _ => throw new ArgumentOutOfRangeException(nameof(contract), contract.RuntimeTfm, "Unsupported checked runtime."),
         };
         var outlierMode = contract.OutlierMode switch

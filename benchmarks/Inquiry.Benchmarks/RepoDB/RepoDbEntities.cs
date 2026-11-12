@@ -1,3 +1,4 @@
+using System.Globalization;
 using RepoDb.Attributes;
 using RepoDb.Interfaces;
 using RepoDb.Options;
@@ -48,7 +49,7 @@ public sealed class RdProduct
     [Map("CategoryID")]
     public int? CategoryID { get; set; }
 
-    [Map("UnitPrice")]
+    [Map("UnitPrice"), PropertyHandler(typeof(SqliteDecimalPropertyHandler))]
     public decimal? UnitPrice { get; set; }
 
     [Map("UnitsInStock")]
@@ -67,6 +68,19 @@ public sealed class SqliteBooleanPropertyHandler : IPropertyHandler<long, bool>
     public bool Get(long input, PropertyHandlerGetOptions options) => input != 0;
 
     public long Set(bool input, PropertyHandlerSetOptions options) => input ? 1L : 0L;
+}
+
+/// <summary>
+/// SQLite stores <c>UnitPrice</c> as REAL, and Microsoft.Data.Sqlite reads it as Double. From .NET 11 the
+/// Double to Decimal conversion is exact, so 21.99 becomes 21.98999. This handler parses the shortest
+/// round-trip text instead, the same way the ADO.NET legs read the value.
+/// </summary>
+public sealed class SqliteDecimalPropertyHandler : IPropertyHandler<double?, decimal?>
+{
+    public decimal? Get(double? input, PropertyHandlerGetOptions options)
+        => input is { } value ? decimal.Parse(value.ToString("R", CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture) : null;
+
+    public double? Set(decimal? input, PropertyHandlerSetOptions options) => (double?)input;
 }
 
 [Map("Region")]

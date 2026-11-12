@@ -96,7 +96,7 @@
     <_InquiryOracleSharedPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)src\Inquiry.Oracle.Analyzer\bin\$(Configuration)\netstandard2.0\Inquiry.Generators.Shared.dll'))</_InquiryOracleSharedPath>
   </PropertyGroup>
 
-  <!-- DocFX forces TargetFramework=net8.0 on every project it loads, including the netstandard2.0
+  <!-- DocFX forces TargetFramework=net10.0 on every project it loads, including the netstandard2.0
        analyzer projects that providers reference only to build them first. Those references add no
        public API, and loading them under the forced TFM makes DocFX warn about the shared generator
        reference, so API metadata generation drops them. -->

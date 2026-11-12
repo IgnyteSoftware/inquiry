@@ -53,7 +53,7 @@ if (args.Length != 2 || !Enum.TryParse<FixtureTier>(args[0], true, out var tier)
     await Console.Error.WriteLineAsync("Usage: Inquiry.Benchmarks.FixtureGenerator <tiny|standard|large> <output-directory>");
     await Console.Error.WriteLineAsync("       Inquiry.Benchmarks.FixtureGenerator --checksums <tiny|standard|large>");
     await Console.Error.WriteLineAsync("       Inquiry.Benchmarks.FixtureGenerator --table-checksum <tiny|standard|large> <table>");
-    await Console.Error.WriteLineAsync("       Inquiry.Benchmarks.FixtureGenerator --resolved-dependencies <provider> <developerProject|releaseCandidatePackage> <net8.0|net10.0> <rid> <selected-assets.tsv> <project.assets.json> <output-manifest> <root-id=path> [<root-id=path> ...]");
+    await Console.Error.WriteLineAsync("       Inquiry.Benchmarks.FixtureGenerator --resolved-dependencies <provider> <developerProject|releaseCandidatePackage> <net10.0|net11.0> <rid> <selected-assets.tsv> <project.assets.json> <output-manifest> <root-id=path> [<root-id=path> ...]");
     return 2;
 }
 
