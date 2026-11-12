@@ -26,6 +26,7 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
     private readonly MySqlDataSource _primaryDataSource;
     private readonly MySqlDataSource? _failoverDataSource;
     private readonly bool _ownsDataSources;
+    private readonly bool _externalDataSourceAllowsLocalInfile;
 
     private readonly Func<CancellationToken, ValueTask<DbConnection>> _openPrimary;
 
@@ -82,6 +83,7 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
     {
         _primaryDataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
         _connectionString = dataSource.ConnectionString;
+        _externalDataSourceAllowsLocalInfile = new MySqlConnectionStringBuilder(_connectionString).AllowLoadLocalInfile;
         _openPrimary = ct => OpenCoreAsync(_connectionString, ct);
     }
 
@@ -115,9 +117,25 @@ internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactor
     /// </summary>
     internal ValueTask<DbConnection> OpenBulkCopyConnectionAsync(CancellationToken cancellationToken = default)
     {
-        return _failoverConnectionString is { } failover
-            ? FailoverConnectionOpener.OpenAsync(OpenBulkCoreAsync, WithLocalInfile(_connectionString), WithLocalInfile(failover), _retryingOpener, cancellationToken)
-            : OpenBulkCoreAsync(WithLocalInfile(_connectionString), cancellationToken);
+        // An externally owned data source can hold credentials that its connection string does not,
+        // such as a password provider or a client certificate callback. When that data source already
+        // allows local infile, the bulk connection comes from it. Otherwise the flag must stay off the
+        // caller's pool, so the bulk connection opens from the connection string alone.
+        if (_externalDataSourceAllowsLocalInfile)
+        {
+            return OpenCoreAsync(_connectionString, cancellationToken);
+        }
+
+        var bulkConnectionString = WithLocalInfile(_connectionString);
+        if (_failoverConnectionString is { } failover)
+        {
+            return FailoverConnectionOpener.OpenAsync(OpenBulkCoreAsync, bulkConnectionString, WithLocalInfile(failover), _retryingOpener, cancellationToken);
+        }
+
+        // The retry policy applies to this open as it does to an ordinary one.
+        return _retryingOpener is null
+            ? OpenBulkCoreAsync(bulkConnectionString, cancellationToken)
+            : _retryingOpener.OpenAsync(token => OpenBulkCoreAsync(bulkConnectionString, token), cancellationToken);
     }
 
     private async ValueTask<DbConnection> OpenCoreAsync(string connectionString, CancellationToken cancellationToken)
