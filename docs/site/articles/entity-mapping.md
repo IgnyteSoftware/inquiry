@@ -442,7 +442,8 @@ Both forms generate the same DDL. The typed form resolves the table and schema f
 - The local and referenced names can differ. `Order.ShipVia` references `Shipper` this way.
 - An entity can reference itself, as `Employee.ReportsTo` does with `typeof(Employee)`.
 - To reference a column other than the key, or one column of a composite key, name the target
-  property: `[InquiryForeignKey(typeof(Tag), nameof(Tag.TenantId))]`.
+  property: `[InquiryForeignKey(typeof(Tag), nameof(Tag.TenantId))]`. The name is a property of the
+  target, not a column. A name that matches no property fails the build (`INQ116`).
 - The target must have `[InquiryTable]` (`INQ084`) and exactly one `[InquiryKey]` unless you name the
   property (`INQ085`).
 

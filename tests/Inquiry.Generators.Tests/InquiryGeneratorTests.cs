@@ -2674,7 +2674,8 @@ public sealed partial class InquiryGeneratorTests
         SyntaxTreeOptionsProvider? syntaxTreeOptionsProvider = null,
         IReadOnlyDictionary<string, ReportDiagnostic>? additionalDiagnosticOptions = null,
         bool includeNoGridGenerator = false,
-        LanguageVersion languageVersion = LanguageVersion.CSharp10)
+        LanguageVersion languageVersion = LanguageVersion.CSharp10,
+        string? referencedAssemblySource = null)
     {
         var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(languageVersion);
         var trees = new List<Microsoft.CodeAnalysis.SyntaxTree> { CSharpSyntaxTree.ParseText(source, parseOptions) };
@@ -2723,10 +2724,22 @@ public sealed partial class InquiryGeneratorTests
             compilationOptions = compilationOptions.WithSyntaxTreeOptionsProvider(syntaxTreeOptionsProvider);
         }
 
+        var references = GetReferences();
+        if (referencedAssemblySource is not null)
+        {
+            // Entities that another assembly declares reach the generator as metadata, not as source.
+            references.Add(CSharpCompilation.Create(
+                "InquiryGeneratorReferencedTests",
+                [CSharpSyntaxTree.ParseText(referencedAssemblySource, parseOptions)],
+                GetReferences(),
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable))
+                .ToMetadataReference());
+        }
+
         var compilation = CSharpCompilation.Create(
             "InquiryGeneratorConsumerTests",
             trees,
-            GetReferences(),
+            references,
             compilationOptions);
 
         // Each provider's analyzer ships a self-contained generator; drive all three to mirror a

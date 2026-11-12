@@ -1402,7 +1402,17 @@ internal static class EntityProcessor
         {
             // Column override is a property name on the target — resolve its mapped column name.
             var resolvedColumn = ResolveTargetColumn(targetType, columnOverride);
-            return (schema, tableName, resolvedColumn ?? columnOverride);
+            if (resolvedColumn is null)
+            {
+                diagnostics?.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.TypedForeignKeyTargetMissingProperty,
+                    location,
+                    targetType.Name,
+                    columnOverride));
+                return (null, null, null);
+            }
+
+            return (schema, tableName, resolvedColumn);
         }
 
         // Default: resolve the target's [InquiryKey] property.
@@ -1443,14 +1453,14 @@ internal static class EntityProcessor
 
     private static string? ResolveTargetColumn(INamedTypeSymbol targetType, string propertyName)
     {
-        foreach (var member in targetType.GetMembers().OfType<IPropertySymbol>())
+        // nameof(Target.Property) also compiles for an inherited property. The most derived
+        // declaration wins, as it does in C#.
+        for (var type = targetType; type is not null; type = type.BaseType)
         {
-            if (!string.Equals(member.Name, propertyName, StringComparison.Ordinal))
+            if (type.GetMembers(propertyName).OfType<IPropertySymbol>().FirstOrDefault() is { } property)
             {
-                continue;
+                return ResolveMappedColumnName(property);
             }
-
-            return ResolveMappedColumnName(member);
         }
 
         return null;

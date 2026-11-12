@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -63,6 +63,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ113         Concurrency-token store shape   (upsert on a token entity, or a database-generated token the dialect cannot emit) [IN USE]
     //   INQ114         Stored-procedure provider support (dialect without procedures, Oracle RETURN, or an Oracle read-back ODP.NET cannot bind) [IN USE]
     //   INQ115         Unapplied criteria             ([InquiryWhere] or a specification on an operation that does not apply criteria) [IN USE]
+    //   INQ116         Typed foreign key property     ([InquiryForeignKey(typeof(T), "Name")] names no property of T) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -659,6 +660,15 @@ internal static class InquiryDiagnosticDescriptors
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq085");
+
+    public static readonly DiagnosticDescriptor TypedForeignKeyTargetMissingProperty = new(
+        "INQ116",
+        "Typed foreign key names a property the target does not have",
+        "[InquiryForeignKey(typeof({0}), \"{1}\")] names '{1}', but '{0}' has no property with that name. The second argument is a property name on the target, not a column name. Use nameof({0}.Property), or the string overload to name a table and column directly.",
+        "Inquiry",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq116");
 
     public static readonly DiagnosticDescriptor EnumAsStringNonEnum = new(
         "INQ036",

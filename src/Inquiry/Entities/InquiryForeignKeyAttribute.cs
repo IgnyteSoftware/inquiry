@@ -51,6 +51,12 @@ public sealed class InquiryForeignKeyAttribute : InquiryColumnAttribute
     /// Initializes a new instance of the <see cref="InquiryForeignKeyAttribute"/> class using a
     /// type reference with an explicit referenced column (property name on the target entity).
     /// </summary>
+    /// <remarks>
+    /// <paramref name="referencedColumn"/> is the name of a property of
+    /// <paramref name="referencedType"/>, declared or inherited, and the generator uses that property's mapped column. Pass it
+    /// with <c>nameof</c>. A name that matches no property is build error INQ116, even when it equals a
+    /// column name. To name a table and column directly, use a string constructor.
+    /// </remarks>
     public InquiryForeignKeyAttribute(Type referencedType, string referencedColumn)
     {
         ReferencedType = referencedType ?? throw new ArgumentNullException(nameof(referencedType));
