@@ -21,9 +21,8 @@ namespace Inquiry.Benchmarks;
 /// </summary>
 /// <remarks>
 /// Deliberately a separate class rather than extra <c>[Params]</c> on <see cref="EagerGridBenchmarks"/>.
-/// The #87 regression gate matches baseline cases by exact <c>FullName</c> including parameters, and a
-/// miss is reported as Skip rather than Fail — so adding a parameter there would silently rename all
-/// twelve committed cases and disable that class's gate with no failure signal.
+/// Adding a parameter there would rename all twelve of its cases, so earlier results would no longer
+/// line up with new ones.
 /// </remarks>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]

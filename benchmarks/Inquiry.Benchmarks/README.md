@@ -1,7 +1,8 @@
 # Inquiry.Benchmarks
 
 BenchmarkDotNet harness comparing basic CRUD performance of Inquiry, EF Core, Dapper, and
-raw ADO.NET. Two suites:
+raw ADO.NET. Benchmark results are for internal testing: they are not committed, and nothing gates a
+change or a release on them. Two suites:
 
 - **In-process (SQLite)** — `CustomerCrudBenchmarks` / `ProductCrudBenchmarks` / `ShipperCrudBenchmarks`.
   The definitive *library-overhead* comparison: with the database in-process, the per-call time and
@@ -73,7 +74,7 @@ ADO.NET baseline deliberately runs *separate* queries and stitches in memory, wh
 single multi-result-set command — so a `Ratio` or `Alloc Ratio` below 1.00 is the architectural
 difference being measured, not baseline drift. Do not "fix" it.
 
-Ratios in the committed `EagerGridBenchmarks` baseline (`Grid_Inquiry` ÷ `Grid_AdoNet`, median): 0.97 at
+Ratios from an earlier `EagerGridBenchmarks` run (`Grid_Inquiry` ÷ `Grid_AdoNet`, median): 0.97 at
 (1000, 4), 0.99 at (1000, 100), 0.97 at (100000, 4), and 0.92 at (100000, 100). The post-#70 default-job
 remeasurement for [#265](https://github.com/IgnyteSoftware/inquiry/issues/265) no longer reproduces the
 former 1.15 dense-100k outlier. `EagerLoadingBenchmarks` is **not** exempt — it runs 1.11–1.13× and the
@@ -142,7 +143,7 @@ plain and its tuned or source-generated form:
 
 Every leg reads the same three columns, opens and disposes its own connection or context per call, and
 buffers `SelectAll` into a list. `GlobalSetup` checks that every leg returns the same row count and the same
-point-read row, and throws if one does not. The class is not in the regression-gate inventory.
+point-read row, and throws if one does not.
 
 Dapper.AOT intercepts only methods marked `[DapperAot]`, so the plain `_Dapper` legs in this and every other
 class stay reflection-based. The project enables the interceptors with
@@ -262,8 +263,7 @@ none of them tracked the workload:
 
 The cause is `ServerGarbageCollection` (on for these projects): working set reflects the GC's reservation
 policy, which scales with core count and available RAM, not with what the benchmark allocates. No reset
-point fixes that. **`Allocated` is the actionable memory signal** — it reproduces to the byte and is
-gated by the #87 regression budget.
+point fixes that. **`Allocated` is the actionable memory signal** — it reproduces to the byte.
 
 ### Generated-command hot path (`ParameterBindingBenchmarks` / `GeneratedCommandPipelineBenchmarks`)
 
@@ -516,8 +516,8 @@ dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServ
 dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.SqlServer -- --collection-evidence artifacts/benchmarks/sqlserver-collection-evidence.json
 ```
 
-Until checked historical baselines and a stable benchmark runner are added under the broader benchmark
-roadmap, local output and collected server evidence are non-release-gating and non-authoritative.
+Local output and collected server evidence are for internal testing. They are not committed and do not
+gate a release.
 
 ## Reading the results
 
