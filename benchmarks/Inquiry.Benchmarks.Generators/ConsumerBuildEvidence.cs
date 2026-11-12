@@ -11,7 +11,7 @@ internal static class ConsumerBuildEvidence
 {
     private static readonly JsonSerializerOptions _reportJsonOptions = new() { WriteIndented = true };
 
-    public static async Task RunAsync(string destination)
+    public static async Task RunAsync(string destination, int[] entityCounts)
     {
         var root = Path.GetFullPath(destination);
         if (Directory.Exists(root) || File.Exists(root))
@@ -31,7 +31,7 @@ internal static class ConsumerBuildEvidence
         };
         var analyzer = typeof(Inquiry.Sqlite.Analyzer.InquirySqliteGenerator).Assembly.Location;
         var shared = Path.Combine(Path.GetDirectoryName(analyzer)!, "Inquiry.Generators.Shared.dll");
-        foreach (var count in new[] { 25, 100, 500 })
+        foreach (var count in entityCounts)
         {
             var fixture = new GeneratorFixture(count);
             for (var repetition = 1; repetition <= 3; repetition++)

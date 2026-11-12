@@ -139,13 +139,14 @@ dotnet run -c Release -f net10.0 --project benchmarks/Inquiry.Benchmarks.Generat
 ```
 
 Use a new directory for build evidence. The command refuses to overwrite an
-existing path. It retains consumer sources and build logs there; archive them
+existing path. It builds 25, 100 and 500 entities; pass a comma-separated list
+after the directory, such as `10,100,1000,5000`, to build other sizes. It retains consumer sources and build logs there; archive them
 with `build-evidence.json`. Both commands also support `-f net11.0`. Omit
 `--job Short` for the default BenchmarkDotNet configuration. `--job Dry` checks
 execution only. Require 30 populated statistics and memory records before
 using an exported microbenchmark report; a zero process exit code alone is not
-enough. Require 45 build samples: three sizes, three repetitions, and five
-scenarios including the emitted-source control.
+enough. Require 15 build samples for each size: three repetitions of five
+scenarios, including the emitted-source control. The default three sizes give 45.
 
 ## Remaining release evidence
 
