@@ -13,7 +13,7 @@
     <!-- The schema evolution sample uses DbUp. dbup-core is pinned so the API the guide cites is the one restored. -->
     <PackageVersion Include="dbup-core" Version="6.1.1" />
     <PackageVersion Include="dbup-sqlserver" Version="7.2.0" />
-    <PackageVersion Include="linq2db" Version="6.5.0" />
+    <PackageVersion Include="linq2db" Version="6.5.1" />
     <!-- RepoDB packages share one version. RepoDb.Oracle needs RepoDb 1.16.0, and the 1.16 adapters fit the driver pins below. -->
     <PackageVersion Include="RepoDb" Version="1.16.0" />
     <PackageVersion Include="RepoDb.MySqlConnector" Version="1.16.0" />
@@ -21,57 +21,57 @@
     <PackageVersion Include="RepoDb.PostgreSql" Version="1.16.0" />
     <PackageVersion Include="RepoDb.Sqlite.Microsoft" Version="1.16.0" />
     <PackageVersion Include="RepoDb.SqlServer" Version="1.16.1" />
-    <PackageVersion Include="JsonSchema.Net" Version="9.4.1" />
+    <PackageVersion Include="JsonSchema.Net" Version="9.6.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.3" />
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.1.1" />
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.22" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.22" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.22" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.22" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="9.23.26300" />
-    <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.300" />
+    <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.400" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.MariaDb" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.MySql" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.Oracle" Version="4.14.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.MariaDb" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.Oracle" Version="4.16.0" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.15" />
     <!-- Transitive pin: SSH.NET is pulled by Testcontainers and fixes GHSA-q939-rpr3-3284
          (CVE-2026-48798), which affects versions through 2025.1.0. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <!-- Transitive pin: overrides SQLitePCLRaw.lib.e_sqlite3 2.1.11 (CVE-2025-6965 / GHSA-2m69-gcr7-jv3q)
          pulled by Microsoft.Data.Sqlite / EF Core Sqlite. Remove once those ship a patched SQLitePCLRaw. -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
-    <PackageVersion Include="System.Configuration.ConfigurationManager" Version="10.0.11" />
-    <PackageVersion Include="System.Data.OleDb" Version="10.0.11" />
-    <PackageVersion Include="System.Data.Odbc" Version="10.0.11" />
-    <!-- Transitive pin: Microsoft.Data.SqlClient 7.0.3 and Oracle.ManagedDataAccess.Core 23.26.300 pull
-         System.Security.Cryptography.Pkcs 8.0.1 / 9.0.13 (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7). Remove
+    <PackageVersion Include="System.Configuration.ConfigurationManager" Version="10.0.15" />
+    <PackageVersion Include="System.Data.OleDb" Version="10.0.15" />
+    <PackageVersion Include="System.Data.Odbc" Version="10.0.15" />
+    <!-- Transitive pin: Microsoft.Data.SqlClient 7.1.1 and Oracle.ManagedDataAccess.Core 23.26.400 pull
+         System.Security.Cryptography.Pkcs 9.0.18 / 8.0.1 (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7). Remove
          once both ship against a patched Pkcs. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="Xunit.SkippableFact" Version="1.5.85" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- Build-time tooling (applied via Directory.Build.props) -->
     <!-- Update this intentionally with the analyzer/toolchain policy. Do not put Version on PackageReference. -->
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.34.0.3385" />
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.400" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.404" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
   </ItemGroup>
 
@@ -92,11 +92,11 @@
   <!-- Transitive pinning turns a pinned transitive package into a direct dependency of every package that
        pulls it in, so the hosting versions stay scoped to the projects that reference them. -->
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire'">
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.0" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire.Tests'">
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
   </ItemGroup>
 </Project>
