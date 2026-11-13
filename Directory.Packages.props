@@ -71,7 +71,7 @@
     <!-- Update this intentionally with the analyzer/toolchain policy. Do not put Version on PackageReference. -->
     <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.34.0.3385" />
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.404" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
     <PackageVersion Include="MinVer" Version="7.0.0" />
   </ItemGroup>
 
