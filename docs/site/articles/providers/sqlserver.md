@@ -34,7 +34,7 @@ services.AddInquirySqlServer(
 | Boolean | `BIT` |
 | String | `NVARCHAR(MAX)` (or sized per `[InquiryColumn(Length = N)]`) |
 | Soft-delete literal | `[IsDeleted] = 0` |
-| IN binding | `col IN (SELECT [Value] FROM @param)` (table-valued parameters); integer lists of up to 16 values bind as padded scalar parameters (see [Prepared statements](../features/prepared-statements.md#caveats)) |
+| IN binding | `col IN (SELECT [Value] FROM @param)` (table-valued parameters), or `col IN (SELECT [value] FROM OPENJSON(@param) WITH ([value] <column type> '$'))` when the criterion opts into [JSON binding](#in-lists-without-table-types); integer lists of up to 16 values bind as padded scalar parameters either way (see [Prepared statements](../features/prepared-statements.md#caveats)) |
 | Full-text search | `WHERE FREETEXT(([col1], [col2]), @query)` (requires a full-text catalog + index) |
 | JSON (`[InquiryJson]`) | Stored as `NVARCHAR(MAX)` (serialized text); native JSON only via explicit `[InquiryColumn(SqlType = "...")]` override. JSON-path querying renders `JSON_VALUE([col], '$.path')` |
 | Update-returning | `OUTPUT … INTO @_out; SELECT … FROM @_out` (trigger-safe) |
@@ -57,6 +57,44 @@ services.AddInquirySqlServer(
 - **TVPs ignore `MaxBatchSize`:** a TVP-bound collection (`Compare.In` or a stored-procedure `TvpTypeName` parameter) accepts any `IEnumerable<T>` and is sent whole, as one parameter in one command. `InquiryOptions.MaxBatchSize` sizes entity-collection insert and update chunks only. It is not an input-size limit, so check the collection size before the call if your application needs one. See [Batch operations](../features/batch-operations.md#maxbatchsize-is-not-an-input-limit).
 - **Custom pipeline/direct binder lifetime:** generated stores need no special handling. A custom pipeline or direct caller of the generated-support `InquiryTvpParameter.Bind` API must invoke `Inquiry.Commands.InquiryCommandResources.Dispose(dbCommand)` before disposing the command/connection. If execution and cleanup both fail, retain the execution failure as the first `AggregateException.InnerExceptions` entry and append cleanup failures in disposal order; do not let a `finally` cleanup replace the operation failure.
 - **Cancellation boundary:** enumeration failures before execution do not send the statement. Once SqlClient sends a request, cancellation, timeout, transport failure, or a broken connection can leave autocommit outcome unknown; use an explicit transaction and confirm rollback before claiming atomicity. Synchronous `IEnumerable<T>.MoveNext()` cannot be interrupted by a cancellation token, and cleanup occurs after SqlClient stops consuming it.
+
+## IN lists without table types
+
+By default, a `Compare.In` list of more than 16 integers, or of any other type, binds as a table-valued
+parameter. That needs the generated `Inquiry_Tvp_*` type in the database, with `EXECUTE` and `REFERENCES`
+granted to the application. If your database must not hold Inquiry-owned objects, bind the list as JSON
+instead:
+
+```csharp
+// Every Compare.In criterion in this assembly.
+[assembly: Inquiry.SqlServer.SqlServerInListBinding(InListBinding.Json)]
+
+// Or one criterion. InListBinding.TableValuedParameter keeps the table type when the assembly default is JSON.
+[InquirySelectAllByPredicate, InquiryWhere("Code", Compare.In, InListBinding = InListBinding.Json)]
+public partial Task<IReadOnlyList<Product>> ByCodesAsync(IReadOnlyList<string> codes, CancellationToken ct = default);
+```
+
+The generated SQL is `[Code] IN (SELECT [value] FROM OPENJSON(@Code) WITH ([value] NVARCHAR(40) '$'))`, and
+the list is sent as one `nvarchar(max)` JSON array.
+
+- **No artifact:** a criterion that uses JSON adds no type to `ProviderArtifactsDdl` or
+  `ProviderArtifactsValidationSql`. When no criterion in the assembly uses a table type, the generated
+  schema has neither constant.
+- **Typed as the column:** the `WITH` clause gives each element the column's own SQL type, from its
+  facets or its explicit `SqlType`, such as `UNIQUEIDENTIFIER`, `DATETIME2(3)` or `DECIMAL(21,5)`. The
+  comparison then uses the column's type and collation, not `nvarchar`, as it does with a table type.
+  Temporal values are truncated to the column scale and `datetime` values are rounded to its 1/300 s grid,
+  as SqlClient does for a table-valued parameter. `byte[]` values are sent as base64, which `OPENJSON` decodes.
+- **Same rules otherwise:** lists of up to 16 integers still bind as scalar parameters, `Compare.NotIn`
+  still expands to scalar parameters, and null or empty lists match no rows.
+- **Compatibility level 130 or later:** `OPENJSON` needs SQL Server 2016 or later with database
+  compatibility level 130 or higher. Azure SQL Database and Azure SQL Managed Instance support it.
+- **Query plans:** SQL Server uses a fixed row estimate for `OPENJSON`, whatever the list length. For a
+  table-valued parameter it uses the row count of the call that compiled the plan. Both shapes keep one
+  cached plan for every list length. For very large
+  lists that join large tables, compare the plans and keep the table type on the criteria where it is
+  faster. JSON also costs some CPU to serialize and parse the list, which the table type streams instead.
+  Like a table type, the JSON parameter is not limited by `MaxBatchSize` or the 2,100-parameter limit.
 
 ## Testing
 

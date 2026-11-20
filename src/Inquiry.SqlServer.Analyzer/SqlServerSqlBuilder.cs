@@ -73,6 +73,17 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
         => quotedColumn + " IN (SELECT [Value] FROM " + parameterName + ")";
 
+    // InListBinding: Default = 0, TableValuedParameter = 1, Json = 2.
+    internal override bool UsesJsonInList(int requestedBinding)
+        => requestedBinding == 2 || (requestedBinding == 0 && DefaultInListBinding == 2);
+
+    // The WITH clause types each element as the column's own SQL type, so the column's collation and type rules apply.
+    protected override string RenderInCollection(SqlPredicate predicate, string column)
+        => predicate.UsesJsonCollection
+            ? column + " IN (SELECT [value] FROM OPENJSON(" + ParameterName(predicate.ParameterName!) + ") WITH ([value] "
+                + SqlServerTvpResolver.JsonElementDdl(predicate.Column) + " '$'))"
+            : base.RenderInCollection(predicate, column);
+
     /// <inheritdoc />
     public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
 
@@ -81,6 +92,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
     {
+        if (context.Resolution.TransportArguments is { } jsonArguments)
+        {
+            return $"global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, {jsonArguments});";
+        }
+
         var artifact = context.Resolution.Artifact
             ?? throw new System.InvalidOperationException("A successful SQL Server TVP resolution must include an artifact.");
         return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";

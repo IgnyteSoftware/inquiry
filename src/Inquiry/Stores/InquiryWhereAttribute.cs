@@ -83,6 +83,14 @@ public sealed class InquiryWhereAttribute : Attribute
     public string? JsonPath { get; set; }
 
     /// <summary>
+    /// Gets or sets how a <see cref="Compare.In"/> criterion sends its collection on SQL Server.
+    /// <see cref="Stores.InListBinding.Default"/> (the default) uses the assembly's
+    /// <c>[assembly: Inquiry.SqlServer.SqlServerInListBinding]</c> setting, or a generated table type when
+    /// the assembly sets none. Other operators and other providers ignore it.
+    /// </summary>
+    public InListBinding InListBinding { get; set; }
+
+    /// <summary>
     /// Gets or sets the name of the method parameter that supplies this criterion's value, usually
     /// written as <c>nameof(parameter)</c>. For <see cref="Compare.Between"/> and
     /// <see cref="Compare.NotBetween"/> it names the lower bound. For <see cref="Compare.In"/> and
