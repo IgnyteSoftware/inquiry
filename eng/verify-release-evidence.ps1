@@ -18,8 +18,8 @@ if ($ArtifactId -cnotmatch '^[0-9]+$' -or $ArtifactDigest -cnotmatch '^[0-9a-f]{
 $root = Split-Path -Parent $PSScriptRoot
 $manifest = Get-Content -Raw (Join-Path $root 'eng/release-manifest.json') | ConvertFrom-Json
 $stable = $Version -ceq $manifest.packageVersion
-if (-not $stable -and $Version -cnotmatch ('^' + [regex]::Escape($manifest.packageVersion) + '-preview\.[0-9]+$')) {
-    throw 'The release version must match the manifest or its numbered preview.'
+if (-not $stable -and $Version -cnotmatch ('^' + [regex]::Escape($manifest.packageVersion) + '-(preview|rc)\.[0-9]+$')) {
+    throw 'The release version must match the manifest or its numbered preview or release candidate.'
 }
 if ($stable) {
     foreach ($package in $manifest.packages) {
@@ -46,11 +46,13 @@ $expectedChecks = @(
         foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) { "$tfm/$provider/analyzer-and-generated-crud-build" }
         "$tfm/sqlite/crud"
         "$tfm/companions"
+        "$tfm/sqlite/journeys"
     }
     foreach ($probe in @('companion-newer-nu1107', 'core-older-nu1605', 'core-newer-nu1608-warning', 'core-newer-nu1608-warnings-as-errors', 'coordinated-restores')) {
         "net10.0/version-mismatch/$probe"
     }
     'net10.0/linux-x64/nativeaot-crud'
+    'net10.0/linux-x64/nativeaot-journeys'
 )
 if (@(Compare-Object ($expectedChecks | Sort-Object) ($evidence.checks | Sort-Object)).Count -ne 0) {
     throw 'Package consumer checks are incomplete.'
