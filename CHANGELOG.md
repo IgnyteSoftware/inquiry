@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** The generated `AddInquiryGeneratedStores()` extension and its class, `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Every assembly that generates stores emitted the same public class, so a library that generates stores and references another one, such as a web project that references a core data library, failed to build with `CS0436` or `CS0121` when it called the method from its own registration method. Now each library's call registers its own stores, and a host that references several libraries calls each library's registration method without ambiguity. A host that called a referenced library's generated method directly now fails with `CS1061`. To upgrade, add a public registration method with a unique name to that library and call it from the host, as the [library registration guide](docs/site/articles/library-registration.md) describes.
 
+### Fixed
+
+- On .NET 10, `Ignyte.Inquiry.Aspire` now depends on the Microsoft.Extensions 10.0.15 packages instead of 11.0.0. Before, a .NET 10 application that referenced it got Microsoft.Extensions 11.0.0, which overrode the application's own 10.0 versions. Only the .NET 11 dependencies of OpenTelemetry 1.21.0 need version 11. The .NET 11 target still depends on Microsoft.Extensions 11.0.0. OpenTelemetry 1.21.0 still brings System.Diagnostics.DiagnosticSource 11.0.0 on both targets.
+
 ## [1.0.0-rc.1] - 2026-11-20
 
 ### Added

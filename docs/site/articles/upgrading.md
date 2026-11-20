@@ -18,8 +18,9 @@ remove or change them. See [Support](https://github.com/IgnyteSoftware/inquiry/b
   with `NU1107` or `NU1605`, or warns with `NU1608`.
 - `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb` and `Ignyte.Inquiry.Aspire` depend on MySqlConnector
   3.0.0. If your own code uses MySqlConnector, check its 3.0 release notes.
-- `Ignyte.Inquiry.Aspire` depends on the Microsoft.Extensions 11.0.0 packages, which OpenTelemetry 1.21.0
-  needs. The other packages still depend on Microsoft.Extensions 10.0.15.
+- On .NET 11, `Ignyte.Inquiry.Aspire` depends on the Microsoft.Extensions 11.0.0 packages, which
+  OpenTelemetry 1.21.0 needs there. On .NET 10, it and the other packages depend on Microsoft.Extensions
+  10.0.15. `1.0.0-rc.1` used 11.0.0 on both targets.
 - If you upgrade from `1.0.0-preview.10` or earlier: `SqliteInquiryFixture` moved to the
   `Ignyte.Inquiry.Sqlite.Testing` package and the `Inquiry.Sqlite.Testing` namespace in
   `1.0.0-preview.11`. Add that package and change the `using` directive.
