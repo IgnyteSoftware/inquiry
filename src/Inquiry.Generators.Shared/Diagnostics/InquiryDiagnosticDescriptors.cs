@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116, INQ117. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ118. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -65,6 +65,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ115         Unapplied criteria             ([InquiryWhere] or a specification on an operation that does not apply criteria) [IN USE]
     //   INQ116         Typed foreign key property     ([InquiryForeignKey(typeof(T), "Name")] names no property of T) [IN USE]
     //   INQ117         Database default without DDL default (non-nullable UseDatabaseDefault column with no DefaultExpression in generated DDL) [IN USE]
+    //   INQ118         Set-based modified stamp       ([InquiryUpdate(StampModified = true)] also assigns a modified-audit column) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1136,6 +1137,12 @@ internal static class InquiryDiagnosticDescriptors
         "Stored-procedure method '{0}' cannot be generated for the '{1}' dialect: {2}",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq114");
+
+    public static readonly DiagnosticDescriptor StampModifiedColumnAssigned = new(
+        "INQ118", "StampModified update also assigns a stamped column",
+        "Store method '{0}' sets StampModified = true and also assigns the modified-audit column '{1}'. The generated update stamps that column itself. Remove the parameter or [InquirySet] assignment for it, or remove StampModified.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq118");
 
     public static readonly DiagnosticDescriptor WhereCriteriaNotSupported = new(
         "INQ115", "Operation does not support InquiryWhere criteria",

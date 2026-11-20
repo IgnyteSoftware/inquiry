@@ -13,4 +13,14 @@ namespace Inquiry.Stores;
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryUpdateAttribute : Attribute
 {
+    /// <summary>
+    /// Gets or sets a value indicating whether a set-based update (one with
+    /// <see cref="InquiryWhereAttribute"/> criteria) also writes the entity's
+    /// <see cref="Inquiry.Entities.InquiryModifiedAtAttribute"/> and
+    /// <see cref="Inquiry.Entities.InquiryModifiedByAttribute"/> columns. The generated SQL sets them to
+    /// <c>UtcNow</c> and <see cref="Inquiry.InquiryAuditContext.CurrentUser"/>, as an entity update does,
+    /// so the method takes no parameters for them. The default is <see langword="false"/>, which leaves
+    /// the generated SQL unchanged. Entity updates always stamp these columns and ignore this property.
+    /// </summary>
+    public bool StampModified { get; set; }
 }

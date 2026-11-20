@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `[InquiryUpdate(StampModified = true)]` makes a set-based update, one with `[InquiryWhere]` criteria, also write the entity's `[InquiryModifiedAt]` and `[InquiryModifiedBy]` columns with `UtcNow` and `InquiryAuditContext.CurrentUser`, as entity updates do. The method takes no parameters for those columns, so a call can no longer forget them and leave a stale stamp. `[InquirySet]` expression updates stamp the same way. Without the property, generated SQL is unchanged. `INQ118` is a new build error for a method that opts in and also assigns a modified column through a parameter or `[InquirySet]`.
+
 ## [1.0.0-rc.1] - 2026-11-20
 
 ### Added

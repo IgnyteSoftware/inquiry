@@ -81,6 +81,21 @@ internal sealed class SetBinding
     public bool UsesProviderType { get; }
 }
 
+/// <summary>A modified-* auditing column that a set-based update stamps, and its SQL parameter name.</summary>
+internal sealed class StampBinding
+{
+    public StampBinding(ColumnData column, string sqlParameterName)
+    {
+        Column = column;
+        SqlParameterName = sqlParameterName;
+    }
+
+    public ColumnData Column { get; }
+
+    /// <summary>The logical bind name, without the dialect sigil.</summary>
+    public string SqlParameterName { get; }
+}
+
 /// <summary>
 /// A <c>SelectAllByPredicate</c> method's criteria resolved against the entity: the
 /// <see cref="SqlPredicate"/> list handed to the <see cref="SqlBuilder"/> and the parallel parameter
@@ -104,6 +119,9 @@ internal sealed class ResolvedPredicatePlan
 
     /// <summary>The method-parameter index of each plain SET column, in SET-column order.</summary>
     public IReadOnlyList<int> SetParameterIndexes { get; init; } = System.Array.Empty<int>();
+
+    /// <summary>The modified-* auditing columns a <c>StampModified</c> update writes after its SET values.</summary>
+    public IReadOnlyList<StampBinding> StampBindings { get; init; } = System.Array.Empty<StampBinding>();
 
     /// <summary>For an offset-paged select, the logical bind name of the offset. Null otherwise.</summary>
     public string? OffsetParameterName { get; init; }

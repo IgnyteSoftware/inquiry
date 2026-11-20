@@ -1335,6 +1335,19 @@ internal static class StoreOperationEmitter
             }
         }
 
+        foreach (var stamp in plan.StampBindings)
+        {
+            // A timestamp stamp is never null. A user stamp is null when no ambient user is set.
+            var stampNullable = stamp.Column.IsModifiedBy && stamp.Column.Type.IsNullable;
+            source.AppendLine($"                var _s{pi} = {AuditStampValue(stamp.Column)};");
+            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+            source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(stamp.SqlParameterName))}\";");
+            AppendColumnParameterMetadata(source, stamp.Column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(stamp.Column, $"_s{pi}", sqlBuilder, stampNullable)};");
+            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+            pi++;
+        }
+
         // Filter parameters precede the predicate bindings for the same reason as the predicate-select
         // binder: an IN/NOT IN expansion budgets against the parameters already on the command.
         if (filterBinder is not null)

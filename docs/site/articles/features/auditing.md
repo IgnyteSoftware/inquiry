@@ -63,6 +63,30 @@ using (InquiryAuditContext.BeginScope(httpContext.User.Identity?.Name))
 
 In ASP.NET Core apps, the `Ignyte.Inquiry.AspNetCore` package wraps this in ready-made middleware — `app.UseInquiryAuditContext()` opens the scope per request, defaulting the user to the `ClaimTypes.NameIdentifier` claim (register it after `UseAuthentication`; pass a `Func<HttpContext, string?>` to resolve the user differently).
 
+## Set-based updates
+
+A set-based update (`[InquiryUpdate]` with `[InquiryWhere]` criteria) does not stamp by default, so its
+generated SQL stays the same as before. Set `StampModified = true` to make it write the
+`[InquiryModifiedAt]` and `[InquiryModifiedBy]` columns the way an entity update does. The method then
+takes no parameters for them:
+
+```csharp
+[InquiryUpdate(StampModified = true)]
+[InquiryWhere(nameof(Member.Id))]
+public partial Task<int> SetStatusAsync(string status, long id, CancellationToken ct = default);
+```
+
+```sql
+-- SQL Server, where Member.TStamp is [InquiryModifiedAt] and LastUpdatedBy is [InquiryModifiedBy]
+UPDATE [Member] SET [Status] = @Status, [TStamp] = @TStamp, [LastUpdatedBy] = @LastUpdatedBy WHERE [Id] = @Id
+```
+
+The timestamp is `UtcNow` and the user is `InquiryAuditContext.CurrentUser`, read when the command
+binds its parameters. `[InquirySet]` expression updates stamp the same way. Created columns are never
+written. A method that sets `StampModified = true` and also assigns a modified column, through a
+parameter or `[InquirySet]`, reports [INQ118](../diagnostics.md#inq118). On an entity without modified
+columns the property has no effect, and entity updates always stamp.
+
 ## Scope disposal
 
 Dispose nested scopes before their parent. Out-of-order disposal throws
@@ -80,7 +104,7 @@ same rules.
 
 - A timestamp column must be `DateTime`/`DateTimeOffset`; a user column must be `string` (nullable allowed). Combining either with a key, `IsGenerated`, `UseDatabaseDefault`, `[InquirySoftDelete]`, or `[InquiryConcurrencyToken]` is a build-time error (`INQ049` for timestamps, `INQ055` for users). At most one of each per entity (`INQ050` / `INQ056`).
 - Timestamps are generated **client-side in UTC**; user values come from `InquiryAuditContext.CurrentUser` (null when no scope is open). For database-clock stamping, map an ordinary column with `[InquiryColumn(DefaultExpression = ..., UseDatabaseDefault = true)]` instead. `DefaultExpression` alone still sends the property value. See [Database defaults](../entity-mapping.md#database-defaults).
-- **Predicate updates (`[InquiryUpdate]` plus `[InquiryWhere]`) and soft-delete/restore do not touch auditing columns** — they update rows without materializing entities. Add an audit-column parameter explicitly when that matters.
+- **Predicate updates (`[InquiryUpdate]` plus `[InquiryWhere]`) do not touch auditing columns by default** — they update rows without materializing entities. Set `StampModified = true` to stamp the modified columns, as described in [Set-based updates](#set-based-updates). Set-based deletes, soft deletes and restores never stamp them.
 - For a full who/when/what change *history*, see the audit-trail interceptor on the roadmap.
 
 ## See also
