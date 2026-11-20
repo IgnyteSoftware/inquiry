@@ -90,6 +90,8 @@ The middleware picks the user for each request in this order:
 | 3 | The user resolver, which is the signed-in principal by default | The resolver returns a value other than `null`. |
 | 4 | Endpoint metadata without `overrideResolver` | The resolver returns `null`. |
 
+The fallback in row 4 applies only when the resolver returns `null`. A custom resolver that returns a placeholder such as `"anonymous"` or an empty string for an unauthenticated request turns the fallback off. Return `null` when there is no user, or use `overrideResolver: true` on those endpoints.
+
 When an endpoint gets the metadata more than once, for example from its group and from the endpoint itself, the value closest to the endpoint wins. An endpoint with no metadata behaves as before.
 
 **Middleware order.** The middleware reads the metadata from the routed endpoint, so it must run after `UseRouting`. When `UseInquiryAuditContext` runs before routing, it does not see the metadata, and requests with no signed-in user get a `null` audit user. A `WebApplication` that never calls `UseRouting` adds routing at the start of the pipeline, so the metadata works there too.
