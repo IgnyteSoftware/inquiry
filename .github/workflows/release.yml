@@ -3,8 +3,9 @@ name: Release
 # Tag-driven releases (Ignyte org standard):
 #   git tag v1.2.3            -> publishes the stable version to nuget.org + GitHub release
 #   git tag v1.2.3-preview.1  -> publishes a preview to nuget.org + GitHub prerelease
-# The tag version must match eng/release-manifest.json (stable exactly; previews must be
-# -preview.N of the manifest version), and the tagged commit must be on main. Tag creation
+#   git tag v1.2.3-rc.1       -> publishes a release candidate to nuget.org + GitHub prerelease
+# The tag version must match eng/release-manifest.json (stable exactly; prereleases must be
+# -preview.N or -rc.N of the manifest version), and the tagged commit must be on main. Tag creation
 # is restricted to organization admins by the protect-release-tags ruleset; update and
 # deletion of v* tags are blocked for everyone by the protect-release-tags-immutable
 # ruleset, which has no bypass actor, so a release tag is immutable once pushed.
@@ -75,9 +76,9 @@ jobs:
           $version = $Matches[1]
           $manifest = Get-Content -Raw eng/release-manifest.json | ConvertFrom-Json
           $stable = $manifest.packageVersion
-          $isPreview = $version -match "^$([regex]::Escape($stable))-preview\.[0-9]+$"
+          $isPreview = $version -match "^$([regex]::Escape($stable))-(preview|rc)\.[0-9]+$"
           if (-not $isPreview -and $version -cne $stable) {
-            throw "Tag version '$version' must equal the manifest version '$stable' or be one of its -preview.N versions."
+            throw "Tag version '$version' must equal the manifest version '$stable' or be one of its -preview.N or -rc.N versions."
           }
 
           # Resolve the commit via HEAD: for annotated tags GITHUB_SHA can be the tag object,

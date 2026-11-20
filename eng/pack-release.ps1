@@ -7,7 +7,7 @@ param(
 
     [string] $Tag,
 
-    # Overrides the manifest's stable version, e.g. "1.2.3-preview.7" for prerelease builds.
+    # Overrides the manifest's stable version, e.g. "1.2.3-preview.7" or "1.2.3-rc.1" for prerelease builds.
     [string] $PackageVersion,
 
     # Overrides the manifest's repository branch, e.g. "refs/heads/prerelease".
