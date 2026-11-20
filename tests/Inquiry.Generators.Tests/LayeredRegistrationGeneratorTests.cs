@@ -98,6 +98,9 @@ public sealed partial class InquiryGeneratorTests
         {
             public static IServiceCollection Compose(IServiceCollection services)
                 => services.AddCoreData().AddWebData();
+
+            public static IServiceCollection ComposeWebOnly(IServiceCollection services)
+                => services.AddWebData();
         }
         """;
 
@@ -115,13 +118,15 @@ public sealed partial class InquiryGeneratorTests
             context.LoadFromStream(new MemoryStream(web.Image));
             var hostAssembly = context.LoadFromStream(new MemoryStream(host.Image));
 
-            var compose = hostAssembly.GetType("Host.Composition", throwOnError: true)!
-                .GetMethod("Compose", BindingFlags.Public | BindingFlags.Static)!;
-            var services = (IServiceCollection)compose.Invoke(null, [new ServiceCollection()])!;
+            var composition = hostAssembly.GetType("Host.Composition", throwOnError: true)!;
 
-            var serviceTypes = services.Select(static descriptor => descriptor.ServiceType.FullName).ToList();
+            var serviceTypes = ComposeServiceTypes(composition, "Compose");
             Assert.Contains("Core.OrderStore", serviceTypes);
             Assert.Contains("Web.AuditStore", serviceTypes);
+
+            var webOnlyServiceTypes = ComposeServiceTypes(composition, "ComposeWebOnly");
+            Assert.Contains("Web.AuditStore", webOnlyServiceTypes);
+            Assert.DoesNotContain("Core.OrderStore", webOnlyServiceTypes);
         }
         finally
         {
@@ -152,6 +157,13 @@ public sealed partial class InquiryGeneratorTests
 
         var diagnostic = Assert.Single(compilation.GetDiagnostics(), static d => d.Severity == DiagnosticSeverity.Error);
         Assert.Equal("CS1061", diagnostic.Id);
+    }
+
+    private static List<string?> ComposeServiceTypes(Type composition, string methodName)
+    {
+        var method = composition.GetMethod(methodName, BindingFlags.Public | BindingFlags.Static)!;
+        var services = (IServiceCollection)method.Invoke(null, [new ServiceCollection()])!;
+        return services.Select(static descriptor => descriptor.ServiceType.FullName).ToList();
     }
 
     private static (MetadataReference Reference, byte[] Image) CompileLayeredProject(
