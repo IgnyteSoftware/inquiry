@@ -39,14 +39,14 @@
         "Ignyte.Inquiry.SqlServer": "[1.0.0]",
         "Microsoft.Data.SqlClient": "7.1.2",
         "Microsoft.Data.Sqlite": "10.0.15",
-        "Microsoft.Extensions.Configuration": "11.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "11.0.0",
-        "Microsoft.Extensions.DependencyInjection": "11.0.0",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "11.0.0",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
-        "Microsoft.Extensions.Hosting.Abstractions": "11.0.0",
-        "Microsoft.Extensions.Logging": "11.0.0",
-        "Microsoft.Extensions.Logging.Abstractions": "11.0.0",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Hosting.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "MySqlConnector": "3.0.0",
         "Npgsql": "10.0.3",
         "OpenTelemetry.Extensions.Hosting": "1.21.0",
@@ -68,6 +68,14 @@
           "Microsoft.Extensions.Hosting.Abstractions",
           "Microsoft.Extensions.Logging.Abstractions"
         ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
       }
     },
     {
