@@ -1,8 +1,8 @@
 # Registering stores from multiple libraries
 
 Give each data library one public registration method with a unique name. Call that method from the
-host instead of calling `AddInquiryGeneratedStores()` there. Every generated assembly exposes that
-same extension name, so a host referencing two of them can get CS0121 from an ambiguous call.
+host. The generated `AddInquiryGeneratedStores()` extension is `internal`, so only the assembly that
+generates the stores can call it. A host cannot call a referenced library's generated method.
 
 The library wrapper calls its own generated registration. This convention uses direct generated
 calls, requires no reflection or `extern alias`, and works with trimming and NativeAOT.
@@ -41,8 +41,45 @@ public static class InventoryRegistration
 ```
 
 These are application-owned methods, not Inquiry APIs. Each wrapper must compile in the assembly
-that generates its stores. A wrapper in a third assembly would face the same ambiguity as the host.
+that generates its stores, because the generated method is not visible to other assemblies.
 Existing wrappers such as `AddNorthwindSampleStores` and `AddProductWorkspace` follow this convention.
+
+## Layered libraries
+
+A library that generates stores can reference another library that also generates stores. For
+example, a web project that has its own stores can reference a core data library. Each assembly has
+its own internal `AddInquiryGeneratedStores()`, so the two do not conflict. The web project's wrapper
+registers only the web project's stores:
+
+```csharp
+using Inquiry.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Web;
+
+public static class WebRegistration
+{
+    public static IServiceCollection AddWebData(this IServiceCollection services)
+        => services.AddInquiryGeneratedStores();
+}
+```
+
+That call does not register the core library's stores. Call both wrappers, from the host or from the
+web project's own composition method:
+
+```csharp
+services.AddCoreData();
+services.AddWebData();
+```
+
+`InternalsVisibleTo` makes internal types visible to the named assembly. Do not grant it to an
+assembly that also generates stores, such as a test project with its own stores. That assembly sees
+the generated types of both assemblies: the build reports `CS0436`, and the extension call
+`services.AddInquiryGeneratedStores()` fails with `CS0121`. Move those stores into a separate
+assembly. If that is not possible, suppress `CS0436` in that project and call the method by its
+type, `InquiryGeneratedServiceCollectionExtensions.AddInquiryGeneratedStores(services)`. The
+compiler then uses the type that the project generates, so the call registers only that project's
+stores.
 
 ## The host owns options and the connection
 
