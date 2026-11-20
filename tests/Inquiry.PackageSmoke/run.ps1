@@ -130,6 +130,42 @@ function Invoke-RestoreProbe([string] $Name, [string[]] $Packages, [bool] $Warni
     $checks.Add("net10.0/version-mismatch/$Name")
 }
 
+# Each Aspire provider package must bring only its own driver (#606). A web application on .NET 10 must
+# also keep the 10.0 Microsoft.Extensions packages, because OpenTelemetry needs version 11 only on .NET 11.
+$aspireProviders = [ordered]@{
+    MariaDb = @{ Drivers = @('MySqlConnector'); ConnectionString = 'Server=localhost;Database=orders;User ID=root;Password=root' }
+    MySql = @{ Drivers = @('MySqlConnector'); ConnectionString = 'Server=localhost;Database=orders;User ID=root;Password=root' }
+    Oracle = @{ Drivers = @('Oracle.ManagedDataAccess.Core'); ConnectionString = 'User Id=inquiry;Password=inquiry;Data Source=localhost:1521/FREEPDB1' }
+    PostgreSql = @{ Drivers = @('Npgsql'); ConnectionString = 'Host=localhost;Database=orders;Username=postgres;Password=postgres' }
+    Sqlite = @{ Drivers = @('Microsoft.Data.Sqlite', 'SQLitePCLRaw'); ConnectionString = 'Data Source=:memory:' }
+    SqlServer = @{ Drivers = @('Microsoft.Data.SqlClient'); ConnectionString = 'Server=.;Database=orders;Integrated Security=true;TrustServerCertificate=true' }
+}
+
+function Invoke-AspireProviderConsumer([string] $Provider, [string] $Tfm) {
+    $project = New-Consumer "aspire-$Provider-$Tfm" $Tfm @("Ignyte.Inquiry.Aspire.$Provider") @((Join-Path $PSScriptRoot 'AspireProvider.cs')) -AspNetCore
+    $source = Join-Path (Split-Path $project) 'AspireProvider.cs'
+    Set-Content -LiteralPath $source -Value (Get-Content -Raw -LiteralPath $source).Replace('__PROVIDER__', $Provider) -NoNewline -Encoding utf8
+    Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
+    $libraries = @((Get-Content -Raw -LiteralPath (Join-Path (Split-Path $project) 'obj/project.assets.json') | ConvertFrom-Json).libraries.PSObject.Properties.Name)
+    $own = $aspireProviders[$Provider].Drivers
+    foreach ($other in $aspireProviders.Keys | Where-Object { $_ -ne $Provider }) {
+        $forbidden = @("Ignyte.Inquiry.$other", "Ignyte.Inquiry.Aspire.$other") + @($aspireProviders[$other].Drivers | Where-Object { $own -notcontains $_ })
+        foreach ($id in $forbidden) {
+            $found = @($libraries | Where-Object { $_ -like "$id/*" -or $_ -like "$id.*/*" })
+            if ($found) { throw "The $Tfm Ignyte.Inquiry.Aspire.$Provider consumer restored $($found -join ', ')." }
+        }
+    }
+    if ($Tfm -eq 'net10.0') {
+        $extensions11 = @($libraries | Where-Object { $_ -like 'Microsoft.Extensions.*/11.*' })
+        if ($extensions11) { throw "The net10.0 Ignyte.Inquiry.Aspire.$Provider consumer restored $($extensions11 -join ', ')." }
+    }
+    $output = @(& dotnet run --project $project -c Release --no-restore -- $aspireProviders[$Provider].ConnectionString 2>&1 | ForEach-Object { "$_" })
+    $exitCode = $LASTEXITCODE
+    $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+    if ($exitCode -ne 0 -or $output[-1] -cne "ASPIRE-$Provider-OK") { throw "The $Tfm Ignyte.Inquiry.Aspire.$Provider consumer failed ($exitCode)." }
+    $checks.Add("$Tfm/$Provider/aspire-provider-package")
+}
+
 # The schema evolution sample has two entity libraries and runs against SQL Server, so it cannot use the
 # single-project consumer. Its sources and Runner project are copied unchanged; only the library projects
 # are generated, so they reference the candidate package instead of the repository's source projects.
@@ -249,10 +285,13 @@ try {
         Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
         Invoke-Dotnet @('run', '--project', $project, '-c', 'Release', '--no-restore')
         $checks.Add("$tfm/sqlite/crud")
-        $project = New-Consumer "companions-$tfm" $tfm @('Ignyte.Inquiry.Aspire', 'Ignyte.Inquiry.AspNetCore', 'Ignyte.Inquiry.Interceptors', 'Ignyte.Inquiry.Testing', 'Ignyte.Inquiry.Sqlite.Testing', 'Ignyte.Inquiry.Sqlite') @((Join-Path $PSScriptRoot 'Companions.cs')) -AspNetCore
+        $project = New-Consumer "companions-$tfm" $tfm @('Ignyte.Inquiry.Aspire', 'Ignyte.Inquiry.Aspire.Sqlite', 'Ignyte.Inquiry.AspNetCore', 'Ignyte.Inquiry.Interceptors', 'Ignyte.Inquiry.Testing', 'Ignyte.Inquiry.Sqlite.Testing', 'Ignyte.Inquiry.Sqlite') @((Join-Path $PSScriptRoot 'Companions.cs')) -AspNetCore
         Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
         Invoke-Dotnet @('run', '--project', $project, '-c', 'Release', '--no-restore')
         $checks.Add("$tfm/companions")
+        foreach ($provider in ($aspireProviders.Keys | Sort-Object)) {
+            Invoke-AspireProviderConsumer $provider $tfm
+        }
         $project = New-Consumer "journeys-$tfm" $tfm @('Ignyte.Inquiry.Sqlite') $journeySources
         Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
         Invoke-Dotnet @('build', $project, '-c', 'Release', '--no-restore')

@@ -1,16 +1,29 @@
 # Aspire integration
 
-`Ignyte.Inquiry.Aspire` registers an Inquiry provider from the connection name that Aspire passes
-to a project. It also registers Inquiry tracing, metrics, logging, and the `inquiry` readiness
+Each Aspire provider package registers an Inquiry provider from the connection name that Aspire
+passes to a project. It also registers Inquiry tracing, metrics, logging, and the `inquiry` readiness
 health check.
 
-Install the Aspire integration and add a direct reference to the provider package whose source
-generator the application uses. The Aspire package carries the runtime adapters for all providers,
-but excludes their analyzers from transitive flow. Do not directly reference multiple provider
-packages in the same application because each contains a dialect-specific source generator.
+| Provider | Aspire package | Registration |
+|---|---|---|
+| SQL Server | `Ignyte.Inquiry.Aspire.SqlServer` | `AddInquirySqlServer` |
+| PostgreSQL | `Ignyte.Inquiry.Aspire.PostgreSql` | `AddInquiryPostgreSql` |
+| MySQL | `Ignyte.Inquiry.Aspire.MySql` | `AddInquiryMySql` |
+| MariaDB | `Ignyte.Inquiry.Aspire.MariaDb` | `AddInquiryMariaDb` |
+| Oracle | `Ignyte.Inquiry.Aspire.Oracle` | `AddInquiryOracle` |
+| SQLite | `Ignyte.Inquiry.Aspire.Sqlite` | `AddInquirySqlite` |
+
+Each package depends on its provider's runtime package and on `Ignyte.Inquiry.Aspire`, which holds
+the provider-neutral telemetry and health-check defaults. An application restores only the driver of
+the provider it uses.
+
+Install the Aspire package for your provider, and add a direct reference to the provider package so
+the application gets its source generator. The Aspire package excludes the generator from
+transitive flow. Do not directly reference multiple provider packages in the same application,
+because each contains a dialect-specific source generator.
 
 ```powershell
-dotnet add package Ignyte.Inquiry.Aspire --prerelease
+dotnet add package Ignyte.Inquiry.Aspire.PostgreSql --prerelease
 dotnet add package Ignyte.Inquiry.PostgreSql --prerelease
 ```
 
@@ -46,8 +59,8 @@ supplies the setting for the `WithReference(postgres)` call. The extension also:
 - subscribes OpenTelemetry to the `Inquiry` activity source and meter;
 - calls `AddHealthChecks().AddInquiry()`.
 
-The same resource-name interface is available for `AddInquirySqlServer`, `AddInquiryMySql`,
-`AddInquiryMariaDb`, `AddInquirySqlite`, and `AddInquiryOracle`.
+The other Aspire provider packages have the same resource-name interface. The methods are in the
+`Microsoft.Extensions.Hosting` namespace, the same namespace as `IHostApplicationBuilder`.
 
 Each method reads the connection string when it runs, not when the first connection opens. A missing
 or blank `ConnectionStrings:<name>` value throws `InvalidOperationException` from the `AddInquiry*`
@@ -107,6 +120,10 @@ All provider registrations can use an existing data source:
 NpgsqlDataSource dataSource = /* configured and owned by the application */;
 builder.Services.AddInquiryPostgreSql(dataSource);
 ```
+
+To get the Aspire telemetry and health check for that registration, reference `Ignyte.Inquiry.Aspire`
+and call `builder.AddInquiryAspireDefaults()`. The Aspire provider registrations call it for you, and a
+second call adds nothing.
 
 Inquiry opens pipeline connections from that data source and does not dispose it. The application
 that creates the data source remains responsible for its lifetime. SQL Server accepts a

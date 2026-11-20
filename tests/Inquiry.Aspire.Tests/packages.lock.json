@@ -576,14 +576,50 @@
         "type": "Project",
         "dependencies": {
           "Ignyte.Inquiry": "[1.0.0, )",
-          "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
-          "Ignyte.Inquiry.MySql": "[1.0.0, )",
-          "Ignyte.Inquiry.Oracle": "[1.0.0, )",
-          "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
-          "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
-          "Ignyte.Inquiry.Sqlite": "[1.0.0, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.15, )",
           "OpenTelemetry.Extensions.Hosting": "[1.21.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.MariaDb": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.MariaDb": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.MySql": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.MySql": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.Oracle": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.Oracle": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.PostgreSql": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.PostgreSql": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.Sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.Sqlite": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.SqlServer": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
         }
       },
       "Ignyte.Inquiry.MariaDb": {
@@ -1268,13 +1304,49 @@
         "type": "Project",
         "dependencies": {
           "Ignyte.Inquiry": "[1.0.0, )",
-          "Ignyte.Inquiry.MariaDb": "[1.0.0, )",
-          "Ignyte.Inquiry.MySql": "[1.0.0, )",
-          "Ignyte.Inquiry.Oracle": "[1.0.0, )",
-          "Ignyte.Inquiry.PostgreSql": "[1.0.0, )",
-          "Ignyte.Inquiry.SqlServer": "[1.0.0, )",
-          "Ignyte.Inquiry.Sqlite": "[1.0.0, )",
           "OpenTelemetry.Extensions.Hosting": "[1.21.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.MariaDb": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.MariaDb": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.MySql": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.MySql": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.Oracle": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.Oracle": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.PostgreSql": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.PostgreSql": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.Sqlite": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.Sqlite": "[1.0.0, )"
+        }
+      },
+      "Ignyte.Inquiry.Aspire.SqlServer": {
+        "type": "Project",
+        "dependencies": {
+          "Ignyte.Inquiry.Aspire": "[1.0.0, )",
+          "Ignyte.Inquiry.SqlServer": "[1.0.0, )"
         }
       },
       "Ignyte.Inquiry.MariaDb": {

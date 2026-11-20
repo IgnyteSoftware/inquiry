@@ -345,6 +345,9 @@ public sealed class ReleaseManifestTests
         }
     }
 
+    private static JsonNode Package(JsonArray packages, string id) =>
+        packages.Single(package => package!["id"]!.GetValue<string>() == id)!;
+
     private static string MutatedManifest(string mutation)
     {
         var sourcePath = Path.Combine(RepositoryFixture.Root, "eng", "release-manifest.json");
@@ -382,10 +385,10 @@ public sealed class ReleaseManifestTests
                 packages[1]!["dependencies"]!["Ignyte.Inquiry"] = "[1.0.0-preview.1]";
                 break;
             case "bare-provider-dependency":
-                packages[1]!["dependencies"]!["Ignyte.Inquiry.Sqlite"] = "1.0.0";
+                Package(packages, "Ignyte.Inquiry.Aspire.Sqlite")["dependencies"]!["Ignyte.Inquiry.Sqlite"] = "1.0.0";
                 break;
             case "pruned-family-dependency":
-                packages[2]!["prunedDependencies"]!["net10.0"]!.AsArray().Add("Ignyte.Inquiry");
+                Package(packages, "Ignyte.Inquiry.AspNetCore")["prunedDependencies"]!["net10.0"]!.AsArray().Add("Ignyte.Inquiry");
                 break;
             case "tfm":
                 packages[0]!["libTfms"]!.AsArray().RemoveAt(0);

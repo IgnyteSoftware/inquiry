@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <Description>Aspire client integration for the Inquiry SQL Server provider: resource-name registration, telemetry, and health checks.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn.Replace('CS1591', ''))</NoWarn>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inquiry.Aspire\Inquiry.Aspire.csproj" />
+    <ProjectReference Include="..\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
+  </ItemGroup>
+</Project>

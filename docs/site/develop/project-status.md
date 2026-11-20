@@ -3,7 +3,7 @@
 **Inquiry is a compile-time-SQL micro-ORM** — a Roslyn incremental source generator that bakes every SQL
 statement as a `const string` at build time. The runtime ships zero SQL.
 
-**1.0.0 is not released yet.** The public API of all twelve packages and the diagnostic IDs are frozen: they are recorded as Shipped, and a change to either now needs an entry in the matching Unshipped file. Live status, priority, open/closed counts, and delivery history live
+**1.0.0 is not released yet.** The public API of the eighteen packages and the diagnostic IDs are frozen: they are recorded as Shipped, and a change to either now needs an entry in the matching Unshipped file. The six `Ignyte.Inquiry.Aspire.*` provider packages and `AddInquiryAspireDefaults` joined the freeze in [#606](https://github.com/IgnyteSoftware/inquiry/issues/606); their API is in Unshipped until the 1.0.0 baseline moves it to Shipped. Live status, priority, open/closed counts, and delivery history live
 in GitHub — the single source of truth. See the [`1.0.0` milestone](https://github.com/IgnyteSoftware/inquiry/milestone/1),
 the [open milestone issues](https://github.com/IgnyteSoftware/inquiry/issues?q=is%3Aissue+is%3Aopen+milestone%3A1.0.0),
 and [`CHANGELOG.md`](https://github.com/IgnyteSoftware/inquiry/blob/main/CHANGELOG.md) for shipped work.
@@ -61,7 +61,7 @@ provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity
 SourceLink document coverage at the exact commit. The previous
 tag-triggered rebuild-and-wildcard-push workflow was removed because it did not prove the complete provider
 or package-consumer gates and could not safely recover from partial publication. `eng/release-manifest.json`
-now defines the exact twelve-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
+now defines the exact eighteen-package 1.0 bundle, and the cross-platform verifier rejects inventory, version,
 dependency, repository-commit, metadata, symbol, and SourceLink drift. `eng/pack-release.ps1` packs from
 an exact commit in a detached worktree, and CI separates the package producer from an independent verifier
 before the versioned `ci-required-v1` aggregate gate can pass. Publishing is live: release tags publish

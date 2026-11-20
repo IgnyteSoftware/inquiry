@@ -24,6 +24,12 @@ public static class PackageVerifier
     [
         "Ignyte.Inquiry",
         "Ignyte.Inquiry.Aspire",
+        "Ignyte.Inquiry.Aspire.MariaDb",
+        "Ignyte.Inquiry.Aspire.MySql",
+        "Ignyte.Inquiry.Aspire.Oracle",
+        "Ignyte.Inquiry.Aspire.PostgreSql",
+        "Ignyte.Inquiry.Aspire.Sqlite",
+        "Ignyte.Inquiry.Aspire.SqlServer",
         "Ignyte.Inquiry.AspNetCore",
         "Ignyte.Inquiry.Interceptors",
         "Ignyte.Inquiry.MariaDb",
