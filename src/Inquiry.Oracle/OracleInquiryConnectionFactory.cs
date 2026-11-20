@@ -12,6 +12,14 @@ namespace Inquiry.Oracle;
 /// </summary>
 internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    // Registering here runs before any instance opens a connection, so the core check can classify
+    // this provider's exceptions without a reference to its driver.
+    static OracleInquiryConnectionFactory()
+        => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
+
+    // ORA-00001 covers a unique constraint, a unique index and a primary key.
+    private static bool IsUniqueViolation(DbException exception)
+        => exception is OracleException { Number: 1 };
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

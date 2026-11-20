@@ -9,6 +9,17 @@ namespace Inquiry.Sqlite;
 /// </summary>
 internal sealed class SqliteInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    // Registering here runs before any instance opens a connection, so the core check can classify
+    // this provider's exceptions without a reference to its driver.
+    static SqliteInquiryConnectionFactory()
+        => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
+
+    // The primary code, SQLITE_CONSTRAINT, covers every constraint kind, so check the extended code.
+    private static bool IsUniqueViolation(DbException exception)
+        => exception is SqliteException
+        {
+            SqliteExtendedErrorCode: SQLitePCL.raw.SQLITE_CONSTRAINT_UNIQUE or SQLitePCL.raw.SQLITE_CONSTRAINT_PRIMARYKEY,
+        };
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
 

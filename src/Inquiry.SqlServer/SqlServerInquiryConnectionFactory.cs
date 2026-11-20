@@ -9,6 +9,28 @@ namespace Inquiry.SqlServer;
 /// </summary>
 internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    // Registering here runs before any instance opens a connection, so the core check can classify
+    // this provider's exceptions without a reference to its driver.
+    static SqlServerInquiryConnectionFactory()
+        => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
+
+    // 2601 is a duplicate key in a unique index. 2627 is a PRIMARY KEY or UNIQUE constraint violation.
+    // A failed statement can report more than one error, so check each of them.
+    private static bool IsUniqueViolation(DbException exception)
+    {
+        if (exception is SqlException sqlException)
+        {
+            foreach (SqlError error in sqlException.Errors)
+            {
+                if (error.Number is 2601 or 2627)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

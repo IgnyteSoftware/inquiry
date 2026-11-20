@@ -25,3 +25,5 @@ Inquiry.Stores.InquiryQueryAttribute.InquiryQueryAttribute(string! sql) -> void
 Inquiry.Stores.InquiryQueryAttribute.Scalar.get -> bool
 Inquiry.Stores.InquiryQueryAttribute.Scalar.set -> void
 Inquiry.Stores.InquiryQueryAttribute.Sql.get -> string!
+Inquiry.InquiryExceptionExtensions
+static Inquiry.InquiryExceptionExtensions.IsUniqueViolation(this System.Exception! exception) -> bool
