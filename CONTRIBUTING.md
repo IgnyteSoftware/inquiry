@@ -35,11 +35,11 @@ Publishing is automated by [`release.yml`](.github/workflows/release.yml) and ga
 [`eng/release-manifest.json`](eng/release-manifest.json), whose `packageVersion` is the
 single source of truth:
 
-- A maintainer pushes tag **`vX.Y.Z-preview.N`** on `main` → every package is packed,
-  verified, and published to nuget.org as that preview version.
+- A maintainer pushes tag **`vX.Y.Z-preview.N`** or **`vX.Y.Z-rc.N`** on `main` → every
+  package is packed, verified, and published to nuget.org as that prerelease version.
 - A maintainer pushes tag **`vX.Y.Z`** on `main` → the stable version publishes to
   nuget.org and a GitHub release is created with the packages and SBOM attached.
-- The tag version must match the manifest (`X.Y.Z` exactly, or `-preview.N` of it) and the
+- The tag version must match the manifest (`X.Y.Z` exactly, or `-preview.N` or `-rc.N` of it) and the
   tagged commit must be on `main`, or the release fails closed. Cutting a new version
   therefore starts with a reviewed PR that **bumps `packageVersion`** (plus the manifest's
   `tag` and the exact `[X.Y.Z]` inter-package dependency ranges).
@@ -47,14 +47,14 @@ single source of truth:
 Creating `v*` tags is restricted to organization admins by ruleset, and release tags can
 never be updated or deleted — a release tag is the immutable record of what shipped.
 
-To cut a release, preview or stable:
+To cut a release, prerelease or stable:
 
 1. In one commit, rename `## [Unreleased]` in `CHANGELOG.md` to the version and date, such as
-   `## [1.0.0-preview.13] - 2026-10-22`. Add a new empty `## [Unreleased]` section above the
+   `## [1.0.0-rc.1] - 2026-11-20`. Add a new empty `## [Unreleased]` section above the
    renamed one. Make sure `eng/release-manifest.json` allows that version.
 2. In the same commit, update the reference links at the bottom of the file. `[unreleased]`
    compares the new tag to `HEAD`. The new version compares the previous tag to the new tag.
-3. After the pull request merges, tag the resulting commit on `main`, such as `v1.0.0-preview.13`.
+3. After the pull request merges, tag the resulting commit on `main`, such as `v1.0.0-rc.1`.
 
 The release workflow gets the release body from `scripts/release-notes.sh <tag>`. The script
 stops the release when the version has no section, the section is empty, or the version is the

@@ -12,7 +12,7 @@ dotnet add package Ignyte.Inquiry.Sqlite --prerelease
 dotnet add package Microsoft.Extensions.DependencyInjection --version 10.0.2
 ```
 
-Inquiry is currently available as a preview. The provider package includes the source generator and
+Inquiry is currently available as a release candidate. The provider package includes the source generator and
 references the core `Ignyte.Inquiry` runtime. Package IDs start with `Ignyte.`; C# namespaces start
 with `Inquiry`.
 

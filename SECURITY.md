@@ -4,10 +4,11 @@
 
 | Version         | Supported                                        |
 |-----------------|--------------------------------------------------|
-| 1.0.0-preview.x | Fixes ship only in the latest preview            |
+| 1.0.0-preview.x | Not supported                                    |
+| 1.0.0-rc.x      | Fixes ship only in the latest release candidate  |
 | 1.0.x           | Supported once the stable release ships          |
 
-No stable release has shipped yet; `1.0.0-preview` packages are published on nuget.org and receive fixes only in the latest preview.
+No stable release has shipped yet. `1.0.0` release candidates are published on nuget.org, and fixes ship only in the latest one.
 
 Once released, only the latest patch of each supported major.minor receives security fixes.
 

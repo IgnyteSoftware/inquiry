@@ -1,6 +1,6 @@
 # Roadmap
 
-> Inquiry's first stable release will be **1.0.0**; `1.0.0-preview` packages are published on
+> Inquiry's first stable release will be **1.0.0**; `1.0.0` release candidates are published on
 > nuget.org. Package versioning is independent of the .NET 10 runtime floor.
 >
 > Inquiry is the **compile-time .NET micro-ORM**: generated constant SQL, binders, and materializers;
