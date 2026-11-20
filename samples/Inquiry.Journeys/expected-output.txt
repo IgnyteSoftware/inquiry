@@ -1,9 +1,9 @@
-new-schema: created 8 tables from InquiryGeneratedSchema.Ddl; customer 1 round-tripped
+new-schema: created 8 tables from InquiryGeneratedSchema.Ddl; customer 1 round-tripped; orphan line rejected
 existing-schema: insert, read, update and delete on legacy_supplier; 1 row left
 order-and-lines: committed 1 order with 3 lines; rollback left 0 rows
 role-links: linked 3 roles to ada; unlinked editor; ada has admin, viewer
 concurrent-edits: first update won (version 0 -> 1); second update rejected with InquiryConcurrencyException
-tenant-isolation: tenant 1 sees 2 of 3 documents; read, update and delete of tenant 2's document reached 0 rows; no scope throws InquiryFilterValueMissingException
+tenant-isolation: tenant 1 sees 2 of 3 documents; read, update and delete of tenant 2's document reached 0 rows; its own update and delete succeeded; no scope throws InquiryFilterValueMissingException
 selective-eager: [InquiryInclude(Lines)] loaded 3 lines and left Customer unloaded; the default eager load loaded both
 handwritten-sql: Northwind Traders has 1 order, 6 units, 6250 cents by alias; a query missing columns was rejected
 aot-json: Preferences round-tripped through JourneyJsonContext as {"Carrier":"DHL","DeliveryWindows":["Mon 09-12","Thu 13-17"],"GiftWrap":true}

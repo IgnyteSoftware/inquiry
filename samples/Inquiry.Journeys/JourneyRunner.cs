@@ -26,7 +26,21 @@ public sealed class JourneyRunner(IServiceProvider services)
         _customerId = saved.Id!.Value;
         var loaded = await customers.SelectByKeyAsync(_customerId);
         Check(loaded is { Name: "Northwind Traders", Preferences: null }, "The customer did not round-trip.");
-        return $"new-schema: created {tables} tables from InquiryGeneratedSchema.Ddl; customer {_customerId} round-tripped";
+
+        // The generated foreign keys must reach the database, so a line for a missing order fails.
+        var orphan = "accepted";
+        try
+        {
+            await services.GetRequiredService<OrderLineStore>().InsertAllAsync(
+                [new OrderLine { OrderId = 999, Sku = "NONE", Quantity = 1, UnitPriceCents = 1 }]);
+        }
+        catch (DbException ex) when (ex.Message.Contains("FOREIGN KEY constraint failed", StringComparison.Ordinal))
+        {
+            orphan = "rejected";
+        }
+
+        Check(orphan == "rejected", "The generated foreign key did not reject an orphan line.");
+        return $"new-schema: created {tables} tables from InquiryGeneratedSchema.Ddl; customer {_customerId} round-tripped; orphan line {orphan}";
     }
 
     public async Task<string> ExistingSchemaAsync()
@@ -142,6 +156,7 @@ public sealed class JourneyRunner(IServiceProvider services)
         var first = await articles.SelectByKeyAsync(1) ?? throw new InvalidOperationException("The article was not found.");
         var second = await articles.SelectByKeyAsync(1) ?? throw new InvalidOperationException("The article was not found.");
 
+        var before = first.Version;
         first.Title = "Edited by first";
         Check(await articles.UpdateAsync(first), "The first update was rejected.");
         second.Title = "Edited by second";
@@ -159,7 +174,7 @@ public sealed class JourneyRunner(IServiceProvider services)
         var stored = await articles.SelectByKeyAsync(1);
         Check(outcome != "accepted", "The stale update was accepted.");
         Check(stored is { Title: "Edited by first", Version: 1 }, "The stored article is not the first edit.");
-        return $"concurrent-edits: first update won (version {first.Version} -> {stored!.Version}); second update {outcome}";
+        return $"concurrent-edits: first update won (version {before} -> {stored!.Version}); second update {outcome}";
     }
 
     public async Task<string> TenantIsolationAsync()
@@ -175,13 +190,20 @@ public sealed class JourneyRunner(IServiceProvider services)
         ]);
 
         int visible;
-        bool foreignRead, foreignUpdate, foreignDelete;
+        bool foreignRead, foreignUpdate, foreignDelete, ownUpdate, ownDelete;
+        Document? ownEdited, ownDeleted;
         using (InquiryFilterContext.BeginScope(new Dictionary<string, object> { ["TenantId"] = 1 }))
         {
             visible = (await documents.SelectAllAsync()).Count;
             foreignRead = await documents.SelectByKeyAsync(3) is not null;
             foreignUpdate = await documents.UpdateAsync(new Document { Id = 3, Title = "Hijacked", TenantId = 1 });
             foreignDelete = await documents.DeleteAsync(3);
+
+            // Writes to the tenant's own rows must still succeed, so the 0-row results above come from the filter.
+            ownUpdate = await documents.UpdateAsync(new Document { Id = 1, Title = "A plan v2", TenantId = 1 });
+            ownDelete = await documents.DeleteAsync(2);
+            ownEdited = await documents.SelectByKeyAsync(1);
+            ownDeleted = await documents.SelectByKeyAsync(2);
         }
 
         Document? untouched;
@@ -202,9 +224,10 @@ public sealed class JourneyRunner(IServiceProvider services)
 
         Check(visible == 2, $"Tenant 1 sees {visible} documents.");
         Check(!foreignRead && !foreignUpdate && !foreignDelete, "Tenant 1 reached tenant 2's document.");
+        Check(ownUpdate && ownDelete && ownEdited is { Title: "A plan v2" } && ownDeleted is null, "Tenant 1 could not change its own documents.");
         Check(untouched is { Title: "B secrets", TenantId: 2 }, "Tenant 2's document changed.");
         Check(unscoped != "ran", "A read without a tenant scope ran.");
-        return $"tenant-isolation: tenant 1 sees {visible} of 3 documents; read, update and delete of tenant 2's document reached 0 rows; no scope {unscoped}";
+        return $"tenant-isolation: tenant 1 sees {visible} of 3 documents; read, update and delete of tenant 2's document reached 0 rows; its own update and delete succeeded; no scope {unscoped}";
     }
 
     public async Task<string> SelectiveEagerAsync()
@@ -235,13 +258,13 @@ public sealed class JourneyRunner(IServiceProvider services)
             """);
         Check(report is [{ Customer: "Northwind Traders", OrderCount: 1, Units: 6, TotalCents: 6250 }], "The sales report is wrong.");
 
-        // A result without a column for every property fails before the first row.
+        // A result without a column for every property fails before the first row, so an empty result still fails.
         var validation = "accepted";
         try
         {
-            await _inquiry.QueryListAsync<CustomerSales>($"SELECT Name AS Customer FROM Customer");
+            await _inquiry.QueryListAsync<CustomerSales>($"SELECT Name AS Customer FROM Customer WHERE 1 = 0");
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex) when (ex.Message.Contains("'OrderCount'", StringComparison.Ordinal))
         {
             validation = "rejected";
         }
