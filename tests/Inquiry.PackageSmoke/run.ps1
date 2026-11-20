@@ -234,6 +234,9 @@ try {
     if ($output[-1] -cne 'N-PLUS-ONE-RECIPE-OK') { throw 'The N+1 detection recipe did not complete.' }
     $checks.Add('net10.0/sqlite/docs-recipe-n-plus-one')
     $sample = Join-Path $repoRoot 'samples/Inquiry.AotSmoke'
+    $journeys = Join-Path $repoRoot 'samples/Inquiry.Journeys'
+    $journeySources = @((Get-ChildItem -LiteralPath $journeys -Filter '*.cs').FullName)
+    $journeyExpected = @(Get-Content -LiteralPath (Join-Path $journeys 'expected-output.txt'))
     $providers = @{ Sqlite = 'sqlite'; SqlServer = 'sqlserver'; PostgreSql = 'postgresql'; MySql = 'mysql'; MariaDb = 'mariadb'; Oracle = 'oracle' }
     foreach ($tfm in @('net10.0', 'net11.0')) {
         foreach ($provider in ($providers.Keys | Sort-Object)) {
@@ -250,6 +253,15 @@ try {
         Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
         Invoke-Dotnet @('run', '--project', $project, '-c', 'Release', '--no-restore')
         $checks.Add("$tfm/companions")
+        $project = New-Consumer "journeys-$tfm" $tfm @('Ignyte.Inquiry.Sqlite') $journeySources
+        Invoke-Dotnet @('restore', $project, '--configfile', $config, '--no-cache')
+        Invoke-Dotnet @('build', $project, '-c', 'Release', '--no-restore')
+        $output = @(& dotnet run --project $project -c Release --no-build 2>&1 | ForEach-Object { "$_" })
+        $exitCode = $LASTEXITCODE
+        $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+        if ($exitCode -ne 0) { throw "The $tfm journeys consumer failed ($exitCode)." }
+        if (($output -join "`n") -cne ($journeyExpected -join "`n")) { throw "The $tfm journeys output differs from its expected output." }
+        $checks.Add("$tfm/sqlite/journeys")
     }
     # Family packages pin each other exactly (#273), so NuGet must reject a mixed set at restore.
     $probeFeed = Join-Path $workRoot 'probe-feed'
@@ -286,6 +298,16 @@ try {
     & $binary 2>&1 | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'The actual-package NativeAOT consumer failed.' }
     $checks.Add("net10.0/$RuntimeIdentifier/nativeaot-crud")
+    $project = Join-Path $workRoot 'journeys-net10.0/Consumer.csproj'
+    $nativeOutput = Join-Path $workRoot 'native-journeys-out'
+    Invoke-Dotnet @('publish', $project, '-c', 'Release', '-r', $RuntimeIdentifier, '-p:PublishAot=true', "-p:RestoreConfigFile=$config", '-o', $nativeOutput)
+    $binary = Join-Path $nativeOutput $(if ($IsWindows) { 'Consumer.exe' } else { 'Consumer' })
+    $output = @(& $binary 2>&1 | ForEach-Object { "$_" })
+    $exitCode = $LASTEXITCODE
+    $output | Tee-Object -FilePath (Join-Path $results 'consumers.log') -Append | Out-Host
+    if ($exitCode -ne 0) { throw "The NativeAOT journeys consumer failed ($exitCode)." }
+    if (($output -join "`n") -cne ($journeyExpected -join "`n")) { throw 'The NativeAOT journeys output differs from its expected output.' }
+    $checks.Add("net10.0/$RuntimeIdentifier/nativeaot-journeys")
     Invoke-SchemaEvolutionSample
     $checks.Add('net10.0/sqlserver/docs-sample-schema-evolution')
     if (@(Compare-Object ($hashes.file | Sort-Object) ((Get-ChildItem -LiteralPath $bundle -File).Name | Sort-Object)).Count -ne 0) {

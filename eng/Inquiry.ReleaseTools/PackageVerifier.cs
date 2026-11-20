@@ -132,7 +132,7 @@ public static class PackageVerifier
         var version = expectedVersion ?? manifest.PackageVersion;
         var branch = expectedBranch ?? manifest.Assets.RepositoryBranch;
         Require(version == manifest.PackageVersion || IsPreviewOf(manifest.PackageVersion, version),
-            $"Expected version {version} must equal the manifest version {manifest.PackageVersion} or be one of its -preview.N versions.");
+            $"Expected version {version} must equal the manifest version {manifest.PackageVersion} or be one of its -preview.N or -rc.N versions.");
         Require(branch.StartsWith("refs/heads/", StringComparison.Ordinal) && branch.Length > "refs/heads/".Length,
             $"Expected branch {branch} must be a fully qualified refs/heads/ reference.");
         var bundle = Path.GetFullPath(bundleDirectory, root);
@@ -907,14 +907,17 @@ public static class PackageVerifier
         Version.TryParse(version, out var parsed) && parsed.Major >= 0 && parsed.Minor >= 0 && parsed.Build >= 0 && parsed.Revision == -1
         && version == $"{parsed.Major}.{parsed.Minor}.{parsed.Build}";
 
-    private static bool IsPreviewOf(string stableVersion, string candidate)
-    {
-        var prefix = stableVersion + "-preview.";
-        return candidate.StartsWith(prefix, StringComparison.Ordinal)
-            && candidate.Length > prefix.Length
-            && candidate[prefix.Length..].All(character => character is >= '0' and <= '9')
-            && (candidate[prefix.Length] != '0' || candidate.Length == prefix.Length + 1);
-    }
+    private static readonly string[] _prereleaseLabels = ["-preview.", "-rc."];
+
+    private static bool IsPreviewOf(string stableVersion, string candidate) =>
+        _prereleaseLabels.Any(label =>
+        {
+            var prefix = stableVersion + label;
+            return candidate.StartsWith(prefix, StringComparison.Ordinal)
+                && candidate.Length > prefix.Length
+                && candidate[prefix.Length..].All(character => character is >= '0' and <= '9')
+                && (candidate[prefix.Length] != '0' || candidate.Length == prefix.Length + 1);
+        });
 
     private static string DiagnosticTail(string value)
     {

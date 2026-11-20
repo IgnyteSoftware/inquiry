@@ -54,8 +54,8 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 ## Release engineering
 
 Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. Preview releases
-(`v1.0.0-preview.N`) are published on nuget.org; the first stable release will use the `v1.0.0` tag and
-package version `1.0.0`. Every package embeds
+(`v1.0.0-preview.N`) and release candidates (`v1.0.0-rc.N`) publish to nuget.org; the first stable
+release will use the `v1.0.0` tag and package version `1.0.0`. Every package embeds
 SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg` symbol package, including the
 provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity and checks complete
 SourceLink document coverage at the exact commit. The previous
@@ -69,8 +69,8 @@ to nuget.org via Trusted Publishing (see [Contributing — Releasing](contributi
 Benchmarks are internal tools: they do not run in CI, no results are committed, and no release gate depends
 on them.
 [#89](https://github.com/IgnyteSoftware/inquiry/issues/89) closed 2026-07-25 across all nine acceptance
-criteria: package identity, an immutable CI artifact, clean consumer installs on net8/net9/net10 and
-NativeAOT from the produced nupkgs, an API-compatibility baseline, CycloneDX SBOM plus SLSA build
+criteria: package identity, an immutable CI artifact, clean consumer installs on the target frameworks of
+that time (net8/net9/net10; now net10/net11) and NativeAOT from the produced nupkgs, an API-compatibility baseline, CycloneDX SBOM plus SLSA build
 provenance and dependency auditing, release/support/security policies, hosted versioned documentation,
 CODEOWNERS and branch protection, and CodeQL plus dependency scanning. See
 [Contributing — Releasing](contributing.md#releasing).

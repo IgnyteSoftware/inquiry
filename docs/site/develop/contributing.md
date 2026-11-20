@@ -135,7 +135,7 @@ gated by `eng/release-manifest.json`, whose `packageVersion` is the single sourc
 
 | Event | Published version |
 |---|---|
-| Admin pushes tag `v<packageVersion>-preview.N` on `main` | that preview on nuget.org + GitHub prerelease |
+| Admin pushes tag `v<packageVersion>-preview.N` or `v<packageVersion>-rc.N` on `main` | that prerelease on nuget.org + GitHub prerelease |
 | Admin pushes tag `v<packageVersion>` on `main` | the stable on nuget.org + GitHub release |
 | Tag version doesn't match the manifest, or the commit isn't on `main` | Release fails closed — nothing publishes |
 
@@ -166,7 +166,7 @@ commit, and restores and builds only from that immutable snapshot. It refuses a 
 output directory, and validates exact nupkg and snupkg inventory, versions, dependencies, repository
 commit, metadata, assets, DLL/PDB identities, and complete SourceLink mappings. Every dependency on
 another Inquiry package must be the exact range `[version]` at the packed version, including
-`-preview.N` versions. It does not publish or
+`-preview.N` and `-rc.N` versions. It does not publish or
 create a tag.
 
 ### Shippable packages
@@ -215,7 +215,7 @@ After packing a clean commit, verify the same bundle without rebuilding packages
 
 This requires .NET 10/11 runtimes and a native compiler (CI provisions clang and zlib on Linux).
 Use `-RuntimeIdentifier win-x64` on Windows with the NativeAOT C++ toolchain installed.
-For a preview bundle, also pass its exact `-PackageVersion` and the `-RepositoryBranch` used when packing.
+For a prerelease bundle, also pass its exact `-PackageVersion` and the `-RepositoryBranch` used when packing.
 The runner uses fresh NuGet caches and maps every manifest package ID exclusively to the candidate feed.
 It compiles all six provider generators, runs SQLite CRUD and companion APIs on each framework,
 and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution

@@ -10,12 +10,15 @@
 
 Inquiry follows [Semantic Versioning 2.0.0](https://semver.org/). Once a line is released, only its latest patch receives bug fixes and security patches.
 
-No stable release has shipped yet; `1.0.0-preview` packages are published on [nuget.org](https://www.nuget.org/packages/Ignyte.Inquiry) and receive fixes only in the latest preview.
+No stable release has shipped yet. Previews and `1.0.0-rc.N` release candidates publish to [nuget.org](https://www.nuget.org/packages/Ignyte.Inquiry). Once a release candidate is published, only the latest one receives fixes.
 
 | Version         | Status                          | .NET TFMs               |
 |-----------------|---------------------------------|-------------------------|
-| 1.0.0-preview.x | Published previews              | net8.0, net9.0, net10.0 through preview.13; net10.0, net11.0 after |
+| 1.0.0-preview.x | Earlier previews, no fixes      | net8.0, net9.0, net10.0 |
+| 1.0.0-rc.x      | Release candidates              | net10.0, net11.0        |
 | 1.0.x           | Upcoming first stable release   | net10.0, net11.0        |
+
+To upgrade from a preview, follow [Upgrade to 1.0](https://ignytesoftware.github.io/inquiry/articles/upgrading.html).
 
 ## Target framework policy
 

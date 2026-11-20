@@ -1,5 +1,7 @@
 - name: Getting started
   href: getting-started.md
+- name: Upgrade to 1.0
+  href: upgrading.md
 - name: Entity mapping
   href: entity-mapping.md
 - name: Registering data libraries
