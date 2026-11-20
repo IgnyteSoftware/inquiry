@@ -1,7 +1,8 @@
 # Application journeys
 
-This console sample walks nine end-to-end journeys against an in-memory SQLite database, with
-generated stores only. Each journey checks its outcome, throws on any mismatch, and prints one line.
+This console sample walks nine end-to-end journeys against an in-memory SQLite database, using
+generated stores and a handwritten report query. The journeys share one database and run in order,
+and some reuse rows that earlier journeys wrote. Each journey checks its outcome, throws on any mismatch, and prints one line.
 The last line is `JOURNEYS-OK`. The output is in [`expected-output.txt`](expected-output.txt), and the
 package consumer check compares it exactly, on .NET 10, .NET 11 and as a NativeAOT binary.
 

@@ -16,6 +16,8 @@ editing titles, bodies, labels and milestones, including through the API or CLI.
 ```
 feature branch ──PR──▶ main ──tag vX.Y.Z-preview.N──▶ Ignyte.Inquiry.* preview on nuget.org
                         │
+                        ├──tag vX.Y.Z-rc.N───────▶ Ignyte.Inquiry.* release candidate on nuget.org
+                        │
                         └──tag vX.Y.Z──────────────▶ Ignyte.Inquiry.* stable on nuget.org
                                                       + GitHub release
 ```

@@ -31,12 +31,14 @@ The [diagnostic repair index](diagnostics.md) has the fix for each ID.
 
 | Diagnostic | What it reports | Fix |
 |---|---|---|
-| `INQ106` | Two properties of an `[InquiryAdHoc]` DTO or `[InquiryProjection]` claim the same column name, without regard to case. | Rename one property, or give it a distinct `[InquiryColumn]` name. |
+| `INQ106` | Two properties of an `[InquiryAdHoc]` DTO or `[InquiryProjection]` claim the same column name, without regard to case. | Rename one `[InquiryAdHoc]` property. For a projection, rename one property or give it a distinct `[InquiryColumn]` name. |
 | `INQ114` | An `[InquiryStoredProcedure]` method that the target database cannot run. Procedures run on SQL Server and Oracle only. | Remove the method, or call the SQL through `IInquiry`. On Oracle, see [stored procedures](features/stored-procedures.md). |
 | `INQ115` | `[InquiryWhere]` criteria on an operation that ignores them. | Use `[InquirySelectAllByPredicate]` or `[InquiryCount]`, or remove the criteria. |
 | `INQ116` | `[InquiryForeignKey(typeof(T), "Name")]` where `T` has no property `Name`. | Use `nameof`, or `[InquiryForeignKey("Table", "Column")]` for physical names. |
 | `INQ039` | A locking select that the database always rejects: `Distinct` with a lock on PostgreSQL or Oracle, or offset paging with a lock on Oracle. | Remove `Distinct`, the paging or the lock. |
 | `CS8795` | A store method that a suppressed or lowered Inquiry error rejected. Before, it compiled into a stub that threw `NotSupportedException`. | Fix the declaration that the suppressed error reports. |
+
+Lowering `INQ039` project-wide still generates a throwing stub for the methods that report `INQ039`.
 
 Two new warnings fail builds that treat warnings as errors:
 
@@ -48,9 +50,11 @@ Two new warnings fail builds that treat warnings as errors:
 ## 3. Check the mapping changes
 
 - **Handwritten SQL and stored procedures map by column name.** Before, results mapped by `SELECT`-list
-  position. Give each column the name of its property, or the property's `[InquiryColumn]` name. For
-  example, write `SUM(Amount) AS TotalAmount`. Extra columns are ignored. A missing column throws
-  `InvalidOperationException` before the first row. Code that caught `InvalidCastException`,
+  position. For `[InquiryAdHoc]` DTOs, alias each result column to its CLR property name, for example
+  `SUM(Amount) AS TotalAmount`. For entities and projections, including entity results of stored
+  procedures, return every mapped column under its mapped name from `[InquiryColumn]` or `[InquiryKey]`.
+  Extra columns are ignored. A missing or duplicate match throws `InvalidOperationException` before the
+  first row. Code that caught `InvalidCastException`,
   `FormatException` or `OverflowException` around these reads must catch `InvalidOperationException` and
   read `InnerException`. Generated store queries are unchanged.
 - **Attributed base-class properties are mapped.** An entity that derives from a class with Inquiry
@@ -63,7 +67,8 @@ Two new warnings fail builds that treat warnings as errors:
 
 - **Paged results use one command.** A method that returns `InquiryPagedResult<T>` sends the page and the
   count as one command with two result sets. Interceptors see one command and telemetry records one
-  `QUERY_MULTIPLE` operation. A custom `IInquiry` implementation must implement `QueryMultipleAsync`.
+  `QUERY_MULTIPLE` operation. If a custom `IInquiry` implementation runs generated paged methods,
+  implement or forward `QueryMultipleAsync`. Its default implementation throws `NotSupportedException`.
 - **Transactions report the database error.** A failed rollback during cleanup no longer replaces the
   original error. Code that read the provider error from an `AggregateException` around `CommitAsync` or
   `RollbackAsync` must also catch the provider exception.

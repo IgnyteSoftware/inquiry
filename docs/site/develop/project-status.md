@@ -54,7 +54,7 @@ Remaining follow-ups (and explicitly out-of-scope items) are tracked on the [Roa
 ## Release engineering
 
 Packages are versioned by [MinVer](https://github.com/adamralph/minver) from git tags. Preview releases
-(`v1.0.0-preview.N`) and release candidates (`v1.0.0-rc.N`) are published on nuget.org; the first stable
+(`v1.0.0-preview.N`) and release candidates (`v1.0.0-rc.N`) publish to nuget.org; the first stable
 release will use the `v1.0.0` tag and package version `1.0.0`. Every package embeds
 SourceLink metadata (`Microsoft.SourceLink.GitHub`) and ships a `.snupkg` symbol package, including the
 provider analyzer PDBs. The verifier binds each PDB to its DLL CodeView identity and checks complete

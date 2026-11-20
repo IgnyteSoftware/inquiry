@@ -8,7 +8,7 @@
 | 1.0.0-rc.x      | Fixes ship only in the latest release candidate  |
 | 1.0.x           | Supported once the stable release ships          |
 
-No stable release has shipped yet. `1.0.0` release candidates are published on nuget.org, and fixes ship only in the latest one.
+No stable release has shipped yet. `1.0.0-rc.N` release candidates publish to nuget.org, and fixes ship only in the latest one.
 
 Once released, only the latest patch of each supported major.minor receives security fixes.
 

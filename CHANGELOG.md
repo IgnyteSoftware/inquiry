@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Stored procedures declared with `[InquiryStoredProcedure]`: make the procedure's result columns use the entity's mapped column names. Column order no longer matters.
   - `[InquiryProjection]` types read through handwritten SQL: return each column under the property's `[InquiryColumn]` name.
   - Code that catches `InvalidCastException`, `FormatException`, `OverflowException` or a converter's exception around these reads: catch `InvalidOperationException` and inspect `InnerException`.
-- **Breaking:** `INQ106` is a new build error for two properties of an `[InquiryAdHoc]` DTO or an `[InquiryProjection]` whose column names are equal without regard to case, such as `Id` and `ID`, or two projection properties with the same `[InquiryColumn]` name. Both would claim one result column. Rename one property, or give it a distinct `[InquiryColumn]` name.
+- **Breaking:** `INQ106` is a new build error for two properties of an `[InquiryAdHoc]` DTO or an `[InquiryProjection]` whose column names are equal without regard to case, such as `Id` and `ID`, or two projection properties with the same `[InquiryColumn]` name. Both would claim one result column. Rename one `[InquiryAdHoc]` property. For a projection, rename one property or give it a distinct `[InquiryColumn]` name.
 
 ### Fixed
 

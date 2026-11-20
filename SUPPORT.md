@@ -10,7 +10,7 @@
 
 Inquiry follows [Semantic Versioning 2.0.0](https://semver.org/). Once a line is released, only its latest patch receives bug fixes and security patches.
 
-No stable release has shipped yet. `1.0.0` release candidates and earlier previews are published on [nuget.org](https://www.nuget.org/packages/Ignyte.Inquiry). Only the latest release candidate receives fixes.
+No stable release has shipped yet. Previews and `1.0.0-rc.N` release candidates publish to [nuget.org](https://www.nuget.org/packages/Ignyte.Inquiry). Once a release candidate is published, only the latest one receives fixes.
 
 | Version         | Status                          | .NET TFMs               |
 |-----------------|---------------------------------|-------------------------|
