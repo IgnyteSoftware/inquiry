@@ -63,6 +63,37 @@ using (InquiryAuditContext.BeginScope(httpContext.User.Identity?.Name))
 
 In ASP.NET Core apps, the `Ignyte.Inquiry.AspNetCore` package wraps this in ready-made middleware — `app.UseInquiryAuditContext()` opens the scope per request, defaulting the user to the `ClaimTypes.NameIdentifier` claim (register it after `UseAuthentication`; pass a `Func<HttpContext, string?>` to resolve the user differently).
 
+## Endpoints without a signed-in user
+
+Some endpoints authenticate without a principal, such as a kiosk or device token that the handler checks, or a webhook signature. Give those endpoints an audit user as endpoint metadata, instead of a `BeginScope` call in each handler:
+
+```csharp
+app.UseRouting();
+app.UseAuthentication();
+app.UseInquiryAuditContext();   // after UseRouting, so the endpoint is known
+
+var kiosk = app.MapGroup("/kiosk").WithInquiryAuditUser("system:kiosk");
+kiosk.MapPost("/sessions/{id}/abandon", AbandonSession);   // inserts stamp "system:kiosk"
+
+app.MapPost("/webhooks/billing", HandleBilling)
+   .WithInquiryAuditUser("system:billing-webhook", overrideResolver: true);
+```
+
+For MVC, put `[InquiryAuditUser("system:kiosk")]` on the controller or action. `WithInquiryAuditUser` works on a route group, a single endpoint, or any other endpoint convention builder.
+
+The middleware picks the user for each request in this order:
+
+| Order | Source | Applies when |
+|---|---|---|
+| 1 | A scope a handler opens with `InquiryAuditContext.BeginScope` | Always, inside that scope. The inner scope replaces the middleware's scope until it is disposed. |
+| 2 | Endpoint metadata with `overrideResolver: true` (`OverrideResolver = true` on the attribute) | Always. The middleware does not call the resolver. |
+| 3 | The user resolver, which is the signed-in principal by default | The resolver returns a value other than `null`. |
+| 4 | Endpoint metadata without `overrideResolver` | The resolver returns `null`. |
+
+When an endpoint gets the metadata more than once, for example from its group and from the endpoint itself, the value closest to the endpoint wins. An endpoint with no metadata behaves as before.
+
+**Middleware order.** The middleware reads the metadata from the routed endpoint, so it must run after `UseRouting`. When `UseInquiryAuditContext` runs before routing, it does not see the metadata, and requests with no signed-in user get a `null` audit user. A `WebApplication` that never calls `UseRouting` adds routing at the start of the pipeline, so the metadata works there too.
+
 ## Scope disposal
 
 Dispose nested scopes before their parent. Out-of-order disposal throws

@@ -18,7 +18,9 @@ public static class InquiryAuditContextApplicationBuilderExtensions
     /// </summary>
     /// <remarks>
     /// Register this middleware <b>after</b> <c>UseAuthentication</c> so that
-    /// <see cref="HttpContext.User"/> is populated when the resolver runs.
+    /// <see cref="HttpContext.User"/> is populated when the resolver runs. Register it after
+    /// <c>UseRouting</c> too, so that it can read <see cref="InquiryAuditUserAttribute"/> metadata
+    /// from the endpoint.
     /// </remarks>
     public static IApplicationBuilder UseInquiryAuditContext(
         this IApplicationBuilder app,

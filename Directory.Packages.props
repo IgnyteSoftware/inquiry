@@ -112,4 +112,10 @@
   <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Aspire.Tests'">
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
   </ItemGroup>
+
+  <!-- The test host must match the shared ASP.NET Core framework of each target. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'Inquiry.Tests'">
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.15" Condition="'$(TargetFramework)' == 'net10.0'" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="11.0.0" Condition="'$(TargetFramework)' == 'net11.0'" />
+  </ItemGroup>
 </Project>
