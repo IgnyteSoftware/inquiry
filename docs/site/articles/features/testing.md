@@ -148,3 +148,16 @@ await respawner.ResetAsync(connectionFactory);
 ```
 
 Resetting deletes data while keeping schema, which is much faster than recreating containers.
+
+## Aspire applications under `WebApplicationFactory`
+
+An application that registers Inquiry with an Aspire method such as
+`builder.AddInquirySqlServer("orders")` reads `ConnectionStrings:orders` during registration. Set
+the test connection string with `UseSetting` in the factory's `ConfigureWebHost`, not with
+`ConfigureAppConfiguration`, which runs too late:
+
+```csharp
+builder.UseSetting("ConnectionStrings:orders", TestDatabase.ConnectionString);
+```
+
+See [Test hosts](aspire.md#test-hosts) in the Aspire guide for the full pattern.

@@ -49,6 +49,43 @@ supplies the setting for the `WithReference(postgres)` call. The extension also:
 The same resource-name interface is available for `AddInquirySqlServer`, `AddInquiryMySql`,
 `AddInquiryMariaDb`, `AddInquirySqlite`, and `AddInquiryOracle`.
 
+Each method reads the connection string when it runs, not when the first connection opens. A missing
+or blank `ConnectionStrings:<name>` value throws `InvalidOperationException` from the `AddInquiry*`
+call, so a misconfigured application fails at startup.
+
+## Test hosts
+
+Because the connection string is read during registration, a `WebApplicationFactory<TEntryPoint>`
+test must supply its value before the application's `Program` runs. Use `UseSetting` in
+`ConfigureWebHost`:
+
+```csharp
+public sealed class OrdersApiFactory : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        builder.UseSetting("ConnectionStrings:orders", TestDatabase.ConnectionString);
+    }
+}
+```
+
+The key is `ConnectionStrings:` followed by the resource name passed to `AddInquiry*`. The value
+takes precedence over `appsettings.json`, user secrets, and environment variables, so the
+application registers its data source against the test database. Every Inquiry store and the
+`inquiry` health check then use that database.
+
+Do not use `ConfigureAppConfiguration` or `ConfigureTestServices` for this setting. With
+`WebApplication.CreateBuilder`, the factory applies those callbacks after `Program` has called
+`AddInquiry*`. The data source has already been built from the original connection string by then,
+and the test still uses the original database. If no value is configured at all, the `AddInquiry*`
+call throws before those callbacks run.
+
+A test that never opens a connection still needs a well-formed value, because the `AddInquiry*`
+call rejects a missing or blank one. The value does not need a reachable server: registration
+builds the data source without opening a connection. To use a container per test run, start it
+before the factory builds the host, for example in the factory's `InitializeAsync` with xUnit's
+`IAsyncLifetime`, and pass its connection string to `UseSetting`.
+
 ## Existing data sources
 
 All provider registrations can use an existing data source:
