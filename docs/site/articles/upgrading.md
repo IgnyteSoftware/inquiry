@@ -89,7 +89,7 @@ Two new warnings fail builds that treat warnings as errors:
 This change comes after `1.0.0-rc.1`. The generated `AddInquiryGeneratedStores()` extension and its class,
 `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Before, every
 assembly that generates stores exposed them as public, so a library that generates stores and references
-another such library failed to build with `CS0436` or `CS0121`.
+another such library failed to build with `CS0436` or `CS0121` when it called `AddInquiryGeneratedStores()`.
 
 - A call to `AddInquiryGeneratedStores()` in the assembly that generates the stores is unchanged.
 - A call to a referenced library's generated method now fails with `CS1061`. Add a public registration

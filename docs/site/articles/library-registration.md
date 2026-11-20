@@ -2,7 +2,8 @@
 
 Give each data library one public registration method with a unique name. Call that method from the
 host. The generated `AddInquiryGeneratedStores()` extension is `internal`, so only the assembly that
-generates the stores can call it. A host cannot call a referenced library's generated method.
+generates the stores can call it. A host cannot call a referenced library's generated method, unless
+the library grants the host `InternalsVisibleTo`.
 
 The library wrapper calls its own generated registration. This convention uses direct generated
 calls, requires no reflection or `extern alias`, and works with trimming and NativeAOT.
