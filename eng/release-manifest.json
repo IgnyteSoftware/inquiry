@@ -47,7 +47,7 @@
         "Microsoft.Extensions.Hosting.Abstractions": "10.0.15",
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "MySqlConnector": "2.6.2",
+        "MySqlConnector": "3.0.0",
         "Npgsql": "10.0.3",
         "OpenTelemetry.Extensions.Hosting": "1.20.0",
         "Oracle.ManagedDataAccess.Core": "23.26.400",
@@ -227,7 +227,7 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "MySqlConnector": "2.6.2"
+        "MySqlConnector": "3.0.0"
       },
       "libTfms": [
         "net10.0",
@@ -255,7 +255,7 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "MySqlConnector": "2.6.2"
+        "MySqlConnector": "3.0.0"
       },
       "libTfms": [
         "net10.0",
