@@ -78,9 +78,9 @@
       },
       "System.Data.Odbc": {
         "type": "Direct",
-        "requested": "[10.0.15, )",
-        "resolved": "10.0.15",
-        "contentHash": "uSiK3C4Nf54hB1p8jSOTfo4dIfub4I0BDDDWWWm0LTz5JMC2TWDd3OsuUlfyjFRwf2NjEoakuAmWlT/I4wX7tw=="
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "+WLrdPWvj9Hg/Aj5uSO6XoGIOf8IZRSJFObwp50M2gU7bISlZY/gVAf1FCaqzoMDZrRlX2uUyKeQ8LSv9w+JgA=="
       },
       "System.Data.OleDb": {
         "type": "Direct",
@@ -388,9 +388,9 @@
       },
       "System.Data.Odbc": {
         "type": "Direct",
-        "requested": "[10.0.15, )",
-        "resolved": "10.0.15",
-        "contentHash": "uSiK3C4Nf54hB1p8jSOTfo4dIfub4I0BDDDWWWm0LTz5JMC2TWDd3OsuUlfyjFRwf2NjEoakuAmWlT/I4wX7tw=="
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "+WLrdPWvj9Hg/Aj5uSO6XoGIOf8IZRSJFObwp50M2gU7bISlZY/gVAf1FCaqzoMDZrRlX2uUyKeQ8LSv9w+JgA=="
       },
       "System.Data.OleDb": {
         "type": "Direct",

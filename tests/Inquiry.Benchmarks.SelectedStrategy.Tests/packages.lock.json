@@ -724,7 +724,7 @@
           "Microsoft.Extensions.Configuration": "[10.0.15, )",
           "Microsoft.Extensions.Configuration.Json": "[10.0.15, )",
           "System.Configuration.ConfigurationManager": "[10.0.15, )",
-          "System.Data.Odbc": "[10.0.15, )",
+          "System.Data.Odbc": "[11.0.0, )",
           "System.Data.OleDb": "[10.0.15, )"
         }
       },
@@ -1182,9 +1182,9 @@
       },
       "System.Data.Odbc": {
         "type": "CentralTransitive",
-        "requested": "[10.0.15, )",
-        "resolved": "10.0.15",
-        "contentHash": "uSiK3C4Nf54hB1p8jSOTfo4dIfub4I0BDDDWWWm0LTz5JMC2TWDd3OsuUlfyjFRwf2NjEoakuAmWlT/I4wX7tw=="
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "+WLrdPWvj9Hg/Aj5uSO6XoGIOf8IZRSJFObwp50M2gU7bISlZY/gVAf1FCaqzoMDZrRlX2uUyKeQ8LSv9w+JgA=="
       },
       "System.Data.OleDb": {
         "type": "CentralTransitive",
@@ -1875,7 +1875,7 @@
           "Microsoft.Extensions.Configuration": "[10.0.15, )",
           "Microsoft.Extensions.Configuration.Json": "[10.0.15, )",
           "System.Configuration.ConfigurationManager": "[10.0.15, )",
-          "System.Data.Odbc": "[10.0.15, )",
+          "System.Data.Odbc": "[11.0.0, )",
           "System.Data.OleDb": "[10.0.15, )"
         }
       },
@@ -2281,9 +2281,9 @@
       },
       "System.Data.Odbc": {
         "type": "CentralTransitive",
-        "requested": "[10.0.15, )",
-        "resolved": "10.0.15",
-        "contentHash": "uSiK3C4Nf54hB1p8jSOTfo4dIfub4I0BDDDWWWm0LTz5JMC2TWDd3OsuUlfyjFRwf2NjEoakuAmWlT/I4wX7tw=="
+        "requested": "[11.0.0, )",
+        "resolved": "11.0.0",
+        "contentHash": "+WLrdPWvj9Hg/Aj5uSO6XoGIOf8IZRSJFObwp50M2gU7bISlZY/gVAf1FCaqzoMDZrRlX2uUyKeQ8LSv9w+JgA=="
       },
       "System.Data.OleDb": {
         "type": "CentralTransitive",
