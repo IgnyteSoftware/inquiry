@@ -262,7 +262,7 @@ public sealed class JourneyRunner(IServiceProvider services)
         var validation = "accepted";
         try
         {
-            await _inquiry.QueryListAsync<CustomerSales>($"SELECT Name AS Customer FROM Customer WHERE 1 = 0");
+            await _inquiry.QueryListAsync<CustomerSales>($"SELECT Name AS Customer, 0 AS Units, 0 AS TotalCents FROM Customer WHERE 1 = 0");
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("'OrderCount'", StringComparison.Ordinal))
         {

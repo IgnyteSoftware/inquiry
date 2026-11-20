@@ -76,7 +76,7 @@ jobs:
           $version = $Matches[1]
           $manifest = Get-Content -Raw eng/release-manifest.json | ConvertFrom-Json
           $stable = $manifest.packageVersion
-          $isPreview = $version -cmatch "^$([regex]::Escape($stable))-(preview|rc)\.(0|[1-9][0-9]*)$"
+          $isPreview = $version -cmatch "^$([regex]::Escape($stable))-(preview|rc)\.(0|[1-9][0-9]*)\z"
           if (-not $isPreview -and $version -cne $stable) {
             throw "Tag version '$version' must equal the manifest version '$stable' or be one of its -preview.N or -rc.N versions."
           }

@@ -31,7 +31,7 @@ The [diagnostic repair index](diagnostics.md) has the fix for each ID.
 
 | Diagnostic | What it reports | Fix |
 |---|---|---|
-| `INQ106` | Two properties of an `[InquiryAdHoc]` DTO or `[InquiryProjection]` claim the same column name, without regard to case. | Rename one `[InquiryAdHoc]` property. For a projection, rename one property or give it a distinct `[InquiryColumn]` name. |
+| `INQ106` | Two properties of an `[InquiryAdHoc]` DTO or `[InquiryProjection]` claim the same column name, without regard to case. | Rename one `[InquiryAdHoc]` property. For a projection, give one property a distinct `[InquiryColumn]` name, or rename it if its column name comes from the property name. |
 | `INQ114` | An `[InquiryStoredProcedure]` method that the target database cannot run. Procedures run on SQL Server and Oracle only. | Remove the method, or call the SQL through `IInquiry`. On Oracle, see [stored procedures](features/stored-procedures.md). |
 | `INQ115` | `[InquiryWhere]` criteria on an operation that ignores them. | Use `[InquirySelectAllByPredicate]` or `[InquiryCount]`, or remove the criteria. |
 | `INQ116` | `[InquiryForeignKey(typeof(T), "Name")]` where `T` has no property `Name`. | Use `nameof`, or `[InquiryForeignKey("Table", "Column")]` for physical names. |
@@ -52,7 +52,7 @@ Two new warnings fail builds that treat warnings as errors:
 - **Handwritten SQL and stored procedures map by column name.** Before, results mapped by `SELECT`-list
   position. For `[InquiryAdHoc]` DTOs, alias each result column to its CLR property name, for example
   `SUM(Amount) AS TotalAmount`. For entities and projections, including entity results of stored
-  procedures, return every mapped column under its mapped name from `[InquiryColumn]` or `[InquiryKey]`.
+  procedures, return every mapped column under the column name the entity maps it to, such as a name set by `[InquiryColumn]`, `[InquiryKey]` or `[InquiryForeignKey]`.
   Extra columns are ignored. A missing or duplicate match throws `InvalidOperationException` before the
   first row. Code that caught `InvalidCastException`,
   `FormatException` or `OverflowException` around these reads must catch `InvalidOperationException` and

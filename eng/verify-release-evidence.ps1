@@ -18,7 +18,7 @@ if ($ArtifactId -cnotmatch '^[0-9]+$' -or $ArtifactDigest -cnotmatch '^[0-9a-f]{
 $root = Split-Path -Parent $PSScriptRoot
 $manifest = Get-Content -Raw (Join-Path $root 'eng/release-manifest.json') | ConvertFrom-Json
 $stable = $Version -ceq $manifest.packageVersion
-if (-not $stable -and $Version -cnotmatch ('^' + [regex]::Escape($manifest.packageVersion) + '-(preview|rc)\.(0|[1-9][0-9]*)$')) {
+if (-not $stable -and $Version -cnotmatch ('^' + [regex]::Escape($manifest.packageVersion) + '-(preview|rc)\.(0|[1-9][0-9]*)\z')) {
     throw 'The release version must match the manifest or its numbered preview or release candidate.'
 }
 if ($stable) {
