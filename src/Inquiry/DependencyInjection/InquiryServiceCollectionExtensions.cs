@@ -13,7 +13,8 @@ public static class InquiryServiceCollectionExtensions
 {
     private const string AssemblyScanRequiresUnreferencedCode =
         "Assembly scanning discovers generated IInquiryServiceRegistration types via reflection, which trimming may remove. " +
-        "For trimmed/NativeAOT applications, call the generated AddInquiryGeneratedStores() extension instead.";
+        "For trimmed/NativeAOT applications, call the generated AddInquiryGeneratedStores() extension in the assembly that generates the stores, " +
+        "or that library's own registration method, instead.";
 
     /// <summary>
     /// Registers core Inquiry runtime services.
