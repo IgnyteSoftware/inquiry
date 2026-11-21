@@ -17,7 +17,7 @@ internal static class MaterializerEmitter
         for (var i = 0; i < columns.Count; i++)
         {
             var column = columns[i];
-            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i, sqlBuilder, column.EnumAsString, column.Converter)},");
+            source.AppendLine($"{indent}    {column.PropertyName} = {ReadExpression(column.Type, i, sqlBuilder, column.EnumAsString, column.Converter, dateTimeKind: column.DateTimeKind)},");
         }
         source.AppendLine($"{indent}}};");
     }
@@ -104,7 +104,7 @@ internal static class MaterializerEmitter
                 source.AppendLine($"                property = {i};");
             }
 
-            source.AppendLine($"                value{i} = {ReadExpression(column.Type, i, sqlBuilder, column.EnumAsString, column.Converter)};");
+            source.AppendLine($"                value{i} = {ReadExpression(column.Type, i, sqlBuilder, column.EnumAsString, column.Converter, dateTimeKind: column.DateTimeKind)};");
         }
 
         source.AppendLine("            }");
@@ -121,7 +121,7 @@ internal static class MaterializerEmitter
             var column = columns[i];
             var ordinal = $"ordinals[{i.ToString(CultureInfo.InvariantCulture)}]";
             source.AppendLine($"                        case {i}:");
-            source.AppendLine($"                            value{i} = {ReadExpression(column.Type, ordinal, sqlBuilder, column.EnumAsString, column.Converter, ReaderResultRole.Column)};");
+            source.AppendLine($"                            value{i} = {ReadExpression(column.Type, ordinal, sqlBuilder, column.EnumAsString, column.Converter, ReaderResultRole.Column, column.DateTimeKind)};");
             source.AppendLine("                            break;");
         }
 
@@ -146,16 +146,16 @@ internal static class MaterializerEmitter
         source.AppendLine("}");
     }
 
-    public static string ReadExpression(TypeData type, int index, SqlBuilder sqlBuilder, bool enumAsString = false, ConverterData? converter = null, ReaderResultRole role = ReaderResultRole.Column)
-        => ReadExpression(type, index.ToString(CultureInfo.InvariantCulture), sqlBuilder, enumAsString, converter, role);
+    public static string ReadExpression(TypeData type, int index, SqlBuilder sqlBuilder, bool enumAsString = false, ConverterData? converter = null, ReaderResultRole role = ReaderResultRole.Column, string? dateTimeKind = null)
+        => ReadExpression(type, index.ToString(CultureInfo.InvariantCulture), sqlBuilder, enumAsString, converter, role, dateTimeKind);
 
-    private static string ReadExpression(TypeData type, string index, SqlBuilder sqlBuilder, bool enumAsString, ConverterData? converter, ReaderResultRole role)
+    private static string ReadExpression(TypeData type, string index, SqlBuilder sqlBuilder, bool enumAsString, ConverterData? converter, ReaderResultRole role, string? dateTimeKind)
     {
         var nonNullable = type.NonNullableDisplayName;
         string read;
         if (converter is not null)
         {
-            read = ConverterInvocationEmitter.FromProvider(converter, PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role));
+            read = ConverterInvocationEmitter.FromProvider(converter, WithDateTimeKind(PlainReadExpression(converter.ProviderType, converter.ProviderSpecialType, index, nonNullable, converter.ProviderTypeDisplay, sqlBuilder, role), dateTimeKind));
         }
         else if (enumAsString)
         {
@@ -165,7 +165,7 @@ internal static class MaterializerEmitter
         {
             read = type.IsEnum
                 ? EnumReadExpression(type.EnumUnderlyingSpecialType, nonNullable, index, sqlBuilder, role)
-                : PlainReadExpression(type, type.SpecialType, index, nonNullable, nonNullable, sqlBuilder, role);
+                : WithDateTimeKind(PlainReadExpression(type, type.SpecialType, index, nonNullable, nonNullable, sqlBuilder, role), dateTimeKind);
         }
 
         if (!type.IsNullable)
@@ -177,6 +177,9 @@ internal static class MaterializerEmitter
             ? $"reader.IsDBNull({index}) ? ({type.DisplayName})null : {read}"
             : $"reader.IsDBNull({index}) ? null : {read}";
     }
+
+    private static string WithDateTimeKind(string read, string? dateTimeKind)
+        => dateTimeKind is null ? read : $"global::System.DateTime.SpecifyKind({read}, global::System.DateTimeKind.{dateTimeKind})";
 
     private static string EnumReadExpression(SpecialType underlying, string enumTypeName, string index, SqlBuilder sqlBuilder, ReaderResultRole role)
     {

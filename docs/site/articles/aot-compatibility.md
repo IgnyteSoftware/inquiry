@@ -16,6 +16,7 @@ warnings.
 | `[InquiryJson]` with a `JsonSerializerContext` from `[assembly: InquiryJsonContext]` | Supported | `aot-smoke` round-trips a structured value and a null value. |
 | `[InquiryJson(Context = typeof(...))]` per-property context | Supported | `aot-smoke` round-trips a dictionary through a second context with its own options. |
 | `[InquiryJson]` without a context | Not supported | `InquiryJsonConverter<T>` uses reflection-based `System.Text.Json`. |
+| `[assembly: InquiryDateTimeKind(...)]` and `[InquiryDateTimeKind]` | Supported | The generated read calls `DateTime.SpecifyKind` and uses no reflection. `aot-smoke` reads a UTC column and a null value. |
 | Custom `IInquiryValueConverter` through `[InquiryColumn(Converter = typeof(...))]` | Supported when the converter itself is trim-safe | Not executed by Inquiry. Your converter's code decides. |
 
 See [JSON columns](features/json-columns.md#trimming-and-nativeaot) for the context rules, serializer

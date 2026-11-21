@@ -1,3 +1,6 @@
 #nullable enable
 Inquiry.Stores.InquiryUpdateAttribute.StampModified.get -> bool
 Inquiry.Stores.InquiryUpdateAttribute.StampModified.set -> void
+Inquiry.Entities.InquiryDateTimeKindAttribute
+Inquiry.Entities.InquiryDateTimeKindAttribute.InquiryDateTimeKindAttribute(System.DateTimeKind kind) -> void
+Inquiry.Entities.InquiryDateTimeKindAttribute.Kind.get -> System.DateTimeKind

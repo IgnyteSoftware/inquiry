@@ -3,6 +3,7 @@ using Inquiry.Entities;
 using Inquiry.Stores;
 
 [assembly: InquiryJsonContext(typeof(Inquiry.AotSmoke.SmokeJsonContext))]
+[assembly: InquiryDateTimeKind(DateTimeKind.Utc)]
 
 namespace Inquiry.AotSmoke;
 
@@ -72,6 +73,9 @@ public sealed class Gadget
     [InquiryColumn]
     [InquiryJson(Context = typeof(SmokeTagsJsonContext))]
     public Dictionary<string, string> Tags { get; set; } = [];
+
+    [InquiryColumn]
+    public DateTime? SeenAt { get; set; }
 }
 
 public partial class GadgetStore : InquiryStore<Gadget>

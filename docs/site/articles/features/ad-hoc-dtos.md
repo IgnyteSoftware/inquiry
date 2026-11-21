@@ -54,6 +54,7 @@ Mapping is **by name, not by position**. Every public (or internal) instance pro
 - Get-only (computed), static, and privately-settable properties are skipped and need no column.
 - `[InquiryEnumAsString]` is honored on enum properties; other enums read as their underlying integer.
 - `Guid`, `DateOnly`/`TimeOnly`, and nullable types all read exactly as they do on entities.
+- `[InquiryDateTimeKind]` is honored on `DateTime` properties, and `[assembly: InquiryDateTimeKind(...)]` applies to them. See [DateTime kind](../entity-mapping.md#datetime-kind).
 
 ```csharp
 [InquiryAdHoc]
