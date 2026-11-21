@@ -1,1 +1,35 @@
 #nullable enable
+Inquiry.Testing.RecordedCommand.CommandType.get -> System.Data.CommandType
+Inquiry.Testing.RecordedCommand.Transaction.get -> Inquiry.Testing.RecordedTransaction?
+Inquiry.Testing.RecordedParameter.DbType.get -> System.Data.DbType
+Inquiry.Testing.RecordedParameter.Direction.get -> System.Data.ParameterDirection
+Inquiry.Testing.RecordedParameter.Precision.get -> byte
+Inquiry.Testing.RecordedParameter.ProviderParameter.get -> System.Data.Common.DbParameter?
+Inquiry.Testing.RecordedParameter.Scale.get -> byte
+Inquiry.Testing.RecordedParameter.Size.get -> int
+Inquiry.Testing.RecordedTransaction
+Inquiry.Testing.RecordedTransaction.IsolationLevel.get -> System.Data.IsolationLevel
+Inquiry.Testing.RecordedTransaction.Outcome.get -> Inquiry.Testing.RecordedTransactionOutcome
+Inquiry.Testing.RecordedTransaction.Parent.get -> Inquiry.Testing.RecordedTransaction?
+Inquiry.Testing.RecordedTransactionOutcome
+Inquiry.Testing.RecordedTransactionOutcome.Active = 0 -> Inquiry.Testing.RecordedTransactionOutcome
+Inquiry.Testing.RecordedTransactionOutcome.Committed = 1 -> Inquiry.Testing.RecordedTransactionOutcome
+Inquiry.Testing.RecordedTransactionOutcome.RolledBack = 2 -> Inquiry.Testing.RecordedTransactionOutcome
+Inquiry.Testing.ScriptedDatabase
+Inquiry.Testing.ScriptedDatabase.Commands.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Testing.RecordedCommand!>!
+Inquiry.Testing.ScriptedDatabase.DataSource.get -> System.Data.Common.DbDataSource!
+Inquiry.Testing.ScriptedDatabase.Enqueue(Inquiry.Testing.ScriptedResult! result) -> Inquiry.Testing.ScriptedDatabase!
+Inquiry.Testing.ScriptedDatabase.ScriptedDatabase(System.Data.Common.DbProviderFactory! providerFactory) -> void
+Inquiry.Testing.ScriptedDatabase.Transactions.get -> System.Collections.Generic.IReadOnlyList<Inquiry.Testing.RecordedTransaction!>!
+Inquiry.Testing.ScriptedDatabase.When(System.Func<Inquiry.Testing.RecordedCommand!, bool>! command, Inquiry.Testing.ScriptedResult! result) -> Inquiry.Testing.ScriptedDatabase!
+Inquiry.Testing.ScriptedResult
+Inquiry.Testing.ScriptedResult.WithOutput(string! parameterName, object? value) -> Inquiry.Testing.ScriptedResult!
+Inquiry.Testing.ScriptedResult.WithReturnValue(object? value) -> Inquiry.Testing.ScriptedResult!
+Inquiry.Testing.ScriptedResultSet
+Inquiry.Testing.ScriptedResultSet.Column<T>(string! name) -> Inquiry.Testing.ScriptedResultSet!
+Inquiry.Testing.ScriptedResultSet.Row(params object?[]! values) -> Inquiry.Testing.ScriptedResultSet!
+Inquiry.Testing.ScriptedResultSet.ScriptedResultSet() -> void
+static Inquiry.Testing.ScriptedResult.RowCount(int recordsAffected) -> Inquiry.Testing.ScriptedResult!
+static Inquiry.Testing.ScriptedResult.Rows(params Inquiry.Testing.ScriptedResultSet![]! resultSets) -> Inquiry.Testing.ScriptedResult!
+static Inquiry.Testing.ScriptedResult.Scalar(object? value) -> Inquiry.Testing.ScriptedResult!
+static Inquiry.Testing.ScriptedResult.Throws(System.Exception! exception) -> Inquiry.Testing.ScriptedResult!
