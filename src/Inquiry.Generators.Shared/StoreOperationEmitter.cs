@@ -1428,9 +1428,11 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            });");
+        // The single form checks for a second row. IsUnique is only a declaration, so a schema
+        // without the unique index must fail loudly, not hide the other updated rows.
         var query = method.ReturnsList
             ? $"Inquiry.QueryListAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})"
-            : $"Inquiry.QueryGeneratedSingleOrDefaultAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})";
+            : $"Inquiry.QuerySingleOrDefaultAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})";
         switch (method.PredicateUpdateReturn)
         {
             case PredicateUpdateReturn.Rows:
@@ -1440,24 +1442,40 @@ internal static class StoreOperationEmitter
             // The value is read through the entity materializer, so converters and provider types
             // behave as they do on the entity's own reads.
             case PredicateUpdateReturn.Scalar when method.ReturnsList:
-                source.AppendLine($"        var _rows = await {query}.ConfigureAwait(false);");
-                source.AppendLine($"        var _values = new global::System.Collections.Generic.List<{method.ScalarResultType}>(_rows.Count);");
-                source.AppendLine("        for (var _i = 0; _i < _rows.Count; _i++)");
+                var rows = LocalName(method, "_rows");
+                var values = LocalName(method, "_values");
+                var index = LocalName(method, "_i");
+                source.AppendLine($"        var {rows} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        var {values} = new global::System.Collections.Generic.List<{method.ScalarResultType}>({rows}.Count);");
+                source.AppendLine($"        for (var {index} = 0; {index} < {rows}.Count; {index}++)");
                 source.AppendLine("        {");
-                source.AppendLine($"            _values.Add(_rows[_i].{setColumns[0].PropertyName});");
+                source.AppendLine($"            {values}.Add({rows}[{index}].{setColumns[0].PropertyName});");
                 source.AppendLine("        }");
-                source.AppendLine("        return _values;");
+                source.AppendLine($"        return {values};");
                 break;
 
             case PredicateUpdateReturn.Scalar:
-                source.AppendLine($"        var _row = await {query}.ConfigureAwait(false);");
-                source.AppendLine($"        return _row?.{setColumns[0].PropertyName};");
+                var row = LocalName(method, "_row");
+                source.AppendLine($"        var {row} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        return {row}?.{setColumns[0].PropertyName};");
                 break;
 
             default:
                 source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
                 break;
         }
+    }
+
+    // A method parameter can use a generated local's name, so the local takes trailing underscores until it is free.
+    private static string LocalName(StoreMethodData method, string name)
+    {
+        var suffix = 0;
+        while (method.Parameters.AsImmutableArray().Any(parameter => parameter.Name == name + new string('_', suffix)))
+        {
+            suffix++;
+        }
+
+        return name + new string('_', suffix);
     }
 
     /// <summary>

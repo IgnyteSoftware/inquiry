@@ -137,7 +137,12 @@ The single-row form, `Task<T?>`, needs criteria that can match at most one row: 
 primary-key column, or `Equal` on a column with `IsUnique = true`, joined with AND. Optional criteria
 do not count, and a method with any `Not = true` criterion or group cannot use the single-row form. The update changes every matching row before any row is read, so
 the generator rejects a single-row form that could match more than one. Use the list form for
-those updates.
+those updates. `IsUnique` is a declaration that the database must enforce. If two rows match anyway,
+the call throws `InvalidOperationException` after the update has run, so wrap it in a transaction
+when a duplicate must not stay updated.
+
+For a nullable column, `null` from the single-row value form means either that no row matched or
+that the new value is `NULL`. Return the entity or a projection when you need to tell them apart.
 
 Each provider reads the values in the statement that updates them:
 

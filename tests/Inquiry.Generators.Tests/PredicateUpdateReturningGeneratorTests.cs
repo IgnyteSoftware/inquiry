@@ -38,7 +38,7 @@ public sealed partial class InquiryGeneratorTests
 
         AssertCompiles(result);
         Assert.Contains($"private const string _sqlUpdateWhere_IncrementAsync = \"{expectedSql}\";", text);
-        Assert.Contains("var _row = await Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Item, long, global::Demo.ItemInquiryEntityStructMaterializer>(_cmd, default, cancellationToken).ConfigureAwait(false);", text);
+        Assert.Contains("var _row = await Inquiry.QuerySingleOrDefaultAsync<global::Demo.Item, long, global::Demo.ItemInquiryEntityStructMaterializer>(_cmd, default, cancellationToken).ConfigureAwait(false);", text);
         Assert.Contains("return _row?.Score;", text);
         Assert.Contains("The updated row or value, read as it is after the update, or null when no row matches.", text);
     }
@@ -58,6 +58,42 @@ public sealed partial class InquiryGeneratorTests
         AssertCompiles(result);
         Assert.Contains("UPDATE \\\"TItem\\\" SET \\\"Score\\\" = \\\"Score\\\" + 1 WHERE \\\"Id\\\" = @Id RETURNING", text);
         Assert.Contains("return _row?.Score;", text);
+    }
+
+    [Fact]
+    public void SqlServerOutputTableAvoidsABoundParameterName()
+    {
+        var result = RunGenerator(ReturningStore("""
+            [InquiryUpdate]
+            [InquirySet("Score", "{Score} + @_out")]
+            [InquiryWhere("Id")]
+            public partial Task<int?> IncrementAsync(int _out, long id, CancellationToken cancellationToken = default);
+            """), dialect: "SqlServer");
+        var text = GeneratedStoreText(result, "ItemStore.InquiryStore.g.cs");
+
+        AssertCompiles(result);
+        Assert.Contains("DECLARE @_out1 TABLE (", text);
+        Assert.Contains("SET [Score] = [Score] + @_out OUTPUT INSERTED.[Id], INSERTED.[Category], INSERTED.[Name], INSERTED.[Score], INSERTED.[State] INTO @_out1 WHERE [Id] = @Id; SELECT [Id], [Category], [Name], [Score], [State] FROM @_out1", text);
+    }
+
+    [Fact]
+    public void ValueReturnLocalsAvoidParameterNames()
+    {
+        var result = RunGenerator(ReturningStore("""
+            [InquiryUpdate]
+            [InquirySet("Score", "{Score} + 1")]
+            [InquiryWhere("Id")]
+            public partial Task<int?> IncrementAsync(long _row, CancellationToken cancellationToken = default);
+
+            [InquiryUpdate]
+            [InquirySet("Score", "{Score} + 1")]
+            [InquiryWhere("Category", Compare.In)]
+            [InquiryWhere("Name")]
+            [InquiryWhere("Id", Compare.GreaterThan)]
+            public partial Task<IReadOnlyList<int>> BumpAsync(IReadOnlyList<string> _rows, string _values, long _i, CancellationToken cancellationToken = default);
+            """));
+
+        AssertCompiles(result);
     }
 
     [Theory]

@@ -181,11 +181,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     // The table variable takes the returned column set, so a projection declares only its own columns.
     internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
-        => DeclareOutputTable(returning)
+    {
+        var output = FreeOutputTableName(setClause, whereClause);
+        return DeclareOutputTable(returning, output)
             + " UPDATE " + context.Table + " SET " + setClause
-            + " OUTPUT " + InsertedColumns(returning) + " INTO @_out"
+            + " OUTPUT " + InsertedColumns(returning) + " INTO " + output
             + " WHERE " + whereClause
-            + "; " + SelectFromOutput(returning);
+            + "; " + SelectFromOutput(returning, output);
+    }
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
@@ -298,8 +301,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // OUTPUT INTO @_out requires a typed table variable. Declare it with the entity's column types so the
     // OUTPUT clause works on tables with DML triggers (bare OUTPUT without INTO raises error 334 on
     // triggered tables).
-    private string DeclareOutputTable(SqlBuildContext context)
-        => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
+    private string DeclareOutputTable(SqlBuildContext context, string tableName = "@_out")
+        => "DECLARE " + tableName + " TABLE (" + string.Join(", ", context.Columns.Select(c =>
             QuoteIdentifier(c.ColumnName) + " " + OutputColumnType(c))) + ");";
 
     // The table variable must hold each value without loss, so it takes the declared SqlType. The
@@ -325,8 +328,38 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         return sqlType!.IndexOf("NULL", StringComparison.OrdinalIgnoreCase) >= 0 ? sqlType : sqlType + " NULL";
     }
 
-    private static string SelectFromOutput(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM @_out";
+    private static string SelectFromOutput(SqlBuildContext context, string tableName = "@_out")
+        => "SELECT " + context.SelectColumns + " FROM " + tableName;
+
+    // An [InquirySet] expression can bind a method parameter named _out. Every bound parameter appears in
+    // the SET or WHERE text, so a name absent from both cannot clash. SQL Server variable names ignore case.
+    private static string FreeOutputTableName(string setClause, string whereClause)
+    {
+        var name = "@_out";
+        var suffix = 0;
+        while (UsesVariable(setClause, name) || UsesVariable(whereClause, name))
+        {
+            suffix++;
+            name = "@_out" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return name;
+    }
+
+    private static bool UsesVariable(string sql, string name)
+    {
+        for (var at = sql.IndexOf(name, StringComparison.OrdinalIgnoreCase); at >= 0;
+            at = sql.IndexOf(name, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = at + name.Length;
+            if (end == sql.Length || !(char.IsLetterOrDigit(sql[end]) || sql[end] is '_' or '@' or '#' or '$'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
     {
