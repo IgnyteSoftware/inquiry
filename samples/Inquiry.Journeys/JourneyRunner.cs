@@ -262,7 +262,9 @@ public sealed class JourneyRunner(IServiceProvider services)
         var validation = "accepted";
         try
         {
+#pragma warning disable INQ120 // The journey shows the run-time error for a missing column.
             await _inquiry.QueryListAsync<CustomerSales>($"SELECT Name AS Customer, 0 AS Units, 0 AS TotalCents FROM Customer WHERE 1 = 0");
+#pragma warning restore INQ120
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("'OrderCount'", StringComparison.Ordinal))
         {

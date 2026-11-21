@@ -74,8 +74,10 @@ public sealed class ScriptedDatabaseTests
         await using var services = CreateServices(database);
         var inquiry = services.GetRequiredService<IInquiry>();
 
+#pragma warning disable INQ120 // This test checks the run-time error that INQ120 reports at build time.
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => inquiry.QueryListAsync<Customer>($"SELECT CompanyName, CustomerID FROM Customers"));
+#pragma warning restore INQ120
 
         Assert.Contains("property 'ContactName' needs a column named 'ContactName'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Available columns: CompanyName, CustomerID", exception.Message, StringComparison.Ordinal);

@@ -47,7 +47,7 @@ Mapping is **by name, not by position**. Every public (or internal) instance pro
 
 - Names compare without regard to case (`StringComparison.OrdinalIgnoreCase`), so `ordercount`, `ORDERCOUNT`, and `OrderCount` all match `OrderCount`. Providers that fold unquoted aliases to lower or upper case need no quoting.
 - Extra result columns are ignored. Reports can return helper columns that the DTO does not declare.
-- A missing column throws `InvalidOperationException` before the first row is returned, even when the result has no rows. The message names the DTO, the property, and the available columns.
+- A missing column throws `InvalidOperationException` before the first row is returned, even when the result has no rows. The message names the DTO, the property, and the available columns. When the SQL text is constant, build warning [`INQ120`](../diagnostics.md#inq120) reports a missing or duplicate column at the call site.
 - If two result columns match one property, for example `Total` and `TOTAL`, the read throws. Inquiry does not pick one.
 - Two properties whose names differ only by case, such as `Id` and `ID`, report build error `INQ106`.
 - A database `NULL` in a non-nullable property throws `InvalidOperationException` that names the property. A column whose type the property cannot read throws `InvalidOperationException` that names the property and the column. The provider's exception is the inner exception.

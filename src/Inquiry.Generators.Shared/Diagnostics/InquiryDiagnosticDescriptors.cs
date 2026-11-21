@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ119. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ120. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -67,6 +67,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ117         Database default without DDL default (non-nullable UseDatabaseDefault column with no DefaultExpression in generated DDL) [IN USE]
     //   INQ118         Set-based modified stamp       ([InquiryUpdate(StampModified = true)] also assigns a modified-audit column) [IN USE]
     //   INQ119         DateTime read kind              ([InquiryDateTimeKind] on a column that does not read a DateTime, or an undefined kind) [IN USE]
+    //   INQ120         Handwritten SQL result columns (a generated result shape's column is missing from, or matched twice by, constant SQL read through IInquiry) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1124,6 +1125,14 @@ internal static class InquiryDiagnosticDescriptors
         "'{0}.{1}' cannot use [InquiryDateTimeKind]: {2}. Apply it only to a column that reads a System.DateTime, and pass DateTimeKind.Utc, DateTimeKind.Local or DateTimeKind.Unspecified.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq119");
+
+    // INQ120 (Warning): an analyzer, not the generator, reports it at an IInquiry call site. Name mapping
+    // throws on the first read, so the warning names the property and every column the SQL returns.
+    public static readonly DiagnosticDescriptor ResultColumnMismatch = new(
+        "INQ120", "Handwritten SQL result columns do not match the result type",
+        "The SQL read into '{0}' {1}. The SQL returns: {2}. Give each result column the name of the column its property maps to, for example with an alias.",
+        "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq120");
 
     public static readonly DiagnosticDescriptor StoreMethodSignatureNotSupported = new(
         "INQ111", "Store method signature cannot be generated",
