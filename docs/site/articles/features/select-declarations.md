@@ -75,7 +75,9 @@ The method follows the `QuerySingleOrDefaultAsync` rule: when more than one row 
 InquirySelectAllByField and call `SingleOrDefault()` on the list. That reads every match, and a
 duplicate surfaces as a generic LINQ error. The generated SQL reads at most two rows, which is enough
 to detect a duplicate: `LIMIT 2`, `TOP (2)` on SQL Server, and `ROWNUM <= 2` on Oracle. Oracle uses
-`ROWNUM` because it rejects `FOR UPDATE` together with `FETCH FIRST`.
+`ROWNUM` because it rejects `FOR UPDATE` together with `FETCH FIRST`. With `UpdateSkipLocked`, a
+locked duplicate is skipped rather than reported, and Oracle rejects the combination with INQ039; see
+[Row locking](row-locking.md#limitations).
 
 The method takes one parameter of the field's type, then the CancellationToken. The return type can
 also be a nullable projection. `IncludeDeleted`, `LockMode`, `Exclude`, global filters, and `InquiryIgnoreFilter`

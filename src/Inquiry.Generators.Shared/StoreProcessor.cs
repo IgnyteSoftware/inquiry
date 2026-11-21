@@ -2288,7 +2288,8 @@ internal static class StoreProcessor
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
-        // Exact complement of the needsPerMethodSql gate below — a method is served by the shared
+        // Exact complement of the needsPerMethodSql gate below, for the operations that have a shared
+        // const (SelectOneByField has none and always gets its own) — a method is served by the shared
         // const precisely when no per-method shape (IncludeDeleted, Distinct, LockMode, named-filter
         // bypass) forces its own. Keeping the two in lockstep is what prevents both dead shared
         // consts and a bypass method silently falling back to filtered SQL.
@@ -2745,14 +2746,11 @@ internal static class StoreProcessor
 
                 case StoreOperation.SelectOneByField:
                     {
-                        var field = "_sqlSelectOneBy_" + StoreOperationEmitter.BuildFieldSuffix(fieldColumns) + "_" + method.MemberName;
-                        var sql = sqlBuilder.BuildSelectOneByFieldSql(methodCtx, ToColumnList(fieldColumns));
-                        if (method.LockMode != 0)
-                        {
-                            var lockError = TryApplyLockClause(ref sql, sqlBuilder, methodCtx, method);
-                            if (lockError is not null)
-                            { lockErrors[method.MemberName] = lockError; break; }
-                        }
+                        // The member name alone is unique; a field-name prefix could make two names collide.
+                        var field = "_sqlSelectOneBy_" + method.MemberName;
+                        var lockError = TryBuildSelectOneByFieldSql(out var sql, sqlBuilder, methodCtx, method, fieldColumns);
+                        if (lockError is not null)
+                        { lockErrors[method.MemberName] = lockError; break; }
                         AppendSql(field, sql);
                         baseSelectFields[method.MemberName] = field;
                         break;
@@ -2933,12 +2931,18 @@ internal static class StoreProcessor
             {
                 LockMode = method.LockMode,
             };
-            var projSql = method.Operation switch
+            if (method.Operation == StoreOperation.SelectOneByField)
             {
-                StoreOperation.SelectAllByField => sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct),
-                StoreOperation.SelectOneByField => sqlBuilder.BuildSelectOneByFieldSql(projCtx, ToColumnList(fieldColumns)),
-                _ => sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct),
-            };
+                var oneError = TryBuildSelectOneByFieldSql(out var oneSql, sqlBuilder, projCtx, method, fieldColumns);
+                if (oneError is not null)
+                { lockErrors[method.MemberName] = oneError; continue; }
+                AppendSql("_sqlProj_" + method.MemberName, oneSql);
+                continue;
+            }
+
+            var projSql = method.Operation == StoreOperation.SelectAllByField
+                ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
+                : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
             if (method.LockMode != 0)
             {
                 var lockError = TryApplyLockClause(ref projSql, sqlBuilder, projCtx, method);
@@ -5812,6 +5816,22 @@ internal static class StoreProcessor
         {
             return ex.Message;
         }
+    }
+
+    // Returns the INQ039 reason when the provider cannot limit this locked shape to two rows correctly.
+    private static string? TryBuildSelectOneByFieldSql(out string sql, SqlBuilder sqlBuilder, SqlBuildContext context, StoreMethodData method, IReadOnlyList<ColumnData> fieldColumns)
+    {
+        try
+        {
+            sql = sqlBuilder.BuildSelectOneByFieldSql(context, ToColumnList(fieldColumns));
+        }
+        catch (System.NotSupportedException ex)
+        {
+            sql = string.Empty;
+            return ex.Message;
+        }
+
+        return method.LockMode == 0 ? null : TryApplyLockClause(ref sql, sqlBuilder, context, method);
     }
 
     private static string? TryApplyLockClause(ref string sql, SqlBuilder sqlBuilder, SqlBuildContext context, StoreMethodData method)

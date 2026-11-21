@@ -25,7 +25,7 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetWidgetStore(result);
 
-        Assert.Contains($"private const string _sqlSelectOneBy_Name_GetByNameAsync = \"{expectedSql}\";", text);
+        Assert.Contains($"private const string _sqlSelectOneBy_GetByNameAsync = \"{expectedSql}\";", text);
     }
 
     [Fact]
@@ -56,6 +56,23 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SelectOneByField_FieldAndMethodNamesCannotCollide()
+    {
+        var result = RunGenerator(LockModeEntity.Replace(
+            "public string Name { get; set; } = string.Empty;",
+            "public string Name { get; set; } = string.Empty;\n\n    [InquiryColumn(\"Name_Get\")]\n    public string Name_Get { get; set; } = string.Empty;",
+            StringComparison.Ordinal)
+            + "\n\npublic partial class LockModeStore : Inquiry.Stores.InquiryStore<Demo.Product>\n{\n" + """
+            [InquirySelectOneByField(nameof(Demo.Product.Name))]
+            public partial Task<Demo.Product?> Get_Async(string name, CancellationToken cancellationToken = default);
+
+            [InquirySelectOneByField(nameof(Demo.Product.Name_Get))]
+            public partial Task<Demo.Product?> Async(string name_Get, CancellationToken cancellationToken = default);
+            """ + "\n}\n");
+        AssertNoErrors(result);
+    }
+
+    [Fact]
     public void SelectOneByField_IncludeDeletedDropsSoftDeleteFilter()
     {
         var result = RunGenerator(WidgetStore("""
@@ -66,7 +83,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GetWidgetStore(result);
 
         Assert.Contains(
-            "_sqlSelectOneBy_Name_GetAnyByNameAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"Name\\\" = @Name LIMIT 2\";",
+            "_sqlSelectOneBy_GetAnyByNameAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsDeleted\\\" FROM \\\"TWidget\\\" WHERE \\\"Name\\\" = @Name LIMIT 2\";",
             text);
     }
 
@@ -82,7 +99,7 @@ public sealed partial class InquiryGeneratorTests
 
         // IncludeDeleted bypasses soft delete only; the global filter stays, as on [InquirySelectAllByField].
         Assert.Contains(
-            "_sqlSelectOneBy_Name_GetByNameAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TAccount\\\" WHERE \\\"Name\\\" = @Name AND \\\"IsActive\\\" = 1 LIMIT 2\";",
+            "_sqlSelectOneBy_GetByNameAsync = \"SELECT \\\"Id\\\", \\\"Name\\\", \\\"IsActive\\\" FROM \\\"TAccount\\\" WHERE \\\"Name\\\" = @Name AND \\\"IsActive\\\" = 1 LIMIT 2\";",
             text);
     }
 
@@ -128,8 +145,8 @@ public sealed partial class InquiryGeneratorTests
         var text = GetExcludeStore(result);
 
         Assert.Equal(
-            "const string _sqlSelectOneBy_Title_GetByTitleAsync = \"SELECT \"Id\", \"Title\", \"Body\", \"AuthorId\", \"Version\", \"IsDeleted\", \"IsPublished\" FROM \"TAnnouncement\" WHERE \"Title\" = @Title AND \"IsDeleted\" = 0 AND \"IsPublished\" = 1 LIMIT 2\"",
-            GetConst(text, "_sqlSelectOneBy_Title_GetByTitleAsync"));
+            "const string _sqlSelectOneBy_GetByTitleAsync = \"SELECT \"Id\", \"Title\", \"Body\", \"AuthorId\", \"Version\", \"IsDeleted\", \"IsPublished\" FROM \"TAnnouncement\" WHERE \"Title\" = @Title AND \"IsDeleted\" = 0 AND \"IsPublished\" = 1 LIMIT 2\"",
+            GetConst(text, "_sqlSelectOneBy_GetByTitleAsync"));
         Assert.Contains("Inquiry.QueryListAsync<global::Demo.Announcement, string, __InquiryReadMaterializer_GetByTitleAsync>(", text);
     }
 
@@ -159,7 +176,41 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetLockModeStore(result);
 
-        Assert.Contains($"_sqlSelectOneBy_Name_GetByNameForUpdateAsync = \"{expectedSql}\";", text);
+        Assert.Contains($"_sqlSelectOneBy_GetByNameForUpdateAsync = \"{expectedSql}\";", text);
+    }
+
+    [Fact]
+    public void SelectOneByField_SkipLockedOnOracleReportsINQ039()
+    {
+        var result = RunGenerator(LockModeStore("""
+            [InquirySelectOneByField(nameof(Product.Name), LockMode = InquiryLockMode.UpdateSkipLocked)]
+            public partial Task<Product?> GetByNameSkipLockedAsync(string name, CancellationToken cancellationToken = default);
+
+            [InquirySelectOneByField(nameof(Product.Name), LockMode = InquiryLockMode.UpdateSkipLocked)]
+            public partial Task<ProductName?> GetNameSkipLockedAsync(string name, CancellationToken cancellationToken = default);
+            }
+
+            [InquiryProjection(typeof(Demo.Product))]
+            public sealed class ProductName
+            {
+                [InquiryColumn("Name")]
+                public string Name { get; set; } = string.Empty;
+            """), dialect: "Oracle");
+
+        Assert.Equal(2, result.RunResult.Diagnostics.Count(static d => d.Id == "INQ039" &&
+            d.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("SKIP LOCKED", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void SelectOneByField_SkipLockedOnPostgreSqlKeepsTwoRowLimit()
+    {
+        var result = RunGenerator(LockModeStore("""
+            [InquirySelectOneByField(nameof(Product.Name), LockMode = InquiryLockMode.UpdateSkipLocked)]
+            public partial Task<Product?> GetByNameSkipLockedAsync(string name, CancellationToken cancellationToken = default);
+            """), dialect: "PostgreSql");
+        AssertNoErrors(result);
+
+        Assert.Contains("WHERE \\\"Name\\\" = @Name LIMIT 2 FOR UPDATE SKIP LOCKED\";", GetLockModeStore(result));
     }
 
     [Fact]

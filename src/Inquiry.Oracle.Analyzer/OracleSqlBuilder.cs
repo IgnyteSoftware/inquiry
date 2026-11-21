@@ -460,8 +460,17 @@ internal sealed class OracleSqlBuilder : SqlBuilder
     // ROWNUM, not FETCH FIRST: Oracle rejects FOR UPDATE with a row-limiting clause (ORA-02014),
     // and this query must still accept LockMode.
     internal override string BuildSelectOneByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
-        => "SELECT " + context.SelectColumns + " FROM " + FromTable(context)
+    {
+        // Oracle applies ROWNUM before SKIP LOCKED drops locked rows, so the limit could keep only
+        // locked rows and return null while an unlocked match exists.
+        if (context.LockMode == 3)
+        {
+            throw new System.NotSupportedException("Oracle applies the two-row ROWNUM limit before SKIP LOCKED, so a single-row field select cannot use UpdateSkipLocked.");
+        }
+
+        return "SELECT " + context.SelectColumns + " FROM " + FromTable(context)
             + " WHERE " + AppendWhere(BuildFieldWhere(context, filterColumns), "ROWNUM <= 2");
+    }
 
     /// <summary>
     /// Oracle does not support a row-value <c>(a, b) &gt; (@c0, @c1)</c> comparison, so a multi-column
