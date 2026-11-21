@@ -65,4 +65,28 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(PostgresErrorCodes.NotNullViolation, exception.SqlState);
     }
+
+    [SkippableFact]
+    public async Task DuplicateInBatchIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBatchAsync<PostgresException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, exception.SqlState);
+    }
+
+    [SkippableFact]
+    public async Task ForeignKeyViolationInBatchIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await PostgreSqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.ForeignKeyViolationInBatchAsync<PostgresException>(harness.GetRequiredService<UvChildStore>());
+
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, exception.SqlState);
+    }
 }

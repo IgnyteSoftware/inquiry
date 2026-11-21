@@ -63,4 +63,28 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(MySqlErrorCode.ColumnCannotBeNull, exception.ErrorCode);
     }
+
+    [SkippableFact]
+    public async Task DuplicateInBatchIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBatchAsync<MySqlException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(MySqlErrorCode.DuplicateKeyEntry, exception.ErrorCode);
+    }
+
+    [SkippableFact]
+    public async Task ForeignKeyViolationInBatchIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.ForeignKeyViolationInBatchAsync<MySqlException>(harness.GetRequiredService<UvChildStore>());
+
+        Assert.Equal(MySqlErrorCode.NoReferencedRow2, exception.ErrorCode);
+    }
 }

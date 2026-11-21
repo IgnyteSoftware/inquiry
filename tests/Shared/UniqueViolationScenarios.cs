@@ -27,12 +27,18 @@ public partial class UvParentStore : InquiryStore<UvParent>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(UvParent parent, CancellationToken cancellationToken = default);
+
+    [InquiryInsert]
+    public partial Task<int> InsertAllAsync(IEnumerable<UvParent> parents, CancellationToken cancellationToken = default);
 }
 
 public partial class UvChildStore : InquiryStore<UvChild>
 {
     [InquiryInsert]
     public partial Task<int> InsertAsync(UvChild child, CancellationToken cancellationToken = default);
+
+    [InquiryInsert]
+    public partial Task<int> InsertAllAsync(IEnumerable<UvChild> children, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -76,6 +82,28 @@ internal static class UniqueViolationScenarios
         Assert.False(exception.IsUniqueViolation());
         Assert.False(new AggregateException("failed", exception).IsUniqueViolation());
         Assert.False(new OperationCanceledException("cancelled", exception).IsUniqueViolation());
+        return exception;
+    }
+
+    public static async Task<TException> DuplicateInBatchAsync<TException>(UvParentStore store)
+        where TException : Exception
+    {
+        await store.InsertAsync(new UvParent { Id = 1, Code = "alpha" });
+
+        var exception = await Assert.ThrowsAsync<TException>(
+            () => store.InsertAllAsync([new UvParent { Id = 2, Code = "beta" }, new UvParent { Id = 1, Code = "gamma" }]));
+
+        AssertUniqueViolation(exception);
+        return exception;
+    }
+
+    public static async Task<TException> ForeignKeyViolationInBatchAsync<TException>(UvChildStore store)
+        where TException : Exception
+    {
+        var exception = await Assert.ThrowsAsync<TException>(
+            () => store.InsertAllAsync([new UvChild { Id = 1, ParentId = 98 }, new UvChild { Id = 2, ParentId = 99 }]));
+
+        Assert.False(exception.IsUniqueViolation());
         return exception;
     }
 

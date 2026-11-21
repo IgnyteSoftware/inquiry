@@ -56,6 +56,28 @@ public sealed class UniqueViolationIntegrationTests
     }
 
     [Fact]
+    public async Task DuplicateInBatchIsUniqueViolation()
+    {
+        var harness = await SqliteTestHarness.CreateAsync(Ddl, "Uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBatchAsync<SqliteException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_PRIMARYKEY, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
+    public async Task ForeignKeyViolationInBatchIsNotUniqueViolation()
+    {
+        var harness = await SqliteTestHarness.CreateAsync(Ddl, "Uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.ForeignKeyViolationInBatchAsync<SqliteException>(harness.GetRequiredService<UvChildStore>());
+
+        Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_FOREIGNKEY, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
     public async Task DuplicateRowidIsUniqueViolation()
     {
         var harness = await SqliteTestHarness.CreateAsync("CREATE TABLE UvRowid (Value TEXT);", "Uv");

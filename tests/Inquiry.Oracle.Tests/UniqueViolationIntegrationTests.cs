@@ -66,6 +66,30 @@ public sealed class UniqueViolationIntegrationTests
         Assert.Equal(1400, exception.Number);
     }
 
+    [SkippableFact]
+    public async Task DuplicateInBatchIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBatchAsync<OracleException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(24381, exception.Number);
+    }
+
+    [SkippableFact]
+    public async Task ForeignKeyViolationInBatchIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.ForeignKeyViolationInBatchAsync<OracleException>(harness.GetRequiredService<UvChildStore>());
+
+        Assert.Equal(24381, exception.Number);
+    }
+
     // A deferred constraint fails at commit with ORA-02091, which names the cause only in its message.
     [SkippableTheory]
     [InlineData("INSERT INTO UvDeferred (Id) VALUES (1)", 1, true)]

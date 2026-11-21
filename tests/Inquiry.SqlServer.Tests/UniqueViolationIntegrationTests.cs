@@ -63,4 +63,28 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(515, exception.Number);
     }
+
+    [SkippableFact]
+    public async Task DuplicateInBatchIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBatchAsync<SqlException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Contains(exception.Errors.Cast<SqlError>(), error => error.Number == 2627);
+    }
+
+    [SkippableFact]
+    public async Task ForeignKeyViolationInBatchIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.ForeignKeyViolationInBatchAsync<SqlException>(harness.GetRequiredService<UvChildStore>());
+
+        Assert.Contains(exception.Errors.Cast<SqlError>(), error => error.Number == 547);
+    }
 }
