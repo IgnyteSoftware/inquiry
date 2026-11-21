@@ -1420,7 +1420,7 @@ public abstract class SqlBuilder
             SqlCompareOp.Like => RenderLike(column, ParameterName(predicate.ParameterName!)),
             // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
             SqlCompareOp.NotLike => "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")",
-            SqlCompareOp.In => RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass),
+            SqlCompareOp.In => RenderInCollection(predicate, column),
             SqlCompareOp.NotIn => RenderNotIn(column, ParameterName(predicate.ParameterName!)),
             _ => column + " = " + ParameterName(predicate.ParameterName!),
         };
@@ -1459,7 +1459,23 @@ public abstract class SqlBuilder
 
     /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
     public string RenderInCollectionFragment(SqlPredicate predicate)
-        => RenderIn(RenderPredicateColumn(predicate), ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
+        => RenderInCollection(predicate, RenderPredicateColumn(predicate));
+
+    /// <summary>Renders a positive IN criterion over its collection transport. Override to read the predicate.</summary>
+    protected virtual string RenderInCollection(SqlPredicate predicate, string column)
+        => RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
+
+    /// <summary>
+    /// The assembly-wide <c>InListBinding</c> value, as its underlying int, that the store's assembly
+    /// selects. The generator sets it once per store emission.
+    /// </summary>
+    internal int DefaultInListBinding { get; set; }
+
+    /// <summary>
+    /// True when a positive IN criterion with the given <c>InListBinding</c> value (as its underlying int)
+    /// binds its list as one JSON parameter. Only providers that offer that choice override it.
+    /// </summary>
+    internal virtual bool UsesJsonInList(int requestedBinding) => false;
 
     /// <summary>The positive <c>IN</c> criterion over scalar placeholders (already dialect-named).</summary>
     public string RenderInScalarFragment(SqlPredicate predicate, IEnumerable<string> sqlParameterNames)

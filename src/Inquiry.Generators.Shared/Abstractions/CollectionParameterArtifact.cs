@@ -23,7 +23,8 @@ public sealed record CollectionParameterContext(
     string? OwningSchema,
     string OperationName,
     IColumn Column,
-    bool ElementIsNullable);
+    bool ElementIsNullable,
+    bool UsesJson = false);
 
 /// <summary>Provider-owned diagnostic produced while resolving a collection transport.</summary>
 public sealed record CollectionParameterDiagnostic(
@@ -38,6 +39,9 @@ public sealed record CollectionParameterResolution(
     CollectionParameterDiagnostic? Diagnostic)
 {
     public bool IsValid => Diagnostic is null;
+
+    /// <summary>Extra provider binder arguments for a transport that needs no artifact, such as JSON.</summary>
+    public string? TransportArguments { get; init; }
 }
 
 /// <summary>Provider-owned input used to emit a resolved collection binding.</summary>

@@ -16,3 +16,8 @@ Inquiry.SqlServer.SqlServerAppLockMode.Shared = 0 -> Inquiry.SqlServer.SqlServer
 Inquiry.SqlServer.SqlServerAppLockMode.Update = 1 -> Inquiry.SqlServer.SqlServerAppLockMode
 Inquiry.SqlServer.SqlServerInquiryTransactionExtensions
 static Inquiry.SqlServer.SqlServerInquiryTransactionExtensions.AcquireAppLockAsync(this Inquiry.Transactions.IInquiryTransaction! transaction, string! resource, Inquiry.SqlServer.SqlServerAppLockMode mode, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Inquiry.SqlServer.Parameters.InquiryJsonInParameter
+Inquiry.SqlServer.SqlServerInListBindingAttribute
+Inquiry.SqlServer.SqlServerInListBindingAttribute.Binding.get -> Inquiry.Stores.InListBinding
+Inquiry.SqlServer.SqlServerInListBindingAttribute.SqlServerInListBindingAttribute(Inquiry.Stores.InListBinding binding) -> void
+static Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, string! sqlType, int scale, bool nullable) -> void

@@ -1114,6 +1114,7 @@ internal static class StoreProcessor
                 JsonPath = GeneratorHelpers.GetNamedString(candidate, "JsonPath"),
                 Parameter = GeneratorHelpers.GetNamedString(candidate, "Parameter"),
                 UpperParameter = GeneratorHelpers.GetNamedString(candidate, "UpperParameter"),
+                InListBinding = GeneratorHelpers.GetNamedInt(candidate, "InListBinding") ?? 0,
             });
         }
     }
@@ -1776,14 +1777,14 @@ internal static class StoreProcessor
                     continue;
                 }
 
-                binding.CollectionResolution = ResolveCollection(item.Method, binding.Column, binding.ElementIsNullable);
+                binding.CollectionResolution = ResolveCollection(item.Method, binding.Column, binding.ElementIsNullable, binding.UsesJsonCollection);
             }
         }
 
-        CollectionParameterResolution ResolveCollection(StoreMethodData method, ColumnData column, bool elementIsNullable)
+        CollectionParameterResolution ResolveCollection(StoreMethodData method, ColumnData column, bool elementIsNullable, bool usesJson)
         {
             var resolution = sqlBuilder.ResolveCollectionParameter(
-                new CollectionParameterContext(entity.Schema, method.Name, column, elementIsNullable));
+                new CollectionParameterContext(entity.Schema, method.Name, column, elementIsNullable, usesJson));
             if (resolution.IsValid)
             {
                 collectionResolutions.Add(resolution);
@@ -4268,6 +4269,9 @@ internal static class StoreProcessor
                             elementIsNullable: parameter.ElementIsNullable, usesProviderType: usesProviderType));
                         if (predicate.Op == SqlCompareOp.In)
                         {
+                            var usesJson = sqlBuilder.UsesJsonInList(predicate.InListBinding);
+                            predicates[predicates.Count - 1].UsesJsonCollection = usesJson;
+                            bindings[bindings.Count - 1].UsesJsonCollection = usesJson;
                             positiveIns.Add((bindings[bindings.Count - 1], predicates[predicates.Count - 1], paramBase));
                         }
 

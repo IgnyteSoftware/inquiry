@@ -6,3 +6,9 @@ Inquiry.Entities.InquiryDateTimeKindAttribute.InquiryDateTimeKindAttribute(Syste
 Inquiry.Entities.InquiryDateTimeKindAttribute.Kind.get -> System.DateTimeKind
 Inquiry.Stores.InquiryUpsertAttribute.MatchOn.get -> string![]!
 Inquiry.Stores.InquiryUpsertAttribute.MatchOn.set -> void
+Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.Default = 0 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.Json = 2 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.TableValuedParameter = 1 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InquiryWhereAttribute.InListBinding.get -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InquiryWhereAttribute.InListBinding.set -> void

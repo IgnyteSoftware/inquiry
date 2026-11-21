@@ -37,6 +37,9 @@ internal sealed class PredicateBinding
     /// <summary>False when the value must not take the column's provider-specific store type.</summary>
     public bool UsesProviderType { get; }
 
+    /// <summary>True when the collection binds as one JSON parameter, so it needs no provider artifact.</summary>
+    public bool UsesJsonCollection { get; set; }
+
     /// <summary>The exact provider resolution discovered for this binding and reused during emission.</summary>
     public CollectionParameterResolution? CollectionResolution { get; set; }
 

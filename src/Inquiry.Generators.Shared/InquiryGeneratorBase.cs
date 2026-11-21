@@ -168,7 +168,7 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         });
 
         // Two ownership facts that only stores or only the schema read, so a change to one reaches only its readers.
-        var storeOptions = ownership.Select(static (owner, _) => owner.EmitUnsupportedOperationStubs)
+        var storeOptions = ownership.Select(static (owner, _) => (owner.EmitUnsupportedOperationStubs, owner.DefaultInListBinding))
             .WithTrackingName(StoreOptionsTrackingName);
         var schemaOptions = ownership.Select(static (owner, _) => owner.ManifestMetadataCollisionKey)
             .WithTrackingName(SchemaOptionsTrackingName);
@@ -722,6 +722,16 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
         };
         foreach (var attribute in compilation.Assembly.GetAttributes())
         {
+            if (attribute.AttributeClass?.ToDisplayString() == "Inquiry.SqlServer.SqlServerInListBindingAttribute"
+                && attribute.ConstructorArguments.Length == 1
+                && attribute.ConstructorArguments[0].Value is int inListBinding)
+            {
+                ownership = ownership with { DefaultInListBinding = inListBinding };
+            }
+        }
+
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
             if (attribute.AttributeClass?.ToDisplayString() != "System.Reflection.AssemblyMetadataAttribute"
                 || attribute.ConstructorArguments.Length == 0
                 || attribute.ConstructorArguments[0].Value is not string key
@@ -888,5 +898,8 @@ public abstract class InquiryGeneratorBase : IIncrementalGenerator
             : this(kind, ambiguousDialects, unknownDialect, string.Empty, false)
         {
         }
+
+        /// <summary>The <c>[assembly: SqlServerInListBinding]</c> value as its underlying int, or 0.</summary>
+        public int DefaultInListBinding { get; init; }
     }
 }

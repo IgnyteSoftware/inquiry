@@ -14,9 +14,10 @@ internal sealed record StoreSlice(
     EquatableArray<ProjectionData> Projections,
     EquatableArray<string> InvalidEntityNames,
     bool EmitUnsupportedOperationStubs,
-    bool Emit)
+    bool Emit,
+    int DefaultInListBinding = 0)
 {
-    public static StoreSlice Build(StoreData store, EntityIndex index, ProjectionIndex projections, bool emitUnsupportedOperationStubs)
+    public static StoreSlice Build(StoreData store, EntityIndex index, ProjectionIndex projections, (bool EmitUnsupportedOperationStubs, int DefaultInListBinding) options)
     {
         if (!index.Emit)
         {
@@ -49,7 +50,7 @@ internal sealed record StoreSlice(
             }
         }
 
-        return new StoreSlice(store, entities, mappedProjections.ToImmutable(), invalid, emitUnsupportedOperationStubs, true);
+        return new StoreSlice(store, entities, mappedProjections.ToImmutable(), invalid, options.EmitUnsupportedOperationStubs, true, options.DefaultInListBinding);
     }
 }
 
@@ -91,6 +92,7 @@ internal sealed record StoreEmission(
             projections[projection.FullyQualifiedName] = projection;
         }
 
+        sqlBuilder.DefaultInListBinding = slice.DefaultInListBinding;
         var emission = StoreProcessor.Emit(
             collector,
             store,

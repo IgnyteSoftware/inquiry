@@ -82,6 +82,9 @@ public sealed class SqlPredicate
     internal bool IsNegated { get; }
     internal bool IsOptional { get; }
 
+    /// <summary>True when a positive IN criterion sends its list as JSON instead of the provider's default transport.</summary>
+    internal bool UsesJsonCollection { get; set; }
+
     /// <summary>
     /// A JSON path (<c>$.a.b</c>) when this criterion filters inside <see cref="Column"/> (a JSON text
     /// column), or null for an ordinary column comparison. When set, <see cref="SqlBuilder.RenderPredicate"/>
