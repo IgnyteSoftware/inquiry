@@ -54,7 +54,7 @@ New warnings fail builds that treat warnings as errors:
   on each criterion.
 - `INQ117`: a non-nullable column sets `UseDatabaseDefault = true` with no `DefaultExpression` on an entity
   that generates DDL. Add a `DefaultExpression`, or set `GenerateDdl = false`.
-- `INQ120`, added after `1.0.0-rc.1`: constant handwritten SQL returns no column, or two columns, for a
+- `INQ120`, added in `1.0.0-rc.2`: constant handwritten SQL returns no column, or two columns, for a
   property of its result type. See the name-mapping change below.
 
 ## 3. Check the mapping changes
@@ -99,7 +99,7 @@ New warnings fail builds that treat warnings as errors:
 
 ## 5. Register stores through each library's own method
 
-This change comes after `1.0.0-rc.1`. The generated `AddInquiryGeneratedStores()` extension and its class,
+This change comes in `1.0.0-rc.2`. The generated `AddInquiryGeneratedStores()` extension and its class,
 `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Before, every
 assembly that generates stores exposed them as public, so a library that generates stores and references
 another such library failed to build with `CS0436` or `CS0121` when it called `AddInquiryGeneratedStores()`.

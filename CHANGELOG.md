@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-11-21
+
 ### Added
 
 - `[InquiryUpdate(StampModified = true)]` makes a set-based update, one with `[InquiryWhere]` criteria, also write the entity's `[InquiryModifiedAt]` and `[InquiryModifiedBy]` columns with `UtcNow` and `InquiryAuditContext.CurrentUser`, as entity updates do. The method takes no parameters for those columns, so a call can no longer forget them and leave a stale stamp. `[InquirySet]` expression updates stamp the same way. Without the property, generated SQL is unchanged. `INQ118` is a new build error for a method that opts in and also assigns a modified column through a parameter or `[InquirySet]`.
@@ -282,7 +284,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.2...HEAD
+[1.0.0-rc.2]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...v1.0.0-rc.1
 [1.0.0-preview.12]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...v1.0.0-preview.12
 [1.0.0-preview.11]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...v1.0.0-preview.11
