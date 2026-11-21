@@ -93,9 +93,15 @@ The middleware picks the user for each request in this order:
 
 The fallback in row 4 applies only when the resolver returns `null`. A custom resolver that returns a placeholder such as `"anonymous"` or an empty string for an unauthenticated request turns the fallback off. Return `null` when there is no user, or use `overrideResolver: true` on those endpoints.
 
-When an endpoint gets the metadata more than once, for example from its group and from the endpoint itself, the value closest to the endpoint wins. The closest value replaces both the user and `overrideResolver`, so an endpoint that sets its own user without `overrideResolver` turns off the override of its group. An endpoint with no metadata behaves as before.
+When an endpoint gets the metadata more than once, the value ASP.NET Core adds last wins, and it replaces both the user and `overrideResolver`. The order is:
 
-**Middleware order.** The middleware reads the metadata from the routed endpoint, so it must run after `UseRouting`. When `UseInquiryAuditContext` runs before routing, it does not see the metadata, and requests with no signed-in user get a `null` audit user. A `WebApplication` that never calls `UseRouting` adds routing at the start of the pipeline, so the metadata works there too.
+1. `WithInquiryAuditUser` on a route group.
+2. `[InquiryAuditUser]` on a controller, then on an action or a minimal API handler.
+3. `WithInquiryAuditUser` on the endpoint itself, or on the builder that `MapControllers()` returns.
+
+So an endpoint that sets its own user without `overrideResolver` turns off the override of its group. A convention such as `app.MapControllers().WithInquiryAuditUser("system:api")` replaces every controller and action attribute, including any `OverrideResolver = true`. An endpoint with no metadata behaves as before.
+
+**Middleware order.** The middleware reads the metadata from the routed endpoint, so it must run after `UseRouting`. When `UseInquiryAuditContext` runs before routing, it does not see the metadata, and requests with no signed-in user get a `null` audit user. `overrideResolver` has no effect there either, so a signed-in user replaces the endpoint's audit user. A `WebApplication` that never calls `UseRouting` adds routing at the start of the pipeline, so the metadata works there too.
 
 ## Scope disposal
 

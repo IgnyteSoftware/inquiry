@@ -9,7 +9,9 @@ namespace Inquiry.AspNetCore;
 /// <para>
 /// Apply it to an MVC controller or action, or add it to a minimal API endpoint or route group with
 /// <see cref="InquiryAuditUserEndpointConventionBuilderExtensions.WithInquiryAuditUser{TBuilder}(TBuilder, string, bool)"/>.
-/// When an endpoint has more than one, the one closest to the endpoint wins.
+/// When an endpoint has more than one, the one that ASP.NET Core adds last wins and replaces
+/// <see cref="OverrideResolver"/> too. Conventions on an endpoint or on <c>MapControllers()</c>
+/// are added after the attributes on a controller, action or handler.
 /// </para>
 /// <para>
 /// The middleware uses <see cref="User"/> when the user resolver returns <see langword="null"/>, or
