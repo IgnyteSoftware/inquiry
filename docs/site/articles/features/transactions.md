@@ -218,7 +218,7 @@ using Inquiry.SqlServer;
 
 await inquiry.ExecuteInTransactionAsync(async tx =>
 {
-    await tx.AcquireAppLockAsync($"import:{tenantId}", InquiryAppLockMode.Exclusive, TimeSpan.FromSeconds(10));
+    await tx.AcquireAppLockAsync($"import:{tenantId}", SqlServerAppLockMode.Exclusive, TimeSpan.FromSeconds(10));
 
     // Only one transaction at a time runs this part for the same tenant.
     await RunImportAsync(tx, tenantId);
@@ -227,7 +227,9 @@ await inquiry.ExecuteInTransactionAsync(async tx =>
 
 SQL Server releases the lock when the transaction commits or rolls back. A lock acquired through a
 savepoint handle belongs to the outer transaction. If that savepoint rolls back, SQL Server also
-releases the lock. There is no release method, and session-owned locks are not supported.
+releases a lock first acquired after the savepoint. It does not undo a mode change: a `Shared` lock
+taken before the savepoint and converted to `Exclusive` after it stays `Exclusive` until the
+transaction ends. There is no release method, and session-owned locks are not supported.
 
 `resource` is 1 to 255 characters. SQL Server compares the name binary, so it is case-sensitive.
 `timeout` is how long to wait: `TimeSpan.Zero` does not wait, and `Timeout.InfiniteTimeSpan` waits
@@ -241,12 +243,14 @@ Each `sp_getapplock` return code has one outcome:
 |---|---|
 | `0` | Granted at once. The call completes. |
 | `1` | Granted after waiting for other holders to release it. The call completes. |
-| `-1` | Not granted within the timeout. Throws `InquiryAppLockException` with `Failure = Timeout`. |
-| `-2` | SQL Server canceled the request. Throws `InquiryAppLockException` with `Failure = Canceled`. |
-| `-3` | Chosen as a deadlock victim. Throws `InquiryAppLockException` with `Failure = Deadlock`. |
-| `-999` | SQL Server rejected the parameters or the call. Throws `InquiryAppLockException` with `Failure = InvalidRequest`. |
+| `-1` | Not granted within the timeout. Throws `SqlServerAppLockException` with `Failure = Timeout`. |
+| `-2` | SQL Server canceled the request. Throws `SqlServerAppLockException` with `Failure = Canceled`. |
+| `-3` | Chosen as a deadlock victim. Throws `SqlServerAppLockException` with `Failure = Deadlock`. |
+| `-999` | SQL Server rejected the parameters or the call. Throws `SqlServerAppLockException` with `Failure = InvalidRequest`. |
 
-`InquiryAppLockException` also exposes `Resource` and the raw `ReturnCode`. The transaction stays
+`SqlServerAppLockException` also exposes `Resource` and the raw `ReturnCode`. The exception means the
+transaction did not get the requested mode. A lock it already held on the resource stays held: a
+failed conversion from `Shared` to `Exclusive` keeps the `Shared` lock. The transaction stays
 open after the exception, with the locks it already holds, so roll it back or let
 `ExecuteInTransactionAsync` roll it back. When the caller's cancellation token stops the wait, the
 call throws `OperationCanceledException`, as described in [Errors](../error-contracts.md).

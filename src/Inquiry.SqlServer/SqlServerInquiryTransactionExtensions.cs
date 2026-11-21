@@ -7,7 +7,7 @@ namespace Inquiry.SqlServer;
 /// <summary>
 /// SQL Server application locks (<c>sp_getapplock</c>) scoped to an Inquiry transaction.
 /// </summary>
-public static class SqlServerAppLockExtensions
+public static class SqlServerInquiryTransactionExtensions
 {
     private const int MaxResourceLength = 255;
 
@@ -23,7 +23,8 @@ public static class SqlServerAppLockExtensions
     /// <summary>
     /// Acquires a SQL Server application lock owned by this transaction. SQL Server releases the
     /// lock when the outermost transaction commits or rolls back. A rollback to a savepoint also
-    /// releases a lock acquired after that savepoint.
+    /// releases a lock first acquired after that savepoint. It does not undo a mode change: a lock
+    /// held before the savepoint and converted after it keeps the converted mode.
     /// </summary>
     /// <param name="transaction">An Inquiry transaction on a SQL Server connection. A savepoint
     /// handle acquires the lock for its outer transaction.</param>
@@ -35,8 +36,8 @@ public static class SqlServerAppLockExtensions
     /// or <paramref name="cancellationToken"/> is canceled. Sub-millisecond values round up.</param>
     /// <param name="cancellationToken">Cancels the wait.</param>
     /// <returns>A task that completes when the lock is granted (return code 0 or 1).</returns>
-    /// <exception cref="InquiryAppLockException"><c>sp_getapplock</c> returned -1, -2, -3 or -999.
-    /// <see cref="InquiryAppLockException.Failure"/> names the outcome.</exception>
+    /// <exception cref="SqlServerAppLockException"><c>sp_getapplock</c> returned -1, -2, -3 or -999.
+    /// <see cref="SqlServerAppLockException.Failure"/> names the outcome.</exception>
     /// <exception cref="ArgumentException"><paramref name="resource"/> is empty or longer than 255 characters.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="mode"/> is undefined, or
     /// <paramref name="timeout"/> is negative (other than infinite) or longer than <see cref="int.MaxValue"/> milliseconds.</exception>
@@ -44,7 +45,7 @@ public static class SqlServerAppLockExtensions
     public static async Task AcquireAppLockAsync(
         this IInquiryTransaction transaction,
         string resource,
-        InquiryAppLockMode mode,
+        SqlServerAppLockMode mode,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
     {
@@ -57,11 +58,11 @@ public static class SqlServerAppLockExtensions
 
         var modeName = mode switch
         {
-            InquiryAppLockMode.Shared => "Shared",
-            InquiryAppLockMode.Update => "Update",
-            InquiryAppLockMode.IntentShared => "IntentShared",
-            InquiryAppLockMode.IntentExclusive => "IntentExclusive",
-            InquiryAppLockMode.Exclusive => "Exclusive",
+            SqlServerAppLockMode.Shared => "Shared",
+            SqlServerAppLockMode.Update => "Update",
+            SqlServerAppLockMode.IntentShared => "IntentShared",
+            SqlServerAppLockMode.IntentExclusive => "IntentExclusive",
+            SqlServerAppLockMode.Exclusive => "Exclusive",
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown application lock mode."),
         };
 
@@ -97,6 +98,6 @@ public static class SqlServerAppLockExtensions
             return;
         }
 
-        throw new InquiryAppLockException(resource, (InquiryAppLockFailure)result);
+        throw new SqlServerAppLockException(resource, (SqlServerAppLockFailure)result);
     }
 }

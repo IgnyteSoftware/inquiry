@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Inquiry.SqlServer.Tests;
 
 /// <summary>
-/// Runs <see cref="SqlServerAppLockExtensions.AcquireAppLockAsync"/> against a live engine (#611).
+/// Runs <see cref="SqlServerInquiryTransactionExtensions.AcquireAppLockAsync"/> against a live engine (#611).
 /// Each transaction uses its own DI scope, so it has its own connection.
 /// </summary>
 [Collection(SqlServerCollection.Name)]
@@ -26,15 +26,15 @@ public sealed class AppLockIntegrationTests
         const string resource = "applock:timeout";
 
         await using var holder = await BeginAsync(harness);
-        await holder.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+        await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
         Assert.Equal("Exclusive", await LockModeAsync(holder.Transaction, resource));
 
         var elapsed = Stopwatch.StartNew();
-        var error = await Assert.ThrowsAsync<InquiryAppLockException>(
-            () => Task.Run(() => AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, TimeSpan.FromMilliseconds(500))).WaitAsync(_completesWithin));
+        var error = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => Task.Run(() => AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, TimeSpan.FromMilliseconds(500))).WaitAsync(_completesWithin));
         elapsed.Stop();
 
-        Assert.Equal(InquiryAppLockFailure.Timeout, error.Failure);
+        Assert.Equal(SqlServerAppLockFailure.Timeout, error.Failure);
         Assert.Equal(-1, error.ReturnCode);
         Assert.Equal(resource, error.Resource);
         Assert.True(elapsed.Elapsed >= TimeSpan.FromMilliseconds(450), $"The waiter returned after {elapsed.Elapsed}.");
@@ -50,8 +50,8 @@ public sealed class AppLockIntegrationTests
         Task<string> waiter;
         await using (var holder = await BeginAsync(harness))
         {
-            await holder.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
-            waiter = Task.Run(() => AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, _completesWithin));
+            await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
+            waiter = Task.Run(() => AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, _completesWithin));
             await AssertBlockedAsync(waiter);
             await holder.Transaction.CommitAsync();
         }
@@ -68,19 +68,19 @@ public sealed class AppLockIntegrationTests
 
         await using (var holder = await BeginAsync(harness))
         {
-            await holder.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+            await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
             await holder.Transaction.RollbackAsync();
         }
 
-        Assert.Equal("Exclusive", await AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero));
+        Assert.Equal("Exclusive", await AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero));
 
         // Disposal without commit is the other rollback path.
         await using (var holder = await BeginAsync(harness))
         {
-            await holder.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+            await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
         }
 
-        Assert.Equal("Exclusive", await AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero));
+        Assert.Equal("Exclusive", await AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero));
     }
 
     [SkippableFact]
@@ -94,23 +94,41 @@ public sealed class AppLockIntegrationTests
         await using var holder = await BeginAsync(harness);
         await using (var savepoint = await holder.Transaction.BeginTransactionAsync())
         {
-            await savepoint.AcquireAppLockAsync(rolledBack, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+            await savepoint.AcquireAppLockAsync(rolledBack, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
             await savepoint.RollbackAsync();
         }
 
         await using (var savepoint = await holder.Transaction.BeginTransactionAsync())
         {
-            await savepoint.AcquireAppLockAsync(committed, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+            await savepoint.AcquireAppLockAsync(committed, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
             await savepoint.CommitAsync();
         }
 
         Assert.Equal("NoLock", await LockModeAsync(holder.Transaction, rolledBack));
-        Assert.Equal("Exclusive", await Task.Run(() => AcquireInNewTransactionAsync(harness, rolledBack, InquiryAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
+        Assert.Equal("Exclusive", await Task.Run(() => AcquireInNewTransactionAsync(harness, rolledBack, SqlServerAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
 
         Assert.Equal("Exclusive", await LockModeAsync(holder.Transaction, committed));
-        var error = await Assert.ThrowsAsync<InquiryAppLockException>(
-            () => Task.Run(() => AcquireInNewTransactionAsync(harness, committed, InquiryAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
-        Assert.Equal(InquiryAppLockFailure.Timeout, error.Failure);
+        var error = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => Task.Run(() => AcquireInNewTransactionAsync(harness, committed, SqlServerAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
+        Assert.Equal(SqlServerAppLockFailure.Timeout, error.Failure);
+    }
+
+    [SkippableFact]
+    public async Task SavepointRollbackKeepsAConvertedMode()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "AppLock");
+        const string resource = "applock:savepoint-convert";
+
+        await using var holder = await BeginAsync(harness);
+        await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Shared, TimeSpan.Zero);
+        await using (var savepoint = await holder.Transaction.BeginTransactionAsync())
+        {
+            await savepoint.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
+            await savepoint.RollbackAsync();
+        }
+
+        Assert.Equal("Exclusive", await LockModeAsync(holder.Transaction, resource));
     }
 
     [SkippableFact]
@@ -121,13 +139,19 @@ public sealed class AppLockIntegrationTests
         const string resource = "applock:shared";
 
         await using var first = await BeginAsync(harness);
-        await first.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Shared, TimeSpan.Zero);
+        await first.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Shared, TimeSpan.Zero);
         await using var second = await BeginAsync(harness);
-        await second.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Shared, TimeSpan.Zero);
+        await second.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Shared, TimeSpan.Zero);
 
-        var error = await Assert.ThrowsAsync<InquiryAppLockException>(
-            () => Task.Run(() => AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
-        Assert.Equal(InquiryAppLockFailure.Timeout, error.Failure);
+        var error = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => Task.Run(() => AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero)).WaitAsync(_completesWithin));
+        Assert.Equal(SqlServerAppLockFailure.Timeout, error.Failure);
+
+        // A refused upgrade keeps the Shared lock the transaction already held.
+        var upgrade = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => first.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero));
+        Assert.Equal(SqlServerAppLockFailure.Timeout, upgrade.Failure);
+        Assert.Equal("Shared", await LockModeAsync(first.Transaction, resource));
     }
 
     [SkippableFact]
@@ -137,17 +161,17 @@ public sealed class AppLockIntegrationTests
         await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "AppLock");
         using var bothHoldFirstLock = new Barrier(2);
 
-        async Task<InquiryAppLockException?> RunAsync(string first, string second)
+        async Task<SqlServerAppLockException?> RunAsync(string first, string second)
         {
             await using var worker = await BeginAsync(harness);
-            await worker.Transaction.AcquireAppLockAsync(first, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
-            bothHoldFirstLock.SignalAndWait(_completesWithin);
+            await worker.Transaction.AcquireAppLockAsync(first, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
+            Assert.True(bothHoldFirstLock.SignalAndWait(_completesWithin), "The other worker did not take its first lock.");
             try
             {
-                await worker.Transaction.AcquireAppLockAsync(second, InquiryAppLockMode.Exclusive, _completesWithin);
+                await worker.Transaction.AcquireAppLockAsync(second, SqlServerAppLockMode.Exclusive, _completesWithin);
                 return null;
             }
-            catch (InquiryAppLockException error)
+            catch (SqlServerAppLockException error)
             {
                 // The victim's transaction stays open and still holds its first lock.
                 Assert.Equal(1, await worker.Transaction.ExecuteScalarAsync<int>($"SELECT @@TRANCOUNT"));
@@ -163,7 +187,7 @@ public sealed class AppLockIntegrationTests
             Task.Run(() => RunAsync("applock:b", "applock:a"))).WaitAsync(_completesWithin * 2);
 
         var failure = Assert.Single(outcomes, outcome => outcome is not null);
-        Assert.Equal(InquiryAppLockFailure.Deadlock, failure!.Failure);
+        Assert.Equal(SqlServerAppLockFailure.Deadlock, failure!.Failure);
         Assert.Equal(-3, failure.ReturnCode);
     }
 
@@ -175,11 +199,16 @@ public sealed class AppLockIntegrationTests
         const string resource = "applock:cancel";
 
         await using var holder = await BeginAsync(harness);
-        await holder.Transaction.AcquireAppLockAsync(resource, InquiryAppLockMode.Exclusive, TimeSpan.Zero);
+        await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
 
-        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        // Open the waiter first, so the token cancels a wait that is already on the server.
+        await using var waiter = await BeginAsync(harness);
+        using var cancel = new CancellationTokenSource();
+        var elapsed = Stopwatch.StartNew();
+        cancel.CancelAfter(TimeSpan.FromMilliseconds(500));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Task.Run(() => AcquireInNewTransactionAsync(harness, resource, InquiryAppLockMode.Exclusive, Timeout.InfiniteTimeSpan, cancel.Token)).WaitAsync(_completesWithin));
+            () => Task.Run(() => waiter.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, Timeout.InfiniteTimeSpan, cancel.Token)).WaitAsync(_completesWithin));
+        Assert.True(elapsed.Elapsed >= TimeSpan.FromMilliseconds(450), $"The wait ended after {elapsed.Elapsed}.");
     }
 
     private static async Task<ScopedTransaction> BeginAsync(SqlServerTestHarness harness)
@@ -199,7 +228,7 @@ public sealed class AppLockIntegrationTests
 
     // Returns the mode the new transaction holds after the call, as SQL Server reports it.
     private static async Task<string> AcquireInNewTransactionAsync(
-        SqlServerTestHarness harness, string resource, InquiryAppLockMode mode, TimeSpan timeout, CancellationToken cancellationToken = default)
+        SqlServerTestHarness harness, string resource, SqlServerAppLockMode mode, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         await using var worker = await BeginAsync(harness);
         await worker.Transaction.AcquireAppLockAsync(resource, mode, timeout, cancellationToken);

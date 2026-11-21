@@ -4,7 +4,7 @@ namespace Inquiry.SqlServer;
 /// Why <c>sp_getapplock</c> did not grant an application lock. Each value equals the negative
 /// return code that <c>sp_getapplock</c> reports for that outcome.
 /// </summary>
-public enum InquiryAppLockFailure
+public enum SqlServerAppLockFailure
 {
     /// <summary>Return code -1: the lock was not granted within the timeout.</summary>
     Timeout = -1,

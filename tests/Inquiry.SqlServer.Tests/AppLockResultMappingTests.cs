@@ -16,7 +16,7 @@ public sealed class AppLockResultMappingTests
     public async Task GrantedCodesComplete(int returnCode)
     {
         var transaction = new ScalarTransaction(returnCode);
-        await transaction.AcquireAppLockAsync("orders", InquiryAppLockMode.Exclusive, TimeSpan.FromSeconds(5));
+        await transaction.AcquireAppLockAsync("orders", SqlServerAppLockMode.Exclusive, TimeSpan.FromSeconds(5));
 
         var command = Assert.Single(transaction.Commands);
         Assert.Contains("@LockOwner = N'Transaction'", command.CommandText, StringComparison.Ordinal);
@@ -25,14 +25,14 @@ public sealed class AppLockResultMappingTests
     }
 
     [Theory]
-    [InlineData(-1, InquiryAppLockFailure.Timeout)]
-    [InlineData(-2, InquiryAppLockFailure.Canceled)]
-    [InlineData(-3, InquiryAppLockFailure.Deadlock)]
-    [InlineData(-999, InquiryAppLockFailure.InvalidRequest)]
-    public async Task RefusedCodesThrowTypedException(int returnCode, InquiryAppLockFailure expected)
+    [InlineData(-1, SqlServerAppLockFailure.Timeout)]
+    [InlineData(-2, SqlServerAppLockFailure.Canceled)]
+    [InlineData(-3, SqlServerAppLockFailure.Deadlock)]
+    [InlineData(-999, SqlServerAppLockFailure.InvalidRequest)]
+    public async Task RefusedCodesThrowTypedException(int returnCode, SqlServerAppLockFailure expected)
     {
-        var error = await Assert.ThrowsAsync<InquiryAppLockException>(
-            () => new ScalarTransaction(returnCode).AcquireAppLockAsync("orders", InquiryAppLockMode.Shared, TimeSpan.Zero));
+        var error = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => new ScalarTransaction(returnCode).AcquireAppLockAsync("orders", SqlServerAppLockMode.Shared, TimeSpan.Zero));
 
         Assert.Equal(expected, error.Failure);
         Assert.Equal(returnCode, error.ReturnCode);
@@ -43,7 +43,7 @@ public sealed class AppLockResultMappingTests
     public async Task InfiniteTimeoutWaitsWithoutClientTimeout()
     {
         var transaction = new ScalarTransaction(0);
-        await transaction.AcquireAppLockAsync("orders", InquiryAppLockMode.Update, Timeout.InfiniteTimeSpan);
+        await transaction.AcquireAppLockAsync("orders", SqlServerAppLockMode.Update, Timeout.InfiniteTimeSpan);
 
         var command = Assert.Single(transaction.Commands);
         Assert.Equal(-1, command.Parameters[2].Value);
@@ -54,11 +54,11 @@ public sealed class AppLockResultMappingTests
     public async Task InvalidArgumentsThrowBeforeExecuting()
     {
         var transaction = new ScalarTransaction(0);
-        await Assert.ThrowsAsync<ArgumentException>(() => transaction.AcquireAppLockAsync("", InquiryAppLockMode.Shared, TimeSpan.Zero));
-        await Assert.ThrowsAsync<ArgumentException>(() => transaction.AcquireAppLockAsync(new string('x', 256), InquiryAppLockMode.Shared, TimeSpan.Zero));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", (InquiryAppLockMode)99, TimeSpan.Zero));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", InquiryAppLockMode.Shared, TimeSpan.FromMilliseconds(-2)));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", InquiryAppLockMode.Shared, TimeSpan.FromDays(25)));
+        await Assert.ThrowsAsync<ArgumentException>(() => transaction.AcquireAppLockAsync("", SqlServerAppLockMode.Shared, TimeSpan.Zero));
+        await Assert.ThrowsAsync<ArgumentException>(() => transaction.AcquireAppLockAsync(new string('x', 256), SqlServerAppLockMode.Shared, TimeSpan.Zero));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", (SqlServerAppLockMode)99, TimeSpan.Zero));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", SqlServerAppLockMode.Shared, TimeSpan.FromMilliseconds(-2)));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => transaction.AcquireAppLockAsync("orders", SqlServerAppLockMode.Shared, TimeSpan.FromDays(25)));
         Assert.Empty(transaction.Commands);
     }
 

@@ -1,10 +1,10 @@
 namespace Inquiry.SqlServer;
 
 /// <summary>
-/// The <c>@LockMode</c> that <see cref="SqlServerAppLockExtensions.AcquireAppLockAsync"/> passes to
+/// The <c>@LockMode</c> that <see cref="SqlServerInquiryTransactionExtensions.AcquireAppLockAsync"/> passes to
 /// <c>sp_getapplock</c>. The modes follow the SQL Server lock compatibility matrix.
 /// </summary>
-public enum InquiryAppLockMode
+public enum SqlServerAppLockMode
 {
     /// <summary>Compatible with other <c>Shared</c>, <c>Update</c> and <c>IntentShared</c> holders.</summary>
     Shared = 0,
