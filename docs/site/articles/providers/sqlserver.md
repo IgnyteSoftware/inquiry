@@ -82,9 +82,14 @@ the list is sent as one `nvarchar(max)` JSON array.
   schema has neither constant.
 - **Typed as the column:** the `WITH` clause gives each element the column's own SQL type, from its
   facets or its explicit `SqlType`, such as `UNIQUEIDENTIFIER`, `DATETIME2(3)` or `DECIMAL(21,5)`. The
-  comparison then uses the column's type and collation, not `nvarchar`, as it does with a table type.
+  comparison then uses the column's type and collation, not `nvarchar`. A table type cannot do this when
+  the column's collation differs from the database default: that comparison fails with error 468.
   Temporal values are truncated to the column scale and `datetime` values are rounded to its 1/300 s grid,
   as SqlClient does for a table-valued parameter. `byte[]` values are sent as base64, which `OPENJSON` decodes.
+- **ANSI code pages:** a `char` or `varchar` element is converted with the database default code page.
+  If a `char` or `varchar` column uses a collation with another code page, such as a UTF-8 collation in a
+  Latin1 database, characters outside the database code page become `?` and do not match. Use `nchar` or
+  `nvarchar` for such columns.
 - **Same rules otherwise:** lists of up to 16 integers still bind as scalar parameters, `Compare.NotIn`
   still expands to scalar parameters, and null or empty lists match no rows.
 - **Compatibility level 130 or later:** `OPENJSON` needs SQL Server 2016 or later with database
