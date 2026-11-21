@@ -61,8 +61,37 @@ set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotL
   `[InquiryDelete]` is a compile error; use `[InquiryDeleteAll]` for an explicit table-wide delete.
 - `[InquiryUpdate]`'s SET fields must be ordinary mutable columns: not the key, not
   database-generated, not the soft-delete indicator, not a concurrency token.
+- `[InquiryUpdate(StampModified = true)]` also writes the entity's `[InquiryModifiedAt]` and
+  `[InquiryModifiedBy]` columns, with `UtcNow` and `InquiryAuditContext.CurrentUser`. See
+  [Stamping modified columns](#stamping-modified-columns).
 - **Concurrency-token entities are rejected** for both operations (same rationale as batch
   mutations: a set-based statement cannot check per-row tokens).
+
+## Stamping modified columns
+
+A set-based update does not write auditing columns unless you opt in. With `StampModified = true`, the
+generated SET clause appends one parameter per `[InquiryModifiedAt]` and `[InquiryModifiedBy]` column,
+after the method's own assignments. The method declares no parameters for them, and the binder fills
+them with `UtcNow` and `InquiryAuditContext.CurrentUser`:
+
+```csharp
+[InquiryUpdate(StampModified = true)]
+[InquiryWhere(nameof(Member.Id))]
+public partial Task<int> SetStatusAsync(string status, long id, CancellationToken ct = default);
+// UPDATE [Member] SET [Status] = @Status, [TStamp] = @TStamp, [LastUpdatedBy] = @LastUpdatedBy WHERE [Id] = @Id
+
+[InquiryUpdate(StampModified = true)]
+[InquirySet(nameof(Member.Score), "{Score} + @delta")]
+[InquiryWhere(nameof(Member.Id))]
+public partial Task<int> AddScoreAsync(int delta, long id, CancellationToken ct = default);
+// UPDATE [Member] SET [Score] = [Score] + @delta, [TStamp] = @TStamp, [LastUpdatedBy] = @LastUpdatedBy WHERE [Id] = @Id
+```
+
+Without `StampModified`, the generated SQL is unchanged. A criterion on a stamped column binds under a
+new name, such as `@TStamp2`, so it cannot collide with the stamp. A method that opts in and also
+assigns a modified column, through a parameter or `[InquirySet]`, reports
+[INQ118](../diagnostics.md#inq118). Set-based deletes and soft deletes never stamp. See
+[Auditing](auditing.md#set-based-updates).
 
 ## Soft-delete entities
 

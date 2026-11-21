@@ -126,6 +126,12 @@ internal sealed record StoreMethodData(
     /// </summary>
     public bool HardDelete { get; init; }
 
+    /// <summary>
+    /// For <see cref="StoreOperation.UpdateByPredicate"/>, whether <c>StampModified = true</c> was set so
+    /// the SET clause also writes the entity's modified-* auditing columns.
+    /// </summary>
+    public bool StampModified { get; init; }
+
     /// <summary>For <see cref="StoreOperation.SelectTopByOrder"/>, the raw column name (resolved at emit).</summary>
     public string? TopByOrderColumn { get; init; }
 

@@ -1469,3 +1469,15 @@ Failing shape: `[InquiryColumn(UseDatabaseDefault = true)] public string Status 
 Smallest correction: Add the default, `[InquiryColumn(DefaultExpression = "'New'", UseDatabaseDefault = true)]`. If the deployed table has its own default and Inquiry does not create the table, set `GenerateDdl = false` on the entity's `[InquiryTable]`.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ118
+
+StampModified update also assigns a stamped column. Default: error, enabled.
+
+Trigger: A set-based `[InquiryUpdate(StampModified = true)]` method also assigns an `[InquiryModifiedAt]` or `[InquiryModifiedBy]` column, through an update parameter or an `[InquirySet]` assignment. The generated update stamps that column itself, so the method would set it twice.
+
+Failing shape: `[InquiryUpdate(StampModified = true)] [InquiryWhere(nameof(Member.Id))]` on `SetStatusAsync(string status, DateTime tStamp, long id, CancellationToken ct)`, where `Member.TStamp` is `[InquiryModifiedAt]`.
+
+Smallest correction: Remove the `tStamp` parameter or the `[InquirySet]` assignment. To pass the value yourself, remove `StampModified` instead.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

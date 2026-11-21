@@ -526,6 +526,8 @@ internal static class StoreProcessor
             or StoreOperation.SelectAllByPredicate &&
             GeneratorHelpers.GetNamedBool(attribute, "Distinct");
         var hardDelete = attribute.AttributeClass?.Name is "InquiryHardDeleteAttribute" or "InquiryHardDeleteAllAttribute";
+        var stampModified = operation == StoreOperation.UpdateByPredicate &&
+            GeneratorHelpers.GetNamedBool(attribute, "StampModified");
         var lockMode = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
             ? GeneratorHelpers.GetNamedInt(attribute, "LockMode") ?? 0
@@ -555,6 +557,7 @@ internal static class StoreProcessor
             IncludedRelations = new EquatableArray<string>(ReadIncludedRelations(method)),
             Distinct = distinct,
             HardDelete = hardDelete,
+            StampModified = stampModified,
             LockMode = lockMode,
             TopByOrderColumn = topByOrderColumn,
             TopByOrderDescending = topByOrderDescending,
@@ -2150,9 +2153,19 @@ internal static class StoreProcessor
 
             if (method.Operation == StoreOperation.UpdateByPredicate)
             {
-                AppendSql("_sqlUpdateWhere_" + method.MemberName, predicatePlan.SetAssignments.Count > 0
-                    ? sqlBuilder.BuildUpdateByPredicateSql(ctx, predicatePlan.SetAssignments, predicatePlan.Predicates)
-                    : sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates));
+                string updateSql;
+                if (predicatePlan.StampBindings.Count > 0)
+                {
+                    updateSql = sqlBuilder.BuildUpdateByPredicateSql(ctx, StampedSetAssignments(sqlBuilder, fieldColumns, predicatePlan), predicatePlan.Predicates);
+                }
+                else
+                {
+                    updateSql = predicatePlan.SetAssignments.Count > 0
+                        ? sqlBuilder.BuildUpdateByPredicateSql(ctx, predicatePlan.SetAssignments, predicatePlan.Predicates)
+                        : sqlBuilder.BuildUpdateByPredicateSql(ctx, ToColumnList(fieldColumns), predicatePlan.Predicates);
+                }
+
+                AppendSql("_sqlUpdateWhere_" + method.MemberName, updateSql);
             }
             else if (method.Operation == StoreOperation.DeleteByPredicate)
             {
@@ -3368,6 +3381,19 @@ internal static class StoreProcessor
                 }
             }
 
+            IReadOnlyList<StampBinding> stampBindings = Array.Empty<StampBinding>();
+            if (method.StampModified)
+            {
+                if (setColumns.FirstOrDefault(static column => column.IsModifiedAt || column.IsModifiedBy) is { } assignedStamp)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StampModifiedColumnAssigned,
+                        method.Location?.ToLocation(), method.Name, assignedStamp.PropertyName));
+                    return false;
+                }
+
+                stampBindings = ResolveStampBindings(entity, setColumns, setBindings);
+            }
+
             fieldColumns = setColumns;
             if (!TryResolvePredicates(
                 context,
@@ -3378,6 +3404,7 @@ internal static class StoreProcessor
                 setColumns,
                 leadingParameterCount: method.SetExpressions.Count > 0 ? expressionParameterCount : null,
                 reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1)).ToArray(),
+                stampParameterNames: stampBindings.Select(static stamp => stamp.SqlParameterName).ToArray(),
                 setParameterIndexes: method.SetExpressions.Count > 0
                     ? setBindings.Select(static binding => binding.MethodParameterIndex).ToArray()
                     : setParameterIndexes))
@@ -3390,6 +3417,7 @@ internal static class StoreProcessor
                 SetAssignments = setAssignments,
                 SetBindings = setBindings,
                 SetParameterIndexes = setParameterIndexes,
+                StampBindings = stampBindings,
             };
             return true;
         }
@@ -3892,7 +3920,8 @@ internal static class StoreProcessor
         int trailingParameterCount = 0,
         int? leadingParameterCount = null,
         IReadOnlyCollection<string>? reservedParameterNames = null,
-        IReadOnlyCollection<int>? setParameterIndexes = null)
+        IReadOnlyCollection<int>? setParameterIndexes = null,
+        IReadOnlyCollection<string>? stampParameterNames = null)
     {
         plan = null;
         var nonCancellationCount = method.Parameters.Count - 1 - trailingParameterCount;
@@ -3939,6 +3968,14 @@ internal static class StoreProcessor
         {
             reservedIgnoringCase.UnionWith(reservedParameterNames.Where(reservedName =>
                 !method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, reservedName, StringComparison.Ordinal))));
+        }
+
+        // A stamp has no method parameter, so a predicate name must avoid it ignoring case even when
+        // a parameter shares its exact spelling.
+        if (stampParameterNames is not null)
+        {
+            usedNames.UnionWith(stampParameterNames);
+            reservedIgnoringCase.UnionWith(stampParameterNames);
         }
 
         // Paging names are reserved after the filter above, because a C# parameter may use one (#543).
@@ -4331,6 +4368,44 @@ internal static class StoreProcessor
 
     private static bool ParameterMatchesColumnIgnoringNullability(ParameterData parameter, ColumnData column)
         => parameter.NonNullableComparisonDisplay == column.Type.NonNullableDisplayName;
+
+    /// <summary>
+    /// Names the modified-* stamp parameters of a <c>StampModified</c> update. Each takes its property
+    /// name unless that matches a SET or filter parameter ignoring case, because SQL Server and MySQL
+    /// compare parameter names that way.
+    /// </summary>
+    private static List<StampBinding> ResolveStampBindings(
+        EntityData entity,
+        IReadOnlyList<ColumnData> setColumns,
+        IReadOnlyList<SetBinding> setBindings)
+    {
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        taken.UnionWith(setBindings.Count > 0
+            ? setBindings.Select(static binding => binding.SqlParameterName.Substring(1))
+            : setColumns.Select(static column => column.PropertyName));
+        taken.UnionWith(entity.Columns.AsImmutableArray().Select(static column => column.GlobalFilterParameterName).OfType<string>());
+
+        var stamps = new List<StampBinding>();
+        foreach (var column in entity.Columns.AsImmutableArray())
+        {
+            if (!(column.IsModifiedAt || column.IsModifiedBy) || !IsSettableColumn(column))
+            {
+                continue;
+            }
+
+            var name = column.PropertyName;
+            var suffix = 2;
+            while (!taken.Add(name))
+            {
+                name = column.PropertyName + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            stamps.Add(new StampBinding(column, name));
+        }
+
+        return stamps;
+    }
 
     /// <summary>
     /// The SQL bind name for a SET-expression parameter. It is the parameter name unless that equals a
@@ -4873,6 +4948,26 @@ internal static class StoreProcessor
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// The SET list of a <c>StampModified</c> update: the method's own assignments, then one
+    /// parameter per stamped column. Plain SET columns render as they do without stamps.
+    /// </summary>
+    private static List<SqlSetAssignment> StampedSetAssignments(
+        SqlBuilder sqlBuilder,
+        IReadOnlyList<ColumnData> setColumns,
+        ResolvedPredicatePlan plan)
+    {
+        var assignments = plan.SetAssignments.Count > 0
+            ? plan.SetAssignments.ToList()
+            : setColumns.Select(column => new SqlSetAssignment(column, sqlBuilder.ParameterName(column.PropertyName))).ToList();
+        foreach (var stamp in plan.StampBindings)
+        {
+            assignments.Add(new SqlSetAssignment(stamp.Column, sqlBuilder.ParameterName(stamp.SqlParameterName)));
+        }
+
+        return assignments;
     }
 
     private static void AppendConstSql(StringBuilder source, string fieldName, string sql)

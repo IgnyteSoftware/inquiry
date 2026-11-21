@@ -1,1 +1,3 @@
 #nullable enable
+Inquiry.Stores.InquiryUpdateAttribute.StampModified.get -> bool
+Inquiry.Stores.InquiryUpdateAttribute.StampModified.set -> void
