@@ -290,6 +290,6 @@ expose original `.snupkg` archives for comparison: retries use the retained, loc
 allow duplicate symbol uploads to be skipped. This does **not** verify remote symbol archive bytes.
 
 A local recovery rehearsal can replace only the registry transport with a disposable directory: seed
-five packages in each registry, compute the plan (10 existing, 14 missing), copy the missing files, and
-rerun (24 existing). Changing one existing archive must fail preflight. Such a rehearsal does not publish
+five packages in each registry, compute the plan (10 existing, 26 missing), copy the missing files, and
+rerun (36 existing). Changing one existing archive must fail preflight. Such a rehearsal does not publish
 packages or establish real security results; the release workflow must supply those results.
