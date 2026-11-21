@@ -49,7 +49,10 @@ public sealed partial class InquiryGeneratorTests
             [InquirySelectAllByPredicate]
                 [InquiryWhere("ProductName", Compare.In, InListBinding = InListBinding.TableValuedParameter)]
                 public partial Task<IReadOnlyList<Product>> InNamesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default);
-            """) + "\n[assembly: global::Inquiry.SqlServer.SqlServerInListBinding(global::Inquiry.Stores.InListBinding.Json)]\n";
+            """).Replace(
+                "namespace Demo;",
+                "[assembly: global::Inquiry.SqlServer.SqlServerInListBinding(global::Inquiry.Stores.InListBinding.Json)]\n\nnamespace Demo;",
+                StringComparison.Ordinal);
 
         var result = RunGenerator(source, dialect: "SqlServer");
         AssertNoErrors(result);
