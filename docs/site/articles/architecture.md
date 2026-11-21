@@ -84,6 +84,7 @@ All store attributes live in `Inquiry.Stores`. The method must be a `partial` de
 | `[InquirySelectAll]` / `[InquirySelectAllEager]` | `BuildSelectAllSql` (+ per-relation child queries for eager) |
 | `[InquirySelectOneByKey]` / `[InquirySelectOneByKeyEager]` | `BuildSelectByKeySql` (+ per-relation child queries for eager) |
 | `[InquirySelectAllByField("Field")]` | `BuildSelectByFieldSql` |
+| `[InquirySelectOneByField("Field")]` | `BuildSelectOneByFieldSql` |
 | `[InquiryInsert]` returning `Task<int>` / `Task<T?>` | `BuildInsertSql` / `BuildInsertReturningSql` |
 | `[InquiryUpdate]` returning `Task<bool>` / `Task<T?>` | `BuildUpdateSql` / `BuildUpdateReturningSql` |
 | `[InquiryUpsert]` returning `Task<int>` / `Task<T?>` | `BuildUpsertSql` / `BuildUpsertReturningSql` |

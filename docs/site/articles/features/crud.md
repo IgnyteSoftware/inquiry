@@ -12,6 +12,7 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquirySelectOneByKey]` | `Task<T?>` | `SELECT <columns> FROM <table> WHERE <pk> = @key` |
 | `[InquirySelectAllByField("Col1", "Col2")]` | `Task<IReadOnlyList<T>>` | `SELECT … WHERE Col1 = @Col1 AND Col2 = @Col2` |
 | `[InquirySelectAllByField]` (field-less) | `Task<IReadOnlyList<T>>` | Filter columns **derived from the method name** — see below |
+| `[InquirySelectOneByField("Col")]` | `Task<T?>` | `SELECT … WHERE Col = @Col` limited to two rows; a second match throws |
 | `[InquiryInsert]` | `Task<int>` or `Task<T?>` | Inserts one entity; the return type selects rows-affected or returning SQL |
 | `[InquiryInsert]` with `IEnumerable<T>` | `Task<int>` | Batched inserts in one transaction |
 | `[InquiryUpdate]` | `Task<bool>` or `Task<T?>` | Updates an entity by primary key; the return type selects the command shape |

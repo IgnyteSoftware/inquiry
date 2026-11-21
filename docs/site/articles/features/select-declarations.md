@@ -82,7 +82,7 @@ locked duplicate is skipped rather than reported, and Oracle rejects the combina
 The method takes one parameter of the field's type, then the CancellationToken. The return type can
 also be a nullable projection. `IncludeDeleted`, `LockMode`, `Exclude`, global filters, and `InquiryIgnoreFilter`
 behave as on InquirySelectAllByField. An unknown field reports INQ007, a return type other than
-`Task<T?>` reports INQ005, and a parameter that does not match the field type reports INQ006. To
+`Task<T?>` reports INQ005 (a non-nullable `Task<T>` only where nullable annotations are enabled), and a parameter that does not match the field type reports INQ006. To
 match on more than one field, use InquirySelectAllByPredicate. A database unique constraint on the
 field is still the reliable guard against duplicates; this method only detects them on read.
 

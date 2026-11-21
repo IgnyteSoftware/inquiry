@@ -160,7 +160,7 @@ Trigger: The method return shape is not supported for its operation.
 
 Failing shape: A procedure returns Task&lt;List&lt;Product&gt;&gt;.
 
-Smallest correction: Use Task&lt;IReadOnlyList&lt;Product&gt;&gt; or IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list). An [InquirySelectOneByField] method must return Task&lt;Product?&gt; or a nullable projection; a list, a stream, or a non-nullable Task&lt;Product&gt; reports INQ005.
+Smallest correction: Use Task&lt;IReadOnlyList&lt;Product&gt;&gt; or IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list). An [InquirySelectOneByField] method must return Task&lt;Product?&gt; or a nullable projection; a list, a stream, or, in a nullable-enabled context, a non-nullable Task&lt;Product&gt; reports INQ005.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L90).
 
