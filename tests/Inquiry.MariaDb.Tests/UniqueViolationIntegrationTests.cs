@@ -64,6 +64,20 @@ public sealed class UniqueViolationIntegrationTests
         Assert.Equal(MySqlErrorCode.ColumnCannotBeNull, exception.ErrorCode);
     }
 
+    // LOAD DATA LOCAL INFILE skips a duplicate row. MySqlConnector then reports BulkCopyFailed, which
+    // does not say why a row was not inserted.
+    [SkippableFact]
+    public async Task DuplicateInBulkInsertIsNotClassified()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await MariaDbTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBulkInsertAsync<MySqlException>(harness.GetRequiredService<UvParentStore>(), isUniqueViolation: false);
+
+        Assert.Equal(MySqlErrorCode.BulkCopyFailed, exception.ErrorCode);
+    }
+
     [SkippableFact]
     public async Task DuplicateInBatchIsUniqueViolation()
     {

@@ -49,10 +49,12 @@ and every other provider error return `false`.
 |---|---|---|
 | SQL Server | `SqlException` | Error number 2601 (duplicate key in a unique index) or 2627 (`PRIMARY KEY` or `UNIQUE` constraint), in any entry of `Errors` |
 | PostgreSQL | `PostgresException` | SQLSTATE `23505` (`unique_violation`) |
-| MySQL | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`). Its SQLSTATE, `23000`, also covers foreign-key errors, so the check does not use it. |
-| MariaDB | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`) |
+| MySQL | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`), 1022 (`ER_DUP_KEY`) or 1169 (`ER_DUP_UNIQUE`). Their SQLSTATE, `23000`, also covers foreign-key errors, so the check does not use it. |
+| MariaDB | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`), 1022 (`ER_DUP_KEY`) or 1169 (`ER_DUP_UNIQUE`) |
 | Oracle | `OracleException` | `ORA-00001` (`Number` 1), for a unique constraint, a unique index or a primary key, in `Number` or in any entry of `Errors`. A batch write that Inquiry sends with array binding fails as `ORA-24381` and lists each failed row in `Errors`. A deferred unique constraint fails at commit as `ORA-02091` (`Number` 2091), which returns `true` only when its message reports `ORA-00001` as the cause. |
 | SQLite | `SqliteException` | Extended result code `SQLITE_CONSTRAINT_UNIQUE` (2067), `SQLITE_CONSTRAINT_PRIMARYKEY` (1555) or `SQLITE_CONSTRAINT_ROWID` (2579, a duplicate rowid on a table without a declared primary key) |
+
+A bulk insert on MySQL or MariaDB uses `LOAD DATA LOCAL INFILE`, which skips a duplicate row instead of failing. MySqlConnector then throws `MySqlException` with `ErrorCode` `BulkCopyFailed`, because fewer rows were inserted than copied. That error does not say why, so `IsUniqueViolation()` returns `false` for it. See [Partial writes and retries](features/bulk-insert.md#partial-writes-and-retries).
 
 The check does not report the name of the violated constraint or index. Read it from the provider
 exception when you need it, such as `PostgresException.ConstraintName`.

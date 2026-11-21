@@ -30,6 +30,9 @@ public partial class UvParentStore : InquiryStore<UvParent>
 
     [InquiryInsert]
     public partial Task<int> InsertAllAsync(IEnumerable<UvParent> parents, CancellationToken cancellationToken = default);
+
+    [InquiryBulkInsert]
+    public partial Task<long> BulkInsertAsync(IEnumerable<UvParent> parents, CancellationToken cancellationToken = default);
 }
 
 public partial class UvChildStore : InquiryStore<UvChild>
@@ -104,6 +107,26 @@ internal static class UniqueViolationScenarios
             () => store.InsertAllAsync([new UvChild { Id = 1, ParentId = 98 }, new UvChild { Id = 2, ParentId = 99 }]));
 
         Assert.False(exception.IsUniqueViolation());
+        return exception;
+    }
+
+    public static async Task<TException> DuplicateInBulkInsertAsync<TException>(UvParentStore store, bool isUniqueViolation)
+        where TException : Exception
+    {
+        await store.InsertAsync(new UvParent { Id = 1, Code = "alpha" });
+
+        var exception = await Assert.ThrowsAsync<TException>(
+            () => store.BulkInsertAsync([new UvParent { Id = 2, Code = "beta" }, new UvParent { Id = 1, Code = "gamma" }]));
+
+        if (isUniqueViolation)
+        {
+            AssertUniqueViolation(exception);
+        }
+        else
+        {
+            Assert.False(exception.IsUniqueViolation());
+        }
+
         return exception;
     }
 

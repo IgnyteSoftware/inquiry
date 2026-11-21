@@ -65,6 +65,18 @@ public sealed class UniqueViolationIntegrationTests
     }
 
     [SkippableFact]
+    public async Task DuplicateInBulkInsertIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBulkInsertAsync<SqlException>(harness.GetRequiredService<UvParentStore>(), isUniqueViolation: true);
+
+        Assert.Contains(exception.Errors.Cast<SqlError>(), error => error.Number == 2627);
+    }
+
+    [SkippableFact]
     public async Task DuplicateInBatchIsUniqueViolation()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

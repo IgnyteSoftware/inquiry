@@ -38,7 +38,22 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
         }
 
         return oracleException.Number == 1
-            || (oracleException.Number == 2091 && oracleException.Message.Contains("ORA-00001:", StringComparison.Ordinal));
+            || (oracleException.Number == 2091 && HasErrorStackEntry(oracleException.Message, "ORA-00001:"));
+    }
+
+    // Each error in the stack starts a new line. Matching only at a line start stops a constraint
+    // name that contains the text from matching.
+    private static bool HasErrorStackEntry(string message, string prefix)
+    {
+        foreach (var line in message.AsSpan().EnumerateLines())
+        {
+            if (line.TrimStart().StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private readonly DbDataSource? _dataSource;

@@ -56,6 +56,17 @@ public sealed class UniqueViolationIntegrationTests
     }
 
     [Fact]
+    public async Task DuplicateInBulkInsertIsUniqueViolation()
+    {
+        var harness = await SqliteTestHarness.CreateAsync(Ddl, "Uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBulkInsertAsync<SqliteException>(harness.GetRequiredService<UvParentStore>(), isUniqueViolation: true);
+
+        Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_PRIMARYKEY, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
     public async Task DuplicateInBatchIsUniqueViolation()
     {
         var harness = await SqliteTestHarness.CreateAsync(Ddl, "Uv");

@@ -67,6 +67,18 @@ public sealed class UniqueViolationIntegrationTests
     }
 
     [SkippableFact]
+    public async Task DuplicateInBulkInsertIsUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.DuplicateInBulkInsertAsync<OracleException>(harness.GetRequiredService<UvParentStore>(), isUniqueViolation: true);
+
+        Assert.Contains(exception.Errors.Cast<OracleError>(), error => error.Number == 1);
+    }
+
+    [SkippableFact]
     public async Task DuplicateInBatchIsUniqueViolation()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
