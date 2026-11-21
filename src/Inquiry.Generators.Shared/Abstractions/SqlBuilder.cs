@@ -717,38 +717,32 @@ public abstract class SqlBuilder
     /// rendering all route through the shared hooks), so concrete and inherited by every provider.
     /// </summary>
     internal virtual string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<IColumn> setColumns, IReadOnlyList<SqlPredicate> predicates)
-    {
-        var set = new System.Text.StringBuilder();
-        for (var i = 0; i < setColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                set.Append(", ");
-            }
-
-            set.Append(QuoteIdentifier(setColumns[i].ColumnName)).Append(" = ").Append(ParameterName(setColumns[i].PropertyName));
-        }
-
-        return "UPDATE " + context.Table + " SET " + set.ToString()
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
-    }
+        => "UPDATE " + context.Table + " SET " + RenderUpdateSetClause(setColumns)
+            + " WHERE " + RenderUpdateByPredicateWhere(context, predicates);
 
     internal string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlSetAssignment> assignments, IReadOnlyList<SqlPredicate> predicates)
-    {
-        var set = new System.Text.StringBuilder();
-        for (var i = 0; i < assignments.Count; i++)
-        {
-            if (i > 0)
-            {
-                set.Append(", ");
-            }
+        => "UPDATE " + context.Table + " SET " + RenderUpdateSetClause(assignments)
+            + " WHERE " + RenderUpdateByPredicateWhere(context, predicates);
 
-            set.Append(QuoteIdentifier(assignments[i].Column.ColumnName)).Append(" = ").Append(assignments[i].Expression);
-        }
+    internal string RenderUpdateSetClause(IReadOnlyList<IColumn> setColumns)
+        => string.Join(", ", setColumns.Select(column => QuoteIdentifier(column.ColumnName) + " = " + ParameterName(column.PropertyName)));
 
-        return "UPDATE " + context.Table + " SET " + set.ToString()
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
-    }
+    internal string RenderUpdateSetClause(IReadOnlyList<SqlSetAssignment> assignments)
+        => string.Join(", ", assignments.Select(assignment => QuoteIdentifier(assignment.Column.ColumnName) + " = " + assignment.Expression));
+
+    internal string RenderUpdateByPredicateWhere(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
+
+    /// <summary>
+    /// Builds a set-based UPDATE that returns every updated row as it is after the update. The
+    /// result set has the columns of <paramref name="returning"/> in its SELECT-list order, so the
+    /// materializer for that column set reads it unchanged. A dialect must read the values from the
+    /// UPDATE itself or from rows the UPDATE still holds locked. A separate read could see a change
+    /// that another writer made after the UPDATE.
+    /// </summary>
+    internal virtual string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => throw new System.NotSupportedException(
+            "the dialect has no UPDATE ... RETURNING, so a set-based [InquiryUpdate] can return only Task<int>. Read the rows with a locking select in a transaction instead");
 
     /// <summary>
     /// Builds a set-based literal DELETE whose WHERE clause is the AND/OR composition of

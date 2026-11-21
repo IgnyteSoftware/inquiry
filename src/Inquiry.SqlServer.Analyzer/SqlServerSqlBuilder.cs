@@ -179,6 +179,14 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             + " WHERE " + context.KeyUpdateWhereClause
             + "; " + SelectFromOutput(context);
 
+    // The table variable takes the returned column set, so a projection declares only its own columns.
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => DeclareOutputTable(returning)
+            + " UPDATE " + context.Table + " SET " + setClause
+            + " OUTPUT " + InsertedColumns(returning) + " INTO @_out"
+            + " WHERE " + whereClause
+            + "; " + SelectFromOutput(returning);
+
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 

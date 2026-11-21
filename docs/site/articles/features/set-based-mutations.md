@@ -2,7 +2,8 @@
 
 Update or delete rows matching a WHERE predicate **without loading entities** — the
 EF Core `ExecuteUpdate`/`ExecuteDelete` analog, with the SQL baked at compile time. Both
-operations return the affected row count.
+operations return the affected row count. An update can instead
+[return the values it changed](#return-the-changed-values).
 
 ## You write
 
@@ -55,7 +56,8 @@ set is the comparisons (`Equal`, `NotEqual`, `GreaterThan`, …), `Like` / `NotL
 
 ## Rules
 
-- The method must return `Task<int>` (rows affected).
+- A delete returns `Task<int>` (rows affected). An update returns `Task<int>`, or the changed values
+  as described [below](#return-the-changed-values).
 - **At least one `[InquiryWhere]` is required** for parameter-inferred updates and predicate deletes.
   `[InquiryUpdate]` without a predicate remains the entity-by-key update. A targetless
   `[InquiryDelete]` is a compile error; use `[InquiryDeleteAll]` for an explicit table-wide delete.
@@ -92,6 +94,63 @@ new name, such as `@TStamp2`, so it cannot collide with the stamp. A method that
 assigns a modified column, through a parameter or `[InquirySet]`, reports
 [INQ118](../diagnostics.md#inq118). Set-based deletes and soft deletes never stamp. See
 [Auditing](auditing.md#set-based-updates).
+
+## Return the changed values
+
+An update can return the rows it changed, as they are after the update. Use this for an atomic
+read-modify-write, such as incrementing a counter and reading the new value, or claiming rows and
+reading what was claimed. The values come from the same statement as the update, so another writer
+cannot change them in between.
+
+```csharp
+public partial class UserStore : InquiryStore<User>
+{
+    // The new count, or null when no row matched.
+    [InquiryUpdate]
+    [InquirySet(nameof(User.AccessFailedCount), "{AccessFailedCount} + 1")]
+    [InquiryWhere(nameof(User.Id))]
+    public partial Task<int?> IncrementFailuresAsync(Guid id, CancellationToken ct = default);
+
+    // One entry per updated row.
+    [InquiryUpdate]
+    [InquiryWhere(nameof(User.TenantId))]
+    public partial Task<IReadOnlyList<User>> LockTenantAsync(
+        DateTimeOffset? lockoutEnd, Guid tenantId, CancellationToken ct = default);
+}
+```
+
+| Return type | Result |
+|---|---|
+| `Task<int>` | The affected-row count. |
+| `Task<T?>` | The updated row or value, or `null` when no row matched. |
+| `Task<IReadOnlyList<T>>` | One entry per updated row, in no particular order. Empty when no row matched. |
+
+`T` is one of these:
+
+- The entity.
+- An [`[InquiryProjection]`](projections.md) of the entity. Only the projection's columns are returned.
+- The type of the single column that the update sets, such as `int` for `AccessFailedCount`. A value
+  type must be nullable in the single-row form, such as `int?`. To read a column that the update does
+  not set, such as the key of a claimed row, return the entity or a projection.
+
+The single-row form, `Task<T?>`, needs criteria that can match at most one row: `Equal` on every
+primary-key column, or `Equal` on a column with `IsUnique = true`, joined with AND. Optional and
+negated criteria do not count. The update changes every matching row before any row is read, so
+the generator rejects a single-row form that could match more than one. Use the list form for
+those updates.
+
+Each provider reads the values in the statement that updates them:
+
+| Provider | How the values are read |
+|---|---|
+| SQL Server | `OUTPUT INSERTED.*` into a table variable typed from each column's `SqlType`, then a `SELECT` from it. The table variable also lets the update run on a table with triggers. |
+| PostgreSQL, SQLite | `UPDATE ... RETURNING`. |
+| Oracle | A PL/SQL block collects the `ROWID` of each updated row, then opens a cursor over those rows while the update still holds their locks. One call can update at most 32,767 rows. A larger update fails, and Oracle rolls back the whole block. |
+| MySQL, MariaDB | Not supported. Neither has `UPDATE ... RETURNING`, so these return types report [INQ039](../diagnostics.md#inq039). Return `Task<int>`, or read the rows with a [locking select](row-locking.md) in a transaction and then update them. |
+
+A single-row form that can match more than one row, a value return on an update that sets more than
+one column, and a value type that does not match the column all report
+[INQ096](../diagnostics.md#inq096).
 
 ## Soft-delete entities
 

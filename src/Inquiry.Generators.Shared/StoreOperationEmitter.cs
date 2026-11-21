@@ -455,10 +455,11 @@ internal static class StoreOperationEmitter
                 }
 
             case StoreOperation.UpdateByPredicate:
-                AppendHeader(source, method, parameters, isAsync: false);
+                AppendHeader(source, method, parameters, isAsync: method.PredicateUpdateReturn == PredicateUpdateReturn.Scalar);
                 // Set-based UPDATE composes the active-row predicate, so its SQL carries the
                 // parameterized filter term and the binder must fill it.
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder,
+                    entityType, structMat);
                 source.AppendLine("    }");
                 break;
 
@@ -1335,7 +1336,9 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string cancellation,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        string? rowType = null,
+        string? rowMaterializer = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
@@ -1425,7 +1428,36 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            });");
-        source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+        var query = method.ReturnsList
+            ? $"Inquiry.QueryListAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})"
+            : $"Inquiry.QueryGeneratedSingleOrDefaultAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})";
+        switch (method.PredicateUpdateReturn)
+        {
+            case PredicateUpdateReturn.Rows:
+                source.AppendLine($"        return {query};");
+                break;
+
+            // The value is read through the entity materializer, so converters and provider types
+            // behave as they do on the entity's own reads.
+            case PredicateUpdateReturn.Scalar when method.ReturnsList:
+                source.AppendLine($"        var _rows = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        var _values = new global::System.Collections.Generic.List<{method.ScalarResultType}>(_rows.Count);");
+                source.AppendLine("        for (var _i = 0; _i < _rows.Count; _i++)");
+                source.AppendLine("        {");
+                source.AppendLine($"            _values.Add(_rows[_i].{setColumns[0].PropertyName});");
+                source.AppendLine("        }");
+                source.AppendLine("        return _values;");
+                break;
+
+            case PredicateUpdateReturn.Scalar:
+                source.AppendLine($"        var _row = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        return _row?.{setColumns[0].PropertyName};");
+                break;
+
+            default:
+                source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+                break;
+        }
     }
 
     /// <summary>

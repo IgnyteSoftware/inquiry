@@ -360,6 +360,26 @@ internal static class StoreProcessor
             returnsList = operation is StoreOperation.SelectAllByPredicate or StoreOperation.FullTextSearch or StoreOperation.SelectAllEager &&
                 IsTaskOfReadOnlyList(method.ReturnType, entityType);
         }
+
+        var predicateUpdateReturn = PredicateUpdateReturn.RowCount;
+        string? scalarResultComparisonType = null;
+        var scalarResultIsNullableValueType = false;
+        if (operation == StoreOperation.UpdateByPredicate &&
+            TryGetPredicateUpdateReturn(method.ReturnType, entityType, out predicateUpdateReturn, out var updateElement, out var updateReturnsList))
+        {
+            returnsList = updateReturnsList;
+            if (predicateUpdateReturn == PredicateUpdateReturn.Rows)
+            {
+                resultElementTypeFqn = updateElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            }
+            else
+            {
+                var valueType = TypeData.Create(updateElement, updateElement.NullableAnnotation);
+                scalarResultType = updateElement.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+                scalarResultComparisonType = valueType.NonNullableDisplayName;
+                scalarResultIsNullableValueType = valueType.IsValueType && valueType.IsNullable;
+            }
+        }
         var procedureReturn = ProcedureReturnKind.None;
         string? procReadBackName = null;
         var procReturnsValue = false;
@@ -570,6 +590,9 @@ internal static class StoreProcessor
             AggregateFunction = aggregateFunction,
             AggregateColumn = aggregateColumn,
             ScalarResultType = scalarResultType,
+            PredicateUpdateReturn = predicateUpdateReturn,
+            ScalarResultComparisonType = scalarResultComparisonType,
+            ScalarResultIsNullableValueType = scalarResultIsNullableValueType,
             ReturnsPagedResult = returnsPagedResult,
             ResultElementTypeFqn = resultElementTypeFqn,
             ProcedureReadBackName = procReadBackName,
@@ -1333,8 +1356,11 @@ internal static class StoreProcessor
                 TryGetSelectElementType(returnType, out var groupElement, out var isGroupList) && isGroupList &&
                 IsGroupCountElement(groupElement),
             StoreOperation.Aggregate => IsTaskOfSingleTypeArgument(returnType),
+            StoreOperation.UpdateByPredicate =>
+                GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32) ||
+                TryGetPredicateUpdateReturn(returnType, entityType, out _, out _, out _),
             StoreOperation.InsertAll or StoreOperation.DeleteAll or StoreOperation.UpdateAll or
-            StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate =>
+            StoreOperation.DeleteByPredicate =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", SpecialType.System_Int32),
             // Bulk insert returns the rows-written count as long (SqlBulkCopy's RowsCopied is Int64).
             StoreOperation.BulkInsert =>
@@ -1350,6 +1376,48 @@ internal static class StoreProcessor
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// Reads the row or value return of a set-based update: <c>Task&lt;T?&gt;</c> for one row or
+    /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> for many. <c>Task&lt;int&gt;</c> stays the row count, so
+    /// it is not a value return. A row type is the entity or an <c>[InquiryProjection]</c>; any other
+    /// type is the value of the single SET column, checked against that column at emit.
+    /// </summary>
+    private static bool TryGetPredicateUpdateReturn(
+        ITypeSymbol returnType, ITypeSymbol entityType, out PredicateUpdateReturn kind, out ITypeSymbol element, out bool isList)
+    {
+        kind = PredicateUpdateReturn.RowCount;
+        element = null!;
+        isList = false;
+        if (returnType is not INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } task ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>" ||
+            task.TypeArguments[0].SpecialType == SpecialType.System_Int32)
+        {
+            return false;
+        }
+
+        var result = task.TypeArguments[0];
+        if (result is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
+            list.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Collections.Generic.IReadOnlyList<T>")
+        {
+            element = list.TypeArguments[0];
+            isList = true;
+        }
+        else if (result.IsValueType && result is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        {
+            // One row returns null when nothing matched, so a value type must be Nullable<T>.
+            return false;
+        }
+        else
+        {
+            element = result;
+        }
+
+        var isRow = SymbolEqualityComparer.Default.Equals(element, entityType) ||
+            GeneratorHelpers.GetEntityAttribute(element, "InquiryProjectionAttribute") is not null;
+        kind = isRow ? PredicateUpdateReturn.Rows : PredicateUpdateReturn.Scalar;
+        return true;
     }
 
     /// <summary>True when an <c>[InquiryStoredProcedure]</c> sets <c>OutputParameter</c> or <c>ReturnsValue</c>.</summary>
@@ -2188,6 +2256,7 @@ internal static class StoreProcessor
         // Per-method set-based mutation consts. UpdateByPredicate carries its SET columns in the
         // resolved field columns; DeleteByPredicate picks the soft UPDATE form on a soft-delete entity
         // unless HardDelete forces the literal DELETE (mirroring DeleteOneByKey's routing).
+        var predicateUpdateReturningErrors = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (method, fieldColumns, predicatePlan, _) in valid)
         {
             if (predicatePlan is null)
@@ -2195,7 +2264,28 @@ internal static class StoreProcessor
                 continue;
             }
 
-            if (method.Operation == StoreOperation.UpdateByPredicate)
+            if (method.Operation == StoreOperation.UpdateByPredicate && method.PredicateUpdateReturn != PredicateUpdateReturn.RowCount)
+            {
+                // A value return reads the whole entity row so the entity materializer applies converters.
+                // A projection returns its own columns, described by the entity's column metadata:
+                // projection columns carry no store type, and SQL Server types its OUTPUT table from it.
+                var returningCtx = projectionMethods.TryGetValue(method.MemberName, out var returnedProjection)
+                    ? new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(returnedProjection.Columns.AsImmutableArray()
+                        .Select(column => entity.Columns.AsImmutableArray().FirstOrDefault(entityColumn =>
+                            string.Equals(entityColumn.ColumnName, column.ColumnName, StringComparison.OrdinalIgnoreCase)) ?? column)
+                        .ToList()))
+                    : ctx;
+                var setClause = predicatePlan.SetAssignments.Count > 0
+                    ? sqlBuilder.RenderUpdateSetClause(predicatePlan.SetAssignments)
+                    : sqlBuilder.RenderUpdateSetClause(ToColumnList(fieldColumns));
+                var returningError = TryBuildDegradableConst(source, generatedSql, "_sqlUpdateWhere_" + method.MemberName, needed: true,
+                    () => sqlBuilder.BuildUpdateByPredicateReturningSql(ctx, returningCtx, setClause, sqlBuilder.RenderUpdateByPredicateWhere(ctx, predicatePlan.Predicates)));
+                if (returningError is not null)
+                {
+                    predicateUpdateReturningErrors[method.MemberName] = returningError;
+                }
+            }
+            else if (method.Operation == StoreOperation.UpdateByPredicate)
             {
                 string updateSql;
                 if (predicatePlan.StampBindings.Count > 0)
@@ -2530,7 +2620,9 @@ internal static class StoreProcessor
         // column is passed in for predicate computation only — it never joins the projection SELECT list.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
-            if (selectPlan is not null || !projectionMethods.TryGetValue(method.MemberName, out var proj))
+            // A set-based update returns its projection through _sqlUpdateWhere_, built above.
+            if (selectPlan is not null || method.Operation == StoreOperation.UpdateByPredicate ||
+                !projectionMethods.TryGetValue(method.MemberName, out var proj))
             {
                 continue;
             }
@@ -2626,6 +2718,11 @@ internal static class StoreProcessor
             if (unsupportedReason is null && lockErrors.TryGetValue(method.MemberName, out var lockError))
             {
                 unsupportedReason = lockError;
+            }
+            if (unsupportedReason is null && method.Operation == StoreOperation.UpdateByPredicate &&
+                predicateUpdateReturningErrors.TryGetValue(method.MemberName, out var returningError))
+            {
+                unsupportedReason = returningError;
             }
             // The provider diagnostic was already reported at the precise invalid facet above. The method
             // gets no member: only INQ039 may produce a stub.
@@ -3476,6 +3573,14 @@ internal static class StoreProcessor
                 SetParameterIndexes = setParameterIndexes,
                 StampBindings = stampBindings,
             };
+
+            if (method.Operation == StoreOperation.UpdateByPredicate &&
+                PredicateUpdateReturnError(method, entity, setColumns, predicatePlan.Predicates) is { } returnError)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.MutationTargetInvalid, method.Location?.ToLocation(), method.Name, returnError));
+                return false;
+            }
+
             return true;
         }
 
@@ -3851,6 +3956,61 @@ internal static class StoreProcessor
     /// <summary>
     /// Resolves expression-based SET assignments and their leading method parameters.
     /// </summary>
+    /// <summary>
+    /// Returns why a set-based update cannot return its declared rows or value, or null when it can.
+    /// A value return reads the single SET column. A single-row return needs criteria that match at
+    /// most one row, because the UPDATE changes every matching row before any row is read.
+    /// </summary>
+    private static string? PredicateUpdateReturnError(
+        StoreMethodData method, EntityData entity, List<ColumnData> setColumns, IReadOnlyList<SqlPredicate> predicates)
+    {
+        if (method.PredicateUpdateReturn == PredicateUpdateReturn.RowCount)
+        {
+            return null;
+        }
+
+        if (method.PredicateUpdateReturn == PredicateUpdateReturn.Scalar)
+        {
+            if (setColumns.Count != 1)
+            {
+                return $"A '{method.ReturnTypeDisplay}' return reads the value of the single updated column, but this update sets {setColumns.Count} columns. " +
+                    "Return the entity or an [InquiryProjection] to read several columns.";
+            }
+
+            var column = setColumns[0];
+            if (column.Type.NonNullableDisplayName != method.ScalarResultComparisonType ||
+                column.Type.IsValueType && column.Type.IsNullable && !method.ScalarResultIsNullableValueType)
+            {
+                return $"The return type '{method.ReturnTypeDisplay}' does not match updated column '{column.PropertyName}' of type '{column.Type.DisplayName}'. " +
+                    "Return that type, or its nullable form.";
+            }
+        }
+
+        if (!method.ReturnsList && !MatchesAtMostOneRow(entity, predicates))
+        {
+            return "A single-row return needs [InquiryWhere] criteria that match at most one row: Equal on every primary-key column, or Equal on a unique column, joined with AND. " +
+                "Return Task<IReadOnlyList<T>> to read every updated row.";
+        }
+
+        return null;
+    }
+
+    private static bool MatchesAtMostOneRow(EntityData entity, IReadOnlyList<SqlPredicate> predicates)
+    {
+        if (predicates.Any(static predicate => predicate.IsOr))
+        {
+            return false;
+        }
+
+        var equalColumns = new HashSet<string>(
+            predicates
+                .Where(static predicate => predicate.Op == SqlCompareOp.Equal && !predicate.IsNegated && !predicate.IsOptional && predicate.JsonPath is null)
+                .Select(static predicate => predicate.Column.ColumnName),
+            StringComparer.Ordinal);
+        return entity.Keys.Count > 0 && entity.Keys.AsImmutableArray().All(key => equalColumns.Contains(key.ColumnName)) ||
+            entity.Columns.AsImmutableArray().Any(column => column.IsUnique && equalColumns.Contains(column.ColumnName));
+    }
+
     private static bool TryResolveSetExpressions(
         EmissionCollector context,
         StoreMethodData method,
