@@ -86,4 +86,14 @@ public sealed class InquirySelectAllByFieldAttribute : Attribute
     /// pessimistic locks on the selected rows.
     /// </summary>
     public InquiryLockMode LockMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets the mapped property or column names the generated query leaves out of its SELECT
+    /// list, for example <c>Exclude = new[] { nameof(Announcement.Image) }</c>. The omitted properties
+    /// keep the value the entity constructor or property initializer gives them. A key, concurrency
+    /// token, soft-delete or global-filter column, foreign key a relation joins on, ORDER BY column, or
+    /// <c>required</c> property cannot be excluded (INQ122). Do not write an entity read this way back
+    /// with a full <c>[InquiryUpdate]</c>: that update would overwrite the omitted columns.
+    /// </summary>
+    public string[]? Exclude { get; set; }
 }

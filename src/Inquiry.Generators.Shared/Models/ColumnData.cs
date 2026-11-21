@@ -22,6 +22,9 @@ internal sealed record ColumnData : IColumn
     public bool IsKey { get; init; }
     public bool IsGenerated { get; init; }
 
+    /// <summary>The property is a C# <c>required</c> member, so every object initializer must set it.</summary>
+    public bool IsRequiredMember { get; init; }
+
     /// <summary>Insert/upsert assigns a sequential GUID when this key is unset ([InquiryKey(SequentialGuid = true)]).</summary>
     public bool IsSequentialGuid { get; init; }
 
@@ -120,4 +123,10 @@ internal sealed record ColumnData : IColumn
 
     /// <summary>The value converter applied to this column, or null for a directly-mapped type.</summary>
     public ConverterData? Converter { get; init; }
+
+    /// <summary>
+    /// The <c>System.DateTimeKind</c> member name that the materializer applies to the DateTime it reads,
+    /// such as <c>"Utc"</c>, or null to keep the provider's kind.
+    /// </summary>
+    public string? DateTimeKind { get; init; }
 }

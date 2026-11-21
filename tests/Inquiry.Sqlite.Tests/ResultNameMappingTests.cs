@@ -91,8 +91,10 @@ public sealed class ResultNameMappingTests
             gadget => Assert.Equal((2, "beta", 20), (gadget.Id, gadget.Name, gadget.Rank)));
 
         // A column named after the property does not satisfy a mapped column name.
+#pragma warning disable INQ120 // These tests check the run-time error that INQ120 reports at build time.
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.QueryListAsync<NameMappedGadget>(
             $"SELECT gadget_id, gadget_name AS Name, gadget_rank FROM NameMappedGadget"));
+#pragma warning restore INQ120
         Assert.Contains("property 'Name' needs a column named 'gadget_name'", exception.Message, StringComparison.Ordinal);
     }
 
@@ -103,8 +105,10 @@ public sealed class ResultNameMappingTests
         var inquiry = harness.GetRequiredService<IInquiry>();
 
         // The result has no rows, so the error comes from the result columns alone.
+#pragma warning disable INQ120 // These tests check the run-time error that INQ120 reports at build time.
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.QueryListAsync<NameMappedPair>(
             $"SELECT gadget_id AS First, gadget_name AS Label FROM NameMappedGadget WHERE 1 = 0"));
+#pragma warning restore INQ120
 
         Assert.Contains(typeof(NameMappedPair).FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains("property 'Second'", exception.Message, StringComparison.Ordinal);
@@ -117,8 +121,10 @@ public sealed class ResultNameMappingTests
         await using var harness = await SqliteTestHarness.CreateAsync(Ddl, "NameMap");
         var inquiry = harness.GetRequiredService<IInquiry>();
 
+#pragma warning disable INQ120 // These tests check the run-time error that INQ120 reports at build time.
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => inquiry.QueryListAsync<NameMappedPair>(
             $"SELECT 1 AS First, 3 AS first, 2 AS Second, 'x' AS Label"));
+#pragma warning restore INQ120
 
         Assert.Contains("both match property 'First'", exception.Message, StringComparison.Ordinal);
         Assert.Contains("Available columns: First, first, Second, Label", exception.Message, StringComparison.Ordinal);

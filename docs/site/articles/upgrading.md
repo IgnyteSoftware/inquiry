@@ -16,10 +16,18 @@ remove or change them. See [Support](https://github.com/IgnyteSoftware/inquiry/b
 - Every `Ignyte.Inquiry*` package now depends on the other Inquiry packages at exactly its own version.
   Set every `Ignyte.Inquiry*` reference to the same version and update them together. A mix fails restore
   with `NU1107` or `NU1605`, or warns with `NU1608`.
-- `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb` and `Ignyte.Inquiry.Aspire` depend on MySqlConnector
-  3.0.0. If your own code uses MySqlConnector, check its 3.0 release notes.
-- `Ignyte.Inquiry.Aspire` depends on the Microsoft.Extensions 11.0.0 packages, which OpenTelemetry 1.21.0
-  needs. The other packages still depend on Microsoft.Extensions 10.0.15.
+- `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb`, `Ignyte.Inquiry.Aspire.MySql` and
+  `Ignyte.Inquiry.Aspire.MariaDb` depend on MySqlConnector 3.0.0. If your own code uses MySqlConnector,
+  check its 3.0 release notes.
+- The Aspire registrations moved from `Ignyte.Inquiry.Aspire` to one package per provider, such as
+  `Ignyte.Inquiry.Aspire.SqlServer` for `AddInquirySqlServer`. Replace the `Ignyte.Inquiry.Aspire`
+  reference with the package for your provider. Calls such as `builder.AddInquirySqlServer("name")`
+  compile unchanged. A call through the class name, such as
+  `InquiryAspireExtensions.AddInquirySqlServer(builder, "name")`, must use the new class, such as
+  `InquiryAspireSqlServerExtensions`. See [Aspire integration](features/aspire.md).
+- On .NET 11, `Ignyte.Inquiry.Aspire` and the `Ignyte.Inquiry.Aspire.*` provider packages depend on the
+  Microsoft.Extensions 11.0.0 packages, which OpenTelemetry 1.21.0 needs there. On .NET 10, they and the
+  other packages depend on Microsoft.Extensions 10.0.15. `1.0.0-rc.1` used 11.0.0 on both targets.
 - If you upgrade from `1.0.0-preview.10` or earlier: `SqliteInquiryFixture` moved to the
   `Ignyte.Inquiry.Sqlite.Testing` package and the `Inquiry.Sqlite.Testing` namespace in
   `1.0.0-preview.11`. Add that package and change the `using` directive.
@@ -40,12 +48,14 @@ The [diagnostic repair index](diagnostics.md) has the fix for each ID.
 
 Lowering `INQ039` project-wide still generates a throwing stub for the methods that report `INQ039`.
 
-Two new warnings fail builds that treat warnings as errors:
+New warnings fail builds that treat warnings as errors:
 
 - `INQ112`: positional criteria bind two or more parameters of the same type. Set `Parameter = nameof(x)`
   on each criterion.
 - `INQ117`: a non-nullable column sets `UseDatabaseDefault = true` with no `DefaultExpression` on an entity
   that generates DDL. Add a `DefaultExpression`, or set `GenerateDdl = false`.
+- `INQ120`, added after `1.0.0-rc.1`: constant handwritten SQL returns no column, or two columns, for a
+  property of its result type. See the name-mapping change below.
 
 ## 3. Check the mapping changes
 
@@ -54,7 +64,10 @@ Two new warnings fail builds that treat warnings as errors:
   `SUM(Amount) AS TotalAmount`. For entities and projections, including entity results of stored
   procedures, return every mapped column under the column name the entity maps it to, such as a name set by `[InquiryColumn]`, `[InquiryKey]` or `[InquiryForeignKey]`.
   Extra columns are ignored. A missing or duplicate match throws `InvalidOperationException` before the
-  first row. Code that caught `InvalidCastException`,
+  first row. Build warning [`INQ120`](diagnostics.md#inq120) reports these reads at build time when the SQL
+  text is constant, including an unaliased expression such as `COUNT(*)`, `COALESCE(...)`, `CASE ... END`,
+  a scalar subquery or an `OUTPUT` expression, and a column whose name differs from the expected name. It
+  cannot see SQL built at run time, `SELECT *` or stored procedures, so review those reads too. Code that caught `InvalidCastException`,
   `FormatException` or `OverflowException` around these reads must catch `InvalidOperationException` and
   read `InnerException`. Generated store queries are unchanged.
 - **Attributed base-class properties are mapped.** An entity that derives from a class with Inquiry
@@ -83,3 +96,21 @@ Two new warnings fail builds that treat warnings as errors:
 - **SQLite `IN` lists match stored values.** A `Compare.In` list over `Guid`, `DateTime`, `DateTimeOffset`,
   `TimeOnly`, `byte[]` or `float` now matches rows. A `byte[]` list needs SQLite 3.41 or later. A value
   that another writer stored in a different form, such as a lower-case GUID, no longer matches.
+
+## 5. Register stores through each library's own method
+
+This change comes after `1.0.0-rc.1`. The generated `AddInquiryGeneratedStores()` extension and its class,
+`Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Before, every
+assembly that generates stores exposed them as public, so a library that generates stores and references
+another such library failed to build with `CS0436` or `CS0121` when it called `AddInquiryGeneratedStores()`.
+
+- A call to `AddInquiryGeneratedStores()` in the assembly that generates the stores is unchanged.
+- A call to a referenced library's generated method now fails with `CS1061`. Add a public registration
+  method with a unique name to that library, and call it instead. See
+  [Registering stores from multiple libraries](library-registration.md).
+- A library that generates stores and references another one no longer needs to call
+  `Inquiry.Generated.InquiryGeneratedServiceRegistration` directly. Call `AddInquiryGeneratedStores()` from
+  its own registration method.
+- The fix needs every library that generates stores to be built with the new version. A library built with
+  `1.0.0-rc.1`, such as a package published with it, still exposes its public class, and a library that
+  references it still fails with `CS0121`. Rebuild that library with the new version.

@@ -24,6 +24,12 @@ public static class PackageVerifier
     [
         "Ignyte.Inquiry",
         "Ignyte.Inquiry.Aspire",
+        "Ignyte.Inquiry.Aspire.MariaDb",
+        "Ignyte.Inquiry.Aspire.MySql",
+        "Ignyte.Inquiry.Aspire.Oracle",
+        "Ignyte.Inquiry.Aspire.PostgreSql",
+        "Ignyte.Inquiry.Aspire.Sqlite",
+        "Ignyte.Inquiry.Aspire.SqlServer",
         "Ignyte.Inquiry.AspNetCore",
         "Ignyte.Inquiry.Interceptors",
         "Ignyte.Inquiry.MariaDb",
@@ -83,6 +89,17 @@ public static class PackageVerifier
                     $"{package.Id} prunes dependencies that are not declared for {pruned.Key}.");
                 Require(pruned.Value is not null && pruned.Value.All(id => !packagesById.ContainsKey(id)),
                     $"{package.Id} cannot prune Inquiry package dependencies for {pruned.Key}.");
+            }
+            foreach (var versions in package.TfmDependencyVersions ?? new Dictionary<string, IReadOnlyDictionary<string, string>>())
+            {
+                Require(package.LibTfms.Contains(versions.Key, StringComparer.Ordinal), $"{package.Id} sets dependency versions for unknown TFM {versions.Key}.");
+                Require(versions.Value is not null && versions.Value.All(item => package.Dependencies.ContainsKey(item.Key) && !string.IsNullOrWhiteSpace(item.Value)),
+                    $"{package.Id} sets versions for dependencies that are not declared for {versions.Key}.");
+                Require(versions.Value is not null && versions.Value.Keys.All(id => !packagesById.ContainsKey(id)),
+                    $"{package.Id} cannot set Inquiry package dependency versions for {versions.Key}.");
+                var prunedForTfm = package.PrunedDependencies?.GetValueOrDefault(versions.Key) ?? [];
+                Require(versions.Value is not null && versions.Value.Keys.All(id => !prunedForTfm.Contains(id, StringComparer.Ordinal)),
+                    $"{package.Id} sets versions for dependencies that are pruned for {versions.Key}.");
             }
             Require(dependencies.All(dependency => !string.IsNullOrWhiteSpace(dependency.Key) && !string.IsNullOrWhiteSpace(dependency.Value)),
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
@@ -362,6 +379,7 @@ public static class PackageVerifier
                     element => (string?)element.Attribute("version") ?? string.Empty,
                     StringComparer.Ordinal);
                 var prunedIds = package.PrunedDependencies?.GetValueOrDefault(groupTfm) ?? [];
+                var tfmVersions = package.TfmDependencyVersions?.GetValueOrDefault(groupTfm);
                 var expectedIds = package.Dependencies.Keys.Where(id => !prunedIds.Contains(id, StringComparer.Ordinal)).ToArray();
                 RequireSequence(actual.Keys.Order(StringComparer.Ordinal), expectedIds.Order(StringComparer.Ordinal),
                     $"{package.Id} dependencies for {groupTfm}");
@@ -370,7 +388,9 @@ public static class PackageVerifier
                 {
                     // Sibling packages are pinned to the effective version, which can be a -preview.N version.
                     // External dependencies stay at their manifest-pinned versions.
-                    var expectedDependencyVersion = familyIds.Contains(dependency.Key) ? ExactRange(version) : dependency.Value;
+                    var expectedDependencyVersion = familyIds.Contains(dependency.Key)
+                        ? ExactRange(version)
+                        : tfmVersions?.GetValueOrDefault(dependency.Key) ?? dependency.Value;
                     Require(actual[dependency.Key] == expectedDependencyVersion,
                         $"{package.Id} dependency {dependency.Key} must be {expectedDependencyVersion}; found {actual[dependency.Key]}.");
                 }

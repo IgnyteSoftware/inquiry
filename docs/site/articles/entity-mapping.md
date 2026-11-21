@@ -460,6 +460,60 @@ has no entity class, or when the mapping records an existing schema by its physi
 `LegacyNote` does. Only the generator resolves a typed reference. Code that reads the attribute
 through reflection finds `ReferencedType`, and `ReferencedTable` is `null`.
 
+## DateTime kind
+
+Most providers read a timestamp without a time zone, such as SQL Server `datetime2`, as a `DateTime`
+with `DateTimeKind.Unspecified`. If your application stores UTC, declare it once for the assembly:
+
+```csharp
+[assembly: InquiryDateTimeKind(DateTimeKind.Utc)]
+```
+
+Every generated read of a `DateTime` column in that assembly then returns `DateTimeKind.Utc`. This
+covers generated store methods, including `MIN` and `MAX` aggregates that return `DateTime`,
+projections, `[InquiryAdHoc]` DTOs and entities read from handwritten SQL. Scalar queries that you
+write yourself, such as `ExecuteScalarAsync<DateTime>`, and stored-procedure output or return values are not changed.
+To set one column, or to opt a column out of the assembly default, put the
+attribute on the property:
+
+```csharp
+[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Utc)]
+public DateTime? ShippedAt { get; set; }
+
+[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Unspecified)]
+public DateTime LocalOpeningTime { get; set; }
+```
+
+- The generated read calls `DateTime.SpecifyKind`, so the ticks do not change. Inquiry does not
+  convert between time zones. `Local` is also accepted.
+- Nullable columns keep `null` for `NULL`.
+- Without either attribute, values keep the kind the provider returns, and the generated code is the
+  same as before.
+- Writes do not change. Inquiry binds the value you assign. It does not reject a `DateTimeKind.Local`
+  value for a UTC column, so convert with `ToUniversalTime()` before you save it.
+- A projection or ad-hoc DTO uses its own property attribute and the assembly default. It does not
+  inherit the entity property's attribute.
+- `DateTimeOffset` columns are not affected. They already carry an offset.
+- For a column with a [value converter](features/value-converters.md#datetime-kind) whose provider
+  type is `DateTime`, the converter receives the value with the declared kind.
+- On a property whose read value is not a `DateTime`, such as a `string`, a `DateTimeOffset` or a
+  converter with another provider type, the attribute is build error [INQ119](diagnostics.md#inq119).
+  The assembly default skips those columns.
+- On a property that Inquiry does not map, such as an entity property without `[InquiryColumn]`, the
+  attribute has no effect. An `override` property does not inherit the attribute from the base
+  property, so put it on the most-derived property.
+
+What each provider returns without a declaration:
+
+| Provider | Column types read as `DateTime` | Kind without a declaration |
+|---|---|---|
+| SQL Server | `datetime2`, `datetime`, `smalldatetime`, `date` | `Unspecified` |
+| PostgreSQL | `timestamp` (the generated DDL type) | `Unspecified` |
+| PostgreSQL | `timestamptz` | `Utc`. Declaring `Utc` changes nothing. Do not declare `Local`. |
+| MySQL, MariaDB | `DATETIME`, `TIMESTAMP`, `DATE` | The MySqlConnector `DateTimeKind` connection option, `Unspecified` by default. A declaration replaces it. MySQL converts `TIMESTAMP` to the session `time_zone` on read, so declare `Utc` for it only when that zone is `+00:00`. |
+| SQLite | `TEXT` values that Inquiry wrote | `Unspecified`. Text with an offset or `Z` reads as local time, so do not declare a kind for it. |
+| Oracle | `DATE`, `TIMESTAMP` | `Unspecified` |
+
 ## Provider notes
 
 Every provider reads back all mapped columns, including defaulted, computed and generated values:

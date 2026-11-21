@@ -71,7 +71,8 @@ nuget.org); assemblies and namespaces remain `Inquiry.*`:
 |---|---|
 | `Ignyte.Inquiry` | Core runtime — attributes, pipeline, DI |
 | `Ignyte.Inquiry.Sqlite` / `.SqlServer` / `.PostgreSql` / `.MySql` / `.MariaDb` / `.Oracle` | Provider runtime + bundled source-generator analyzer |
-| `Ignyte.Inquiry.Aspire` | Resource-name registration, telemetry, and health checks |
+| `Ignyte.Inquiry.Aspire` | Provider-neutral Aspire telemetry and health-check defaults |
+| `Ignyte.Inquiry.Aspire.SqlServer` / `.PostgreSql` / `.MySql` / `.MariaDb` / `.Oracle` / `.Sqlite` | Aspire resource-name registration for one provider |
 | `Ignyte.Inquiry.AspNetCore` | Audit-context middleware (`UseInquiryAuditContext`) |
 | `Ignyte.Inquiry.Interceptors` | Slow-query logging, sqlcommenter, N+1 detection |
 | `Ignyte.Inquiry.Testing` | Provider-neutral recording, entity factories, transaction sandboxes, and reset helpers |

@@ -60,10 +60,10 @@ public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
         var parameters = new List<RecordedParameter>(context.Command.Parameters.Count);
         foreach (DbParameter parameter in context.Command.Parameters)
         {
-            parameters.Add(new RecordedParameter(parameter.ParameterName, parameter.Value));
+            parameters.Add(new RecordedParameter(parameter));
         }
 
-        var recorded = new RecordedCommand(context.Command.CommandText, parameters);
+        var recorded = new RecordedCommand(context.Command.CommandText, context.Command.CommandType, parameters);
         lock (_lock)
         {
             _commands.Add(recorded);

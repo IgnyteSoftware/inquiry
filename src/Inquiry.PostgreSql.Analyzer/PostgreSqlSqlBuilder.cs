@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.PostgreSql.Analyzer;
@@ -5,6 +6,8 @@ namespace Inquiry.PostgreSql.Analyzer;
 internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
     public override bool ComputedColumnDeclaresStoreType => true;
+
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { PostgreSqlLiterals = true, NestedBlockComments = true };
 
     public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
         => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime
@@ -127,6 +130,9 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 
     internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
         => BuildSoftDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
+
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => "UPDATE " + context.Table + " SET " + setClause + " WHERE " + whereClause + " RETURNING " + returning.SelectColumns;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;

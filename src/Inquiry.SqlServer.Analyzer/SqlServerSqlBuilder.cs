@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Infrastructure;
 
@@ -73,6 +74,17 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)
         => quotedColumn + " IN (SELECT [Value] FROM " + parameterName + ")";
 
+    // InListBinding: Default = 0, TableValuedParameter = 1, Json = 2.
+    internal override bool UsesJsonInList(int requestedBinding)
+        => requestedBinding == 2 || (requestedBinding == 0 && DefaultInListBinding == 2);
+
+    // The WITH clause types each element as the column's own SQL type, so the column's collation and type rules apply.
+    protected override string RenderInCollection(SqlPredicate predicate, string column)
+        => predicate.UsesJsonCollection
+            ? column + " IN (SELECT [value] FROM OPENJSON(" + ParameterName(predicate.ParameterName!) + ") WITH ([value] "
+                + SqlServerTvpResolver.JsonElementDdl(predicate.Column) + " '$'))"
+            : base.RenderInCollection(predicate, column);
+
     /// <inheritdoc />
     public override string ArrayParameterBinderFqn => "global::Inquiry.SqlServer.Parameters.InquiryTvpParameter";
 
@@ -81,6 +93,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override string BuildCollectionParameterBinding(CollectionParameterBindingContext context)
     {
+        if (context.Resolution.TransportArguments is { } jsonArguments)
+        {
+            return $"global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, {jsonArguments});";
+        }
+
         var artifact = context.Resolution.Artifact
             ?? throw new System.InvalidOperationException("A successful SQL Server TVP resolution must include an artifact.");
         return $"global::Inquiry.SqlServer.Parameters.InquiryTvpParameter.Bind({context.CommandExpression}, \"{context.ParameterName}\", {context.ValueExpression}, \"{GeneratorHelpers.Escape(artifact.RuntimeTypeName)}\", {artifact.RuntimeDescriptorFieldName});";
@@ -90,6 +107,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => SqlServerTvpResolver.ResolveProcedure(context);
 
     public override bool SupportsStoredProcedures => true;
+
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BracketIdentifiers = true, NestedBlockComments = true };
     public override bool SupportsProcedureReturnValue => true;
 
     public override string QuoteIdentifier(string identifier)
@@ -162,6 +181,17 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
             + " OUTPUT " + InsertedColumns(context) + " INTO @_out"
             + " WHERE " + context.KeyUpdateWhereClause
             + "; " + SelectFromOutput(context);
+
+    // The table variable takes the returned column set, so a projection declares only its own columns.
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+    {
+        var output = FreeOutputTableName(setClause, whereClause);
+        return DeclareOutputTable(returning, output)
+            + " UPDATE " + context.Table + " SET " + setClause
+            + " OUTPUT " + InsertedColumns(returning) + " INTO " + output
+            + " WHERE " + whereClause
+            + "; " + SelectFromOutput(returning, output);
+    }
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
@@ -274,8 +304,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
     // OUTPUT INTO @_out requires a typed table variable. Declare it with the entity's column types so the
     // OUTPUT clause works on tables with DML triggers (bare OUTPUT without INTO raises error 334 on
     // triggered tables).
-    private string DeclareOutputTable(SqlBuildContext context)
-        => "DECLARE @_out TABLE (" + string.Join(", ", context.Columns.Select(c =>
+    private string DeclareOutputTable(SqlBuildContext context, string tableName = "@_out")
+        => "DECLARE " + tableName + " TABLE (" + string.Join(", ", context.Columns.Select(c =>
             QuoteIdentifier(c.ColumnName) + " " + OutputColumnType(c))) + ");";
 
     // The table variable must hold each value without loss, so it takes the declared SqlType. The
@@ -301,8 +331,38 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         return sqlType!.IndexOf("NULL", StringComparison.OrdinalIgnoreCase) >= 0 ? sqlType : sqlType + " NULL";
     }
 
-    private static string SelectFromOutput(SqlBuildContext context)
-        => "SELECT " + context.SelectColumns + " FROM @_out";
+    private static string SelectFromOutput(SqlBuildContext context, string tableName = "@_out")
+        => "SELECT " + context.SelectColumns + " FROM " + tableName;
+
+    // An [InquirySet] expression can bind a method parameter named _out. Every bound parameter appears in
+    // the SET or WHERE text, so a name absent from both cannot clash. SQL Server variable names ignore case.
+    private static string FreeOutputTableName(string setClause, string whereClause)
+    {
+        var name = "@_out";
+        var suffix = 0;
+        while (UsesVariable(setClause, name) || UsesVariable(whereClause, name))
+        {
+            suffix++;
+            name = "@_out" + suffix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return name;
+    }
+
+    private static bool UsesVariable(string sql, string name)
+    {
+        for (var at = sql.IndexOf(name, StringComparison.OrdinalIgnoreCase); at >= 0;
+            at = sql.IndexOf(name, at + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = at + name.Length;
+            if (end == sql.Length || !(char.IsLetterOrDigit(sql[end]) || sql[end] is '_' or '@' or '#' or '$'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private string BuildGeneratedKeyUpsertSql(SqlBuildContext context, bool returning)
     {

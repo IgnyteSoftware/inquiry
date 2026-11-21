@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Oracle.Shared;
 
@@ -125,6 +126,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             : formalName;
 
     public override bool SupportsStoredProcedures => true;
+
+    // Oracle binds are :name. The Oracle runtime also binds @name, so the generator accepts both.
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BindPrefixes = ":@", OracleQuotedStrings = true };
 
     // Procedure read-backs bind DbTypes from the dialect-neutral mapper, and ODP.NET rejects some of
     // them (Guid, DateTime2) and rejects Size = -1 on OUT buffers. Only bindings with live Oracle
@@ -426,6 +430,17 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE 1 = 0; ELSE OPEN " +
             RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
             context.KeyWhereClause + "; END IF; END;";
+
+    // RETURNING ... INTO cannot feed a result set, so the block collects the ROWID of each updated row
+    // and opens the cursor over those rows. The UPDATE still holds their row locks, so no other writer
+    // can change a value between the UPDATE and the read. The predicate is not tested again, because an
+    // update can change a column that the predicate filters on. SYS.ODCIVARCHAR2LIST holds at most
+    // 32767 entries. A larger update raises an error, and Oracle rolls back the whole block.
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => "DECLARE v_rowids SYS.ODCIVARCHAR2LIST; BEGIN UPDATE " + context.Table + " SET " + setClause +
+            " WHERE " + whereClause + " RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO v_rowids; OPEN " + RefCursorBind +
+            " FOR SELECT " + returning.SelectColumns + " FROM " + context.Table +
+            " WHERE ROWID IN (SELECT CHARTOROWID(COLUMN_VALUE) FROM TABLE(v_rowids)); END;";
 
     public override string BuildUpsertReturningSql(SqlBuildContext context)
         // Reuses the MERGE, which throws for a database-generated key — that case stays unsupported (the

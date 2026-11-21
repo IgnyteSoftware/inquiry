@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.Sqlite.Analyzer;
@@ -26,6 +27,13 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new()
+    {
+        BindPrefixes = "@:$",
+        BracketIdentifiers = true,
+        BacktickIdentifiers = true,
+    };
+
     public override string BuildSelectByKeySql(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);
 
@@ -52,6 +60,9 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
         => BuildSoftDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
+
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => "UPDATE " + context.Table + " SET " + setClause + " WHERE " + whereClause + " RETURNING " + returning.SelectColumns;
 
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;

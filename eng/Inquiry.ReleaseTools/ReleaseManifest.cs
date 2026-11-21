@@ -23,7 +23,9 @@ public sealed record ReleasePackage(
     [property: JsonRequired] IReadOnlyList<string> FrameworkReferences,
     // Dependencies the SDK prunes from specific TFM groups because the target framework or a
     // declared framework reference supplies them (e.g. Microsoft.Extensions.* on net10.0 via AspNetCore.App).
-    IReadOnlyDictionary<string, IReadOnlyList<string>>? PrunedDependencies = null);
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? PrunedDependencies = null,
+    // Versions that replace the Dependencies version in one TFM group, when a TFM needs a different floor.
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? TfmDependencyVersions = null);
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReleaseAssets(

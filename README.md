@@ -23,7 +23,8 @@ Inquiry is an experimental **.NET 10+** source-generated micro-ORM. You write at
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}.Analyzer` | Per-dialect Roslyn analyzers — each a `[Generator]` that bundles the shared framework and emits only when its dialect matches the resolved `[InquiryDialect]`. |
 | `src/Inquiry.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}` | Per-dialect runtime providers: `AddInquiry<Dialect>(...)` DI extension, provider options, internal connection factory, and the `[assembly: InquiryDialect("...")]` marker. |
 | `src/Inquiry.AspNetCore` | ASP.NET Core audit-context middleware that stamps `CreatedBy`/`ModifiedBy` from the current user identity. |
-| `src/Inquiry.Aspire` | Aspire resource-name registration with automatic Inquiry telemetry and health checks. |
+| `src/Inquiry.Aspire` | Provider-neutral Aspire defaults: Inquiry telemetry, OpenTelemetry subscription, and the health check. |
+| `src/Inquiry.Aspire.{Sqlite,SqlServer,PostgreSql,MySql,MariaDb,Oracle}` | Per-provider Aspire resource-name registration (`AddInquiry<Dialect>(builder, "name")`). |
 | `src/Inquiry.Interceptors` | Opt-in companion: slow-query warning logging, sqlcommenter trace-context tagging, and N+1 query detection. |
 | `src/Inquiry.Testing` | Provider-neutral recording, entity factories, transaction sandboxes, and Respawn reset helpers. |
 | `src/Inquiry.Sqlite.Testing` | In-memory SQLite fixture. |
@@ -100,7 +101,7 @@ Packages ship on nuget.org under the `Ignyte.` prefix (assemblies and namespaces
 
 ```powershell
 dotnet add package Ignyte.Inquiry.Sqlite --prerelease      # or .SqlServer / .PostgreSql / .MySql / .MariaDb / .Oracle
-dotnet add package Ignyte.Inquiry.Aspire --prerelease      # optional Aspire client integration
+dotnet add package Ignyte.Inquiry.Aspire.Sqlite --prerelease # optional Aspire client integration, one per provider
 dotnet add package Ignyte.Inquiry.Testing --prerelease     # optional test helpers
 dotnet add package Ignyte.Inquiry.Sqlite.Testing --prerelease # optional SQLite fixture
 ```

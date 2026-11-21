@@ -685,6 +685,7 @@ internal static class EntityProcessor
                 Type = typeData,
                 IsKey = isKey,
                 IsGenerated = isGenerated,
+                IsRequiredMember = property.IsRequired,
                 IsSequentialGuid = isSequentialGuid,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
@@ -736,6 +737,7 @@ internal static class EntityProcessor
                 IsUnique = metadataAttribute is not null && GeneratorHelpers.GetNamedBool(metadataAttribute, "IsUnique"),
                 IndexName = metadataAttribute is not null ? GeneratorHelpers.GetNamedString(metadataAttribute, "IndexName") : null,
                 Converter = converter,
+                DateTimeKind = ResolveDateTimeKind(property, typeData, enumAsString, converter, entitySymbol, diagnostics),
             });
 
             if (property.SetMethod is null || property.SetMethod.DeclaredAccessibility == Accessibility.Private)
@@ -1140,6 +1142,77 @@ internal static class EntityProcessor
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Resolves the <c>DateTimeKind</c> that the materializer applies to a column read: the property's
+    /// <c>[InquiryDateTimeKind]</c>, else the assembly default. Returns null when the read is not a
+    /// <c>DateTime</c> or the kind is <c>Unspecified</c>, so existing reads emit no extra call. Reports
+    /// INQ119 when the property attribute is on a column that does not read a <c>DateTime</c>, or when a
+    /// kind is not a <c>DateTimeKind</c> member.
+    /// </summary>
+    internal static string? ResolveDateTimeKind(
+        IPropertySymbol property,
+        TypeData typeData,
+        bool enumAsString,
+        ConverterData? converter,
+        INamedTypeSymbol mappedType,
+        ImmutableArray<DiagnosticData>.Builder diagnostics)
+    {
+        // A converter column reads its provider type, and the converter receives the stamped value.
+        var readsDateTime = converter is not null
+            ? converter.ProviderSpecialType == SpecialType.System_DateTime
+            : !enumAsString && typeData.SpecialType == SpecialType.System_DateTime;
+
+        var propertyAttribute = GeneratorHelpers.GetEntityAttribute(property, "InquiryDateTimeKindAttribute");
+        AttributeData? attribute = propertyAttribute;
+        if (propertyAttribute is not null)
+        {
+            if (!readsDateTime)
+            {
+                var readType = (converter is not null ? converter.ProviderTypeDisplay : typeData.NonNullableDisplayName).Replace("global::", string.Empty);
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.DateTimeKindInvalid,
+                    propertyAttribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault(),
+                    mappedType.Name,
+                    property.Name,
+                    "the value read from the database is '" + readType + "', not System.DateTime"));
+                return null;
+            }
+        }
+        else
+        {
+            if (!readsDateTime)
+            {
+                return null;
+            }
+
+            attribute = mappedType.ContainingAssembly.GetAttributes().FirstOrDefault(static candidate =>
+                candidate.AttributeClass?.ToDisplayString() == KnownSymbols.EntityAttributeNamespace + ".InquiryDateTimeKindAttribute");
+        }
+
+        if (attribute is not { ConstructorArguments.Length: 1 } || attribute.ConstructorArguments[0].Value is not int kind)
+        {
+            return null;
+        }
+
+        switch (kind)
+        {
+            case 0:
+                return null;
+            case 1:
+                return "Utc";
+            case 2:
+                return "Local";
+            default:
+                diagnostics.Add(DiagnosticData.Create(
+                    InquiryDiagnosticDescriptors.DateTimeKindInvalid,
+                    (propertyAttribute ?? attribute).ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? property.Locations.FirstOrDefault(),
+                    mappedType.Name,
+                    property.Name,
+                    kind.ToString(System.Globalization.CultureInfo.InvariantCulture) + " is not a System.DateTimeKind value"));
+                return null;
+        }
     }
 
     private static (bool Found, INamedTypeSymbol? ContextType) GetAssemblyJsonContext(Compilation compilation)

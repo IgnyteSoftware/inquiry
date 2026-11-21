@@ -1,1 +1,27 @@
 #nullable enable
+Inquiry.Stores.InquiryUpdateAttribute.StampModified.get -> bool
+Inquiry.Stores.InquiryUpdateAttribute.StampModified.set -> void
+Inquiry.Entities.InquiryDateTimeKindAttribute
+Inquiry.Entities.InquiryDateTimeKindAttribute.InquiryDateTimeKindAttribute(System.DateTimeKind kind) -> void
+Inquiry.Entities.InquiryDateTimeKindAttribute.Kind.get -> System.DateTimeKind
+Inquiry.Stores.InquiryUpsertAttribute.MatchOn.get -> string![]!
+Inquiry.Stores.InquiryUpsertAttribute.MatchOn.set -> void
+Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.Default = 0 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.Json = 2 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InListBinding.TableValuedParameter = 1 -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InquiryWhereAttribute.InListBinding.get -> Inquiry.Stores.InListBinding
+Inquiry.Stores.InquiryWhereAttribute.InListBinding.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.set -> void
+Inquiry.Stores.InquiryQueryAttribute
+Inquiry.Stores.InquiryQueryAttribute.InquiryQueryAttribute(string! sql) -> void
+Inquiry.Stores.InquiryQueryAttribute.Scalar.get -> bool
+Inquiry.Stores.InquiryQueryAttribute.Scalar.set -> void
+Inquiry.Stores.InquiryQueryAttribute.Sql.get -> string!

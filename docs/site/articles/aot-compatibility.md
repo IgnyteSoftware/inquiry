@@ -12,10 +12,11 @@ warnings.
 |---|---|---|
 | Generated stores, materializers and parameter binding | Supported | The `aot-smoke` CI job publishes and runs SQLite CRUD as a native binary. The package consumer check repeats it with the candidate packages. |
 | Generated registration, `AddInquiryGeneratedStores()` | Supported | Same as above. |
-| Assembly-scanning registration, `AddInquiry(params Assembly[])` | Not supported | Marked `RequiresUnreferencedCode`. Use `AddInquiryGeneratedStores()`. |
+| Assembly-scanning registration, `AddInquiry(params Assembly[])` | Not supported | Marked `RequiresUnreferencedCode`. Use `AddInquiryGeneratedStores()` in the assembly that generates the stores, or [each library's own registration method](library-registration.md). |
 | `[InquiryJson]` with a `JsonSerializerContext` from `[assembly: InquiryJsonContext]` | Supported | `aot-smoke` round-trips a structured value and a null value. |
 | `[InquiryJson(Context = typeof(...))]` per-property context | Supported | `aot-smoke` round-trips a dictionary through a second context with its own options. |
 | `[InquiryJson]` without a context | Not supported | `InquiryJsonConverter<T>` uses reflection-based `System.Text.Json`. |
+| `[assembly: InquiryDateTimeKind(...)]` and `[InquiryDateTimeKind]` | Supported | The generated read calls `DateTime.SpecifyKind` and uses no reflection. `aot-smoke` reads a UTC column and a null value. |
 | Custom `IInquiryValueConverter` through `[InquiryColumn(Converter = typeof(...))]` | Supported when the converter itself is trim-safe | Not executed by Inquiry. Your converter's code decides. |
 
 See [JSON columns](features/json-columns.md#trimming-and-nativeaot) for the context rules, serializer

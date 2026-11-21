@@ -17,14 +17,14 @@ entity columns is acceptable. Do not move filtering into memory merely to bypass
 
 ## Supported capabilities
 
-| Declaration | Result shape | Filtering | DISTINCT / ordering | Pagination | Eager relations |
-|---|---|---|---|---|---|
-| InquirySelectAll | Entity or projection; buffered list or stream | No method predicates | Both | Ordered offset, buffered; optional total | No |
-| InquirySelectAllByField | Entity or projection; buffered list or stream | Listed fields joined by equality AND | Both | Ordered offset, buffered; optional total | No |
-| InquirySelectAllByPredicate + InquiryWhere | Entity only; buffered list or stream | Comparisons, groups, optional criteria | Both | Ordered offset, buffered; optional total | No |
-| InquirySelectOneByKey | Nullable entity | Primary key | Not configurable | None | No |
-| InquiryKeysetPage | InquiryPage of the entity and cursor | Cursor seek, not arbitrary InquiryWhere filters | Key-field order and one direction; no DISTINCT option | Keyset only | No |
-| InquirySelectAllEager / InquirySelectOneByKeyEager | Entity; buffered list or stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships, or those named by InquiryInclude |
+| Declaration | Result shape | Filtering | DISTINCT / ordering | Pagination | Eager relations | Omit columns |
+|---|---|---|---|---|---|---|
+| InquirySelectAll | Entity or projection; buffered list or stream | No method predicates | Both | Ordered offset, buffered; optional total | No | Exclude, entity results only |
+| InquirySelectAllByField | Entity or projection; buffered list or stream | Listed fields joined by equality AND | Both | Ordered offset, buffered; optional total | No | Exclude, entity results only |
+| InquirySelectAllByPredicate + InquiryWhere | Entity only; buffered list or stream | Comparisons, groups, optional criteria | Both | Ordered offset, buffered; optional total | No | Exclude |
+| InquirySelectOneByKey | Nullable entity | Primary key | Not configurable | None | No | Exclude |
+| InquiryKeysetPage | InquiryPage of the entity and cursor | Cursor seek, not arbitrary InquiryWhere filters | Key-field order and one direction; no DISTINCT option | Keyset only | No | No |
+| InquirySelectAllEager / InquirySelectOneByKeyEager | Entity; buffered list or stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships, or those named by InquiryInclude | No |
 
 For offset paging, parameters end with int offset, int limit, then CancellationToken. Supply a stable
 OrderBy including a unique tie-breaker. InquiryPagedResult adds a total; the page and the COUNT
@@ -87,6 +87,50 @@ last namePattern. nameof protects mapped field names, not parameter binding. Bet
 parameters, IN consumes a collection, and IS NULL consumes none. Do not reorder criteria independently
 of their parameters. To bind each criterion to a parameter by name instead, set `Parameter = nameof(...)`;
 see [bind criteria by name](query-composition.md#bind-criteria-by-name).
+
+## Omit expensive columns
+
+`Exclude` reads the store entity without some of its columns, such as image or document bytes. It is
+available on InquirySelectAll, InquirySelectOneByKey, InquirySelectAllByField, and
+InquirySelectAllByPredicate. Here Announcement has an `int Id` key, `string Title`, and a
+`byte[]? Image`:
+
+```csharp
+[InquirySelectAll(
+    OrderBy = nameof(Announcement.Id),
+    Exclude = new[] { nameof(Announcement.Image) })]
+public partial Task<IReadOnlyList<Announcement>> ListAsync(CancellationToken ct = default);
+
+[InquirySelectOneByKey]
+public partial Task<Announcement?> GetAsync(int id, CancellationToken ct = default);
+```
+
+ListAsync leaves `Image` out of the generated `SELECT` list, and its materializer does not read the
+column. Each returned `Image` keeps the value the entity gives it when it is constructed, here `null`.
+GetAsync has no `Exclude`, so it reads every column. The result stays the entity type, and a column
+added to the entity later joins the read automatically. Name each column with `nameof`, or with its
+mapped column name.
+
+The read must keep the columns that identify the row, guard a later write, filter the active rows, or
+the query needs. `INQ122` is a build error when `Exclude` names one of these:
+
+- a key column, or the `[InquiryConcurrencyToken]` column;
+- the `[InquirySoftDelete]` column, or an `[InquiryGlobalFilter]` column;
+- a foreign key that an `[InquiryRelation]` or `[InquiryManyToMany]` joins on, on this entity or another;
+- a column in the method's `OrderBy`;
+- a C# `required` property, which the materializer must set.
+
+It also rejects an unknown or repeated name, a name that matches more than one column, a list that
+leaves a keyless view with no column, and `Exclude` on a method that returns a projection, because a
+projection already reads only its own columns. A name equal to a property name always means that
+property. Eager-loading methods and handwritten SQL
+have no `Exclude` option.
+
+> [!WARNING]
+> Do not write an entity read with `Exclude` back with a full `[InquiryUpdate]`. That update sets
+> every column from the entity, so it overwrites each omitted column with the default value the read
+> left in its property. Before you update the row, read it again in full, or update only the changed
+> columns with a [set-based update](set-based-mutations.md).
 
 ## All, unassigned, or one category
 

@@ -41,19 +41,23 @@ IReadOnlyList<CategorySales> report = await inquiry.QueryListAsync<CategorySales
 
 `QueryAsync<T>` (streaming) and `QuerySingleOrDefaultAsync<T>` take the same DTOs.
 
+When the SQL is fixed, a store method with `[InquiryQuery]` can return the same DTO and bind its
+parameters by name. See [handwritten SQL](handwritten-queries.md) for when to use each.
+
 ## Column mapping
 
 Mapping is **by name, not by position**. Every public (or internal) instance property with a `set` or `init` accessor reads the result column that has the same name. Use a SQL alias when the column name differs from the property name. The SELECT-list order does not matter.
 
 - Names compare without regard to case (`StringComparison.OrdinalIgnoreCase`), so `ordercount`, `ORDERCOUNT`, and `OrderCount` all match `OrderCount`. Providers that fold unquoted aliases to lower or upper case need no quoting.
 - Extra result columns are ignored. Reports can return helper columns that the DTO does not declare.
-- A missing column throws `InvalidOperationException` before the first row is returned, even when the result has no rows. The message names the DTO, the property, and the available columns.
+- A missing column throws `InvalidOperationException` before the first row is returned, even when the result has no rows. The message names the DTO, the property, and the available columns. When the SQL text is constant, build warning [`INQ120`](../diagnostics.md#inq120) reports a missing or duplicate column at the call site.
 - If two result columns match one property, for example `Total` and `TOTAL`, the read throws. Inquiry does not pick one.
 - Two properties whose names differ only by case, such as `Id` and `ID`, report build error `INQ106`.
 - A database `NULL` in a non-nullable property throws `InvalidOperationException` that names the property. A column whose type the property cannot read throws `InvalidOperationException` that names the property and the column. The provider's exception is the inner exception.
 - Get-only (computed), static, and privately-settable properties are skipped and need no column.
 - `[InquiryEnumAsString]` is honored on enum properties; other enums read as their underlying integer.
 - `Guid`, `DateOnly`/`TimeOnly`, and nullable types all read exactly as they do on entities.
+- `[InquiryDateTimeKind]` is honored on `DateTime` properties, and `[assembly: InquiryDateTimeKind(...)]` applies to them. See [DateTime kind](../entity-mapping.md#datetime-kind).
 
 ```csharp
 [InquiryAdHoc]
@@ -112,6 +116,7 @@ safely. They keep their own mapping and do not need the binding step.
 
 ## See also
 
+- [Handwritten SQL](handwritten-queries.md) — `[InquiryQuery]` store methods and `IInquiry` queries.
 - [Projections](projections.md) — column subsets of one entity, with generated SQL.
 - [Aggregates](aggregates.md) — single scalar results.
 - [Security](../security.md) — how interpolated ad-hoc SQL is parameterized.

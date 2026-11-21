@@ -148,7 +148,23 @@ internal static class StoreOperationEmitter
                 // CreatedAt only lands via the insert branch (the conflict-branch SET excludes it),
                 // so the unset-stamp is correct for both outcomes; ModifiedAt is set on both.
                 EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
-                if (method.ReturnsEntity)
+                if (method.UpsertMatchOn.Count > 0)
+                {
+                    // The match columns find the row, so a null key needs no insert-only path. A key the
+                    // database supplies is not in the INSERT, so it is not bound.
+                    var matchOnColumns = SelectMutationColumns(entity, includeKey: true)
+                        .Where(static c => !(c.IsKey && (c.IsGenerated || c.UseDatabaseDefault)))
+                        .ToArray();
+                    if (method.ReturnsEntity)
+                    {
+                        EmitFastQuerySingleFromEntity(source, sqlBuilder, MatchOnUpsertField(method), entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: false, columnsOverride: matchOnColumns);
+                    }
+                    else
+                    {
+                        EmitFastExecuteFromEntity(source, sqlBuilder, MatchOnUpsertField(method), entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: false, columnsOverride: matchOnColumns);
+                    }
+                }
+                else if (method.ReturnsEntity)
                 {
                     if (ShouldUseInsertWhenKeyIsNull(entity))
                     {
@@ -291,20 +307,40 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.Aggregate:
-                // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
-                AppendHeader(source, method, parameters, isAsync: false);
-                if (predicatePlan!.Bindings.Count == 0)
                 {
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.MemberName, filterBinder)}, {cancellation});");
+                    // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
+                    // A DateTime result from a column with a declared kind gets that kind, like a row read.
+                    var aggregateKind = AggregateDateTimeKind(entity, method);
+                    AppendHeader(source, method, parameters, isAsync: aggregateKind is not null);
+                    string call;
+                    if (predicatePlan!.Bindings.Count == 0)
+                    {
+                        call = $"Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.MemberName, filterBinder)}, {cancellation})";
+                    }
+                    else
+                    {
+                        EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, filterBinder);
+                        var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
+                        call = $"Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation})";
+                    }
+
+                    if (aggregateKind is null)
+                    {
+                        source.AppendLine($"        return {call};");
+                    }
+                    else
+                    {
+                        var value = UnusedParameterName(method, "_value");
+                        var set = UnusedParameterName(method, "_set");
+                        source.AppendLine($"        var {value} = await {call}.ConfigureAwait(false);");
+                        source.AppendLine(method.ScalarResultType!.EndsWith("?", StringComparison.Ordinal)
+                            ? $"        return {value} is {{ }} {set} ? global::System.DateTime.SpecifyKind({set}, global::System.DateTimeKind.{aggregateKind}) : null;"
+                            : $"        return global::System.DateTime.SpecifyKind({value}, global::System.DateTimeKind.{aggregateKind});");
+                    }
+
+                    source.AppendLine("    }");
+                    break;
                 }
-                else
-                {
-                    EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, filterBinder);
-                    var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation});");
-                }
-                source.AppendLine("    }");
-                break;
 
             case StoreOperation.SelectTopByOrder:
                 // Top-1-by-order: parameterless single-row select with ORDER BY + LIMIT 1.
@@ -336,7 +372,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
                     source.AppendLine("    {");
                     source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
-                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
+                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter, dateTimeKind: groupColumn.DateTimeKind);
                     var countType = new TypeData(
                         "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
                         SpecialType.None, false, true, false, false);
@@ -419,10 +455,11 @@ internal static class StoreOperationEmitter
                 }
 
             case StoreOperation.UpdateByPredicate:
-                AppendHeader(source, method, parameters, isAsync: false);
+                AppendHeader(source, method, parameters, isAsync: method.PredicateUpdateReturn == PredicateUpdateReturn.Scalar);
                 // Set-based UPDATE composes the active-row predicate, so its SQL carries the
                 // parameterized filter term and the binder must fill it.
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder,
+                    entityType, structMat);
                 source.AppendLine("    }");
                 break;
 
@@ -440,7 +477,65 @@ internal static class StoreOperationEmitter
                 // The procedure body owns its result columns, so rows map by column name, not ordinal.
                 EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, entity.NameMappedMaterializerFullName, cancellation, entities, procedureTvpBindings);
                 break;
+
+            case StoreOperation.Query:
+                EmitHandwrittenQuery(source, sqlBuilder, method, parameters, cancellation, baseSelectField ?? "_sqlQuery_" + method.MemberName);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Emits an <c>[InquiryQuery]</c> body. Each method parameter binds as a column of its own type,
+    /// so enums, unsigned values and provider date types bind as they do in generated predicates.
+    /// </summary>
+    private static void EmitHandwrittenQuery(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string cancellation, string sqlField)
+    {
+        var state = new GeneratedCommandState(method.Parameters);
+        var call = method.QueryReturn switch
+        {
+            QueryReturnKind.List => $"QueryListAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.SingleOrDefault => $"QuerySingleOrDefaultAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.RowCount => "ExecuteAsync",
+            _ => $"ExecuteScalarAsync<{method.ScalarResultType}, {state.Type}>",
+        };
+
+        // Developer parameter names are free, so the body declares no locals and the binder reads the
+        // generated state, never a developer name. "this." keeps a parameter named Inquiry from hiding the store's.
+        AppendHeader(source, method, parameters, isAsync: false);
+        source.AppendLine($"        return this.Inquiry.{call}(");
+        source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+        source.AppendLine($"                {sqlField},");
+        source.AppendLine($"                {state.Value},");
+        source.AppendLine($"                static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
+        source.AppendLine("                {");
+        for (var i = 0; i < method.Parameters.Count - 1; i++)
+        {
+            var parameter = method.Parameters[i];
+            var column = new ColumnData
+            {
+                PropertyName = parameter.Name,
+                ColumnName = parameter.Name,
+                Type = parameter.ValueType!,
+                Length = parameter.DeclaredLength,
+                Precision = parameter.DeclaredPrecision,
+                Scale = parameter.DeclaredScale,
+                IsUnicode = parameter.DeclaredIsUnicode,
+            };
+            source.AppendLine($"                    var _p{i} = _c.CreateParameter();");
+            source.AppendLine($"                    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(parameter.Name))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", "                    ", predicate: true);
+            source.AppendLine($"                    _p{i}.Value = {BuildParameterValueExpression(column, state.Reference(i), sqlBuilder, parameter.IsNullable)};");
+            source.AppendLine($"                    _c.Parameters.Add(_p{i});");
+        }
+
+        source.AppendLine("                }),");
+        if (method.QueryReturn is QueryReturnKind.List or QueryReturnKind.SingleOrDefault)
+        {
+            source.AppendLine("            default,");
+        }
+
+        source.AppendLine($"            {cancellation});");
+        source.AppendLine("    }");
     }
 
     private static void EmitRotatingUpdate(
@@ -507,9 +602,10 @@ internal static class StoreOperationEmitter
         bool includeKey,
         bool returnRowsAffectedAsBool,
         bool forUpdate = false,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        ColumnData[]? columnsOverride = null)
     {
-        var columns = SelectMutationColumns(entity, includeKey, forUpdate);
+        var columns = columnsOverride ?? SelectMutationColumns(entity, includeKey, forUpdate);
 
         // a bool-returning mutation on a token entity captures the row count so a 0-row conflict can
         // (when the runtime option is set) throw instead of silently returning false.
@@ -1298,7 +1394,9 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string cancellation,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        string? rowType = null,
+        string? rowMaterializer = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
@@ -1333,6 +1431,19 @@ internal static class StoreOperationEmitter
                 source.AppendLine($"                _c.Parameters.Add(_p{pi});");
                 pi++;
             }
+        }
+
+        foreach (var stamp in plan.StampBindings)
+        {
+            // A timestamp stamp is never null. A user stamp is null when no ambient user is set.
+            var stampNullable = stamp.Column.IsModifiedBy && stamp.Column.Type.IsNullable;
+            source.AppendLine($"                var _s{pi} = {AuditStampValue(stamp.Column)};");
+            source.AppendLine($"                var _p{pi} = _c.CreateParameter();");
+            source.AppendLine($"                _p{pi}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(stamp.SqlParameterName))}\";");
+            AppendColumnParameterMetadata(source, stamp.Column, sqlBuilder, $"_p{pi}", "                ", predicate: false);
+            source.AppendLine($"                _p{pi}.Value = {BuildParameterValueExpression(stamp.Column, $"_s{pi}", sqlBuilder, stampNullable)};");
+            source.AppendLine($"                _c.Parameters.Add(_p{pi});");
+            pi++;
         }
 
         // Filter parameters precede the predicate bindings for the same reason as the predicate-select
@@ -1375,7 +1486,54 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            });");
-        source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+        // The single form checks for a second row. IsUnique is only a declaration, so a schema
+        // without the unique index must fail loudly, not hide the other updated rows.
+        var query = method.ReturnsList
+            ? $"Inquiry.QueryListAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})"
+            : $"Inquiry.QuerySingleOrDefaultAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})";
+        switch (method.PredicateUpdateReturn)
+        {
+            case PredicateUpdateReturn.Rows:
+                source.AppendLine($"        return {query};");
+                break;
+
+            // The value is read through the entity materializer, so converters and provider types
+            // behave as they do on the entity's own reads.
+            case PredicateUpdateReturn.Scalar when method.ReturnsList:
+                var rows = LocalName(method, "_rows");
+                var values = LocalName(method, "_values");
+                var index = LocalName(method, "_i");
+                source.AppendLine($"        var {rows} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        var {values} = new global::System.Collections.Generic.List<{method.ScalarResultType}>({rows}.Count);");
+                source.AppendLine($"        for (var {index} = 0; {index} < {rows}.Count; {index}++)");
+                source.AppendLine("        {");
+                source.AppendLine($"            {values}.Add({rows}[{index}].{setColumns[0].PropertyName});");
+                source.AppendLine("        }");
+                source.AppendLine($"        return {values};");
+                break;
+
+            case PredicateUpdateReturn.Scalar:
+                var row = LocalName(method, "_row");
+                source.AppendLine($"        var {row} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        return {row}?.{setColumns[0].PropertyName};");
+                break;
+
+            default:
+                source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+                break;
+        }
+    }
+
+    // A method parameter can use a generated local's name, so the local takes trailing underscores until it is free.
+    private static string LocalName(StoreMethodData method, string name)
+    {
+        var suffix = 0;
+        while (method.Parameters.AsImmutableArray().Any(parameter => parameter.Name == name + new string('_', suffix)))
+        {
+            suffix++;
+        }
+
+        return name + new string('_', suffix);
     }
 
     /// <summary>
@@ -1641,9 +1799,10 @@ internal static class StoreOperationEmitter
         bool isAwait,
         bool emitConcurrencyGuard = false,
         bool forUpdate = false,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        ColumnData[]? columnsOverride = null)
     {
-        var columns = SelectMutationColumns(entity, includeKey, forUpdate);
+        var columns = columnsOverride ?? SelectMutationColumns(entity, includeKey, forUpdate);
 
         // A returning update on a token entity captures the nullable result. This lets the runtime
         // distinguish a stale token from a deleted row and throw when the option is set.
@@ -2861,14 +3020,14 @@ internal static class StoreOperationEmitter
                         // `reader` — MaterializerEmitter.ReadExpression hard-codes that receiver.
                         source.AppendLine("        await _grid.ReadRowsAsync(reader =>");
                         source.AppendLine("        {");
-                        source.AppendLine($"            {NullableLocalType(jParentFk.Type)} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter)};");
+                        source.AppendLine($"            {NullableLocalType(jParentFk.Type)} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter, dateTimeKind: jParentFk.DateTimeKind)};");
                         for (var i = 0; i < jChildFks.Length; i++)
                         {
                             var fk = jChildFks[i];
                             // Unsuffixed for the single-column case, so a single-key association's
                             // generated store is unchanged by composite support landing.
                             var local = jChildFks.Length == 1 ? "_jChildKey" : $"_jChildKey{i}";
-                            source.AppendLine($"            {NullableLocalType(fk.Type)} {local} = {MaterializerEmitter.ReadExpression(fk.Type, i + 1, sqlBuilder, fk.EnumAsString, fk.Converter)};");
+                            source.AppendLine($"            {NullableLocalType(fk.Type)} {local} = {MaterializerEmitter.ReadExpression(fk.Type, i + 1, sqlBuilder, fk.EnumAsString, fk.Converter, dateTimeKind: fk.DateTimeKind)};");
                             jChildAccess[i] = local;
                         }
 
@@ -3105,6 +3264,30 @@ internal static class StoreOperationEmitter
         source.AppendLine("    }");
     }
 
+    // Generated locals share the method scope with its parameters, so add underscores until no parameter uses the name.
+    private static string UnusedParameterName(StoreMethodData method, string name)
+    {
+        var underscores = 0;
+        while (method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, new string('_', underscores) + name, StringComparison.Ordinal)))
+        {
+            underscores++;
+        }
+
+        return new string('_', underscores) + name;
+    }
+
+    private static string? AggregateDateTimeKind(EntityData entity, StoreMethodData method)
+    {
+        if (method.ScalarResultType is not ("global::System.DateTime" or "global::System.DateTime?"))
+        {
+            return null;
+        }
+
+        return entity.Columns.AsImmutableArray().FirstOrDefault(column =>
+            string.Equals(column.PropertyName, method.AggregateColumn, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(column.ColumnName, method.AggregateColumn, StringComparison.OrdinalIgnoreCase))?.DateTimeKind;
+    }
+
     private static void AppendHeader(StringBuilder source, StoreMethodData method, string parameters, bool isAsync)
     {
         AppendDocumentation(source, method);
@@ -3185,6 +3368,9 @@ internal static class StoreOperationEmitter
         var stream = method.ReturnTypeDisplay.Contains("IAsyncEnumerable<");
         var result = method.Operation switch
         {
+            StoreOperation.UpdateByPredicate when method.PredicateUpdateReturn != PredicateUpdateReturn.RowCount => method.ReturnsList
+                ? "One entry per updated row, read as it is after the update, in no particular order. Empty when no row matches."
+                : "The updated row or value, read as it is after the update, or null when no row matches.",
             StoreOperation.Insert or StoreOperation.Upsert => method.ReturnsEntity
                 ? "A newly materialized result entity, or null when the operation returns no row. Use the returned key and database values; the input is not refreshed."
                 : "The provider's affected-row count, not a generated key. Database-generated values are not copied into the input.",
@@ -3209,6 +3395,13 @@ internal static class StoreOperationEmitter
                 ProcedureReturnKind.TaskOfEntityList => "Buffered procedure result rows; an empty result becomes an empty list.",
                 ProcedureReturnKind.TaskOfMultipleResultSets => "Buffered result sets in tuple order; an empty set becomes an empty list.",
                 _ => "A deferred stream of procedure result rows.",
+            },
+            StoreOperation.Query => method.QueryReturn switch
+            {
+                QueryReturnKind.List => "Buffered result rows, mapped to properties by column name; an empty result becomes an empty list.",
+                QueryReturnKind.SingleOrDefault => "The sole result row, mapped to properties by column name, or null when empty. Multiple rows are rejected.",
+                QueryReturnKind.RowCount => "The provider's affected-row count, which may be -1 for a statement that reports none.",
+                _ => "The first column of the first row, converted to the declared type; no row or SQL NULL becomes default(T).",
             },
             _ => stream ? "A deferred stream of matching rows." : "Buffered matching results, including page metadata when declared.",
         };
@@ -3240,9 +3433,12 @@ internal static class StoreOperationEmitter
             }
             else
             {
-                help = method.Operation == StoreOperation.StoredProcedure
-                    ? "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument."
-                    : "The declared key, filter, paging, batch, or option input used by this operation.";
+                help = method.Operation switch
+                {
+                    StoreOperation.StoredProcedure => "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument.",
+                    StoreOperation.Query => "The value bound to the SQL parameter of the same name.",
+                    _ => "The declared key, filter, paging, batch, or option input used by this operation.",
+                };
             }
 
             member.Add(new XElement("param", new XAttribute("name", parameter.Name), help));
@@ -3264,6 +3460,13 @@ internal static class StoreOperationEmitter
         if (method.Operation == StoreOperation.StoredProcedure && method.ProcedureReturn == ProcedureReturnKind.TaskOfEntity)
         {
             AddException("System.InvalidOperationException", "The procedure returns more than one row.");
+        }
+
+        if (method.Operation == StoreOperation.Query && method.QueryReturn is QueryReturnKind.List or QueryReturnKind.SingleOrDefault)
+        {
+            AddException("System.InvalidOperationException", method.QueryReturn == QueryReturnKind.SingleOrDefault
+                ? "The query returns more than one row, or a result column cannot be mapped to the row type."
+                : "A result column cannot be mapped to the row type.");
         }
 
         if (method.HasConcurrencyToken && method.Operation is (StoreOperation.Update or StoreOperation.DeleteOneByKey))
@@ -3313,6 +3516,10 @@ internal static class StoreOperationEmitter
 
         return result?.ToString() ?? text;
     }
+
+    /// <summary>The per-method SQL const of an <c>[InquiryUpsert(MatchOn = ...)]</c> method.</summary>
+    internal static string MatchOnUpsertField(StoreMethodData method)
+        => (method.ReturnsEntity ? "_sqlUpsertReturning_" : "_sqlUpsert_") + method.MemberName;
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)
         => entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault);

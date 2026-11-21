@@ -21,41 +21,24 @@ internal static class SqlServerTvpResolver
 
     public static CollectionParameterResolution Resolve(SqlServerSqlBuilder builder, CollectionParameterContext context)
     {
-        var column = context.Column;
-        PhysicalType? physical;
-        if (column.SqlType is not null)
+        var failure = TryResolvePhysical(context.Column, out var physical);
+        if (failure is not null)
         {
-            if (string.IsNullOrWhiteSpace(column.SqlType))
-            {
-                return Failure(context, "SqlType cannot be empty or whitespace", "SqlType");
-            }
-
-            var conflict = ExplicitFacetConflict(column);
-            if (conflict is not null)
-            {
-                return Failure(context, conflict.Value.Message, conflict.Value.Facet);
-            }
-
-            if (!TryParseExplicit(column.SqlType, out physical, out var parseError))
-            {
-                return Failure(context, parseError, "SqlType");
-            }
-
-            if (!IsCompatible(column.TypeClass, physical!))
-            {
-                return Failure(context, $"provider CLR type '{column.ProviderClrTypeName}' is incompatible with SQL type '{physical!.Ddl}'", "SqlType");
-            }
-        }
-        else
-        {
-            if (!TryInfer(column, out physical, out var inferError, out var inferFacet))
-            {
-                return Failure(context, inferError ?? $"provider CLR type '{column.ProviderClrTypeName}' has no exact TVP mapping", inferFacet);
-            }
+            return Failure(context, failure.Value.Message, failure.Value.Facet);
         }
 
         var resolved = physical!;
-        var nullable = context.ElementIsNullable || column.ProviderValueIsNullable;
+        var nullable = context.ElementIsNullable || context.Column.ProviderValueIsNullable;
+        if (context.UsesJson)
+        {
+            // The scale only drives temporal truncation, so other types pass the binder's neutral 7.
+            var scale = resolved.SystemType is "datetime2" or "datetimeoffset" or "time" ? resolved.Scale : 7;
+            return new(null, null)
+            {
+                TransportArguments = "\"" + resolved.SystemType + "\", " + scale.ToString(CultureInfo.InvariantCulture) + ", " + (nullable ? "true" : "false"),
+            };
+        }
+
         var signature = resolved.Canonical + "|nullable=" + (nullable ? "1" : "0");
         var schema = string.IsNullOrWhiteSpace(context.OwningSchema) ? "dbo" : context.OwningSchema!;
         var hash = Hash("sqlserver-tvp-v2|element=" + signature);
@@ -89,6 +72,48 @@ internal static class SqlServerTvpResolver
             descriptorField,
             descriptor,
             BuildValidationSql(schema, name, qualified, resolved, nullable)), null);
+    }
+
+    /// <summary>The SQL type that an <c>OPENJSON ... WITH</c> clause gives each element of an IN list over <paramref name="column"/>.</summary>
+    internal static string JsonElementDdl(IColumn column)
+        // An invalid column already fails the build with INQ076, so any placeholder keeps the SQL well formed.
+        => TryResolvePhysical(column, out var physical) is null ? physical!.Ddl : "NVARCHAR(MAX)";
+
+    private static (string Message, string? Facet)? TryResolvePhysical(IColumn column, out PhysicalType? physical)
+    {
+        if (column.SqlType is not null)
+        {
+            physical = null;
+            if (string.IsNullOrWhiteSpace(column.SqlType))
+            {
+                return ("SqlType cannot be empty or whitespace", "SqlType");
+            }
+
+            var conflict = ExplicitFacetConflict(column);
+            if (conflict is not null)
+            {
+                return (conflict.Value.Message, conflict.Value.Facet);
+            }
+
+            if (!TryParseExplicit(column.SqlType, out physical, out var parseError))
+            {
+                return (parseError, "SqlType");
+            }
+
+            if (!IsCompatible(column.TypeClass, physical!))
+            {
+                return ($"provider CLR type '{column.ProviderClrTypeName}' is incompatible with SQL type '{physical!.Ddl}'", "SqlType");
+            }
+
+            return null;
+        }
+
+        if (!TryInfer(column, out physical, out var inferError, out var inferFacet))
+        {
+            return (inferError ?? $"provider CLR type '{column.ProviderClrTypeName}' has no exact TVP mapping", inferFacet);
+        }
+
+        return null;
     }
 
     private static CollectionParameterResolution Failure(CollectionParameterContext context, string message, string? facet)

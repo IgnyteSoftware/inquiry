@@ -30,4 +30,7 @@ internal sealed record PredicateData(
 
     /// <summary>The method parameter named by <c>[InquiryWhere.UpperParameter]</c> (a range's upper bound).</summary>
     public string? UpperParameter { get; init; }
+
+    /// <summary>The <c>[InquiryWhere.InListBinding]</c> value as its underlying int; 0 uses the assembly default.</summary>
+    public int InListBinding { get; init; }
 }

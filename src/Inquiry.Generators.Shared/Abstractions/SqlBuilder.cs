@@ -117,6 +117,12 @@ public abstract class SqlBuilder
     internal virtual string RenderDefaultExpression(string expression) => expression;
     internal virtual string RenderCheckExpression(string expression) => expression;
 
+    /// <summary>
+    /// Whether the upsert's conflict branch fires on any unique key rather than on a named target.
+    /// A <c>MatchOn</c> upsert then requires that no other unique key can conflict (INQ121).
+    /// </summary>
+    public virtual bool UpsertConflictsOnAnyUniqueKey => false;
+
     /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
 
@@ -137,6 +143,9 @@ public abstract class SqlBuilder
     public virtual string RuntimeParameterNameFromSql(string sqlParameterName) => sqlParameterName;
     public virtual string StoredProcedureParameterName(string formalName)
         => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?' ? formalName : "@" + formalName;
+
+    /// <summary>The quoting and parameter rules used to bind names in <c>[InquiryQuery]</c> SQL.</summary>
+    internal virtual HandwrittenSqlSyntax HandwrittenSqlSyntax => HandwrittenSqlSyntax.Standard;
 
     /// <summary>
     /// Wraps a stored procedure call in a provider-specific block that surfaces OUT REF CURSOR
@@ -711,38 +720,32 @@ public abstract class SqlBuilder
     /// rendering all route through the shared hooks), so concrete and inherited by every provider.
     /// </summary>
     internal virtual string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<IColumn> setColumns, IReadOnlyList<SqlPredicate> predicates)
-    {
-        var set = new System.Text.StringBuilder();
-        for (var i = 0; i < setColumns.Count; i++)
-        {
-            if (i > 0)
-            {
-                set.Append(", ");
-            }
-
-            set.Append(QuoteIdentifier(setColumns[i].ColumnName)).Append(" = ").Append(ParameterName(setColumns[i].PropertyName));
-        }
-
-        return "UPDATE " + context.Table + " SET " + set.ToString()
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
-    }
+        => "UPDATE " + context.Table + " SET " + RenderUpdateSetClause(setColumns)
+            + " WHERE " + RenderUpdateByPredicateWhere(context, predicates);
 
     internal string BuildUpdateByPredicateSql(SqlBuildContext context, IReadOnlyList<SqlSetAssignment> assignments, IReadOnlyList<SqlPredicate> predicates)
-    {
-        var set = new System.Text.StringBuilder();
-        for (var i = 0; i < assignments.Count; i++)
-        {
-            if (i > 0)
-            {
-                set.Append(", ");
-            }
+        => "UPDATE " + context.Table + " SET " + RenderUpdateSetClause(assignments)
+            + " WHERE " + RenderUpdateByPredicateWhere(context, predicates);
 
-            set.Append(QuoteIdentifier(assignments[i].Column.ColumnName)).Append(" = ").Append(assignments[i].Expression);
-        }
+    internal string RenderUpdateSetClause(IReadOnlyList<IColumn> setColumns)
+        => string.Join(", ", setColumns.Select(column => QuoteIdentifier(column.ColumnName) + " = " + ParameterName(column.PropertyName)));
 
-        return "UPDATE " + context.Table + " SET " + set.ToString()
-            + " WHERE " + AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
-    }
+    internal string RenderUpdateSetClause(IReadOnlyList<SqlSetAssignment> assignments)
+        => string.Join(", ", assignments.Select(assignment => QuoteIdentifier(assignment.Column.ColumnName) + " = " + assignment.Expression));
+
+    internal string RenderUpdateByPredicateWhere(SqlBuildContext context, IReadOnlyList<SqlPredicate> predicates)
+        => AppendWhere(RenderPredicates(predicates), context.ActiveRowPredicate);
+
+    /// <summary>
+    /// Builds a set-based UPDATE that returns every updated row as it is after the update. The
+    /// result set has the columns of <paramref name="returning"/> in its SELECT-list order, so the
+    /// materializer for that column set reads it unchanged. A dialect must read the values from the
+    /// UPDATE itself or from rows the UPDATE still holds locked. A separate read could see a change
+    /// that another writer made after the UPDATE.
+    /// </summary>
+    internal virtual string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => throw new System.NotSupportedException(
+            "the dialect has no UPDATE ... RETURNING, so a set-based [InquiryUpdate] can return only Task<int>. Read the rows with a locking select in a transaction instead");
 
     /// <summary>
     /// Builds a set-based literal DELETE whose WHERE clause is the AND/OR composition of
@@ -1414,7 +1417,7 @@ public abstract class SqlBuilder
             SqlCompareOp.Like => RenderLike(column, ParameterName(predicate.ParameterName!)),
             // NOT LIKE reuses the LIKE hook so any dialect ESCAPE handling stays consistent.
             SqlCompareOp.NotLike => "NOT (" + RenderLike(column, ParameterName(predicate.ParameterName!)) + ")",
-            SqlCompareOp.In => RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass),
+            SqlCompareOp.In => RenderInCollection(predicate, column),
             SqlCompareOp.NotIn => RenderNotIn(column, ParameterName(predicate.ParameterName!)),
             _ => column + " = " + ParameterName(predicate.ParameterName!),
         };
@@ -1453,7 +1456,23 @@ public abstract class SqlBuilder
 
     /// <summary>The positive <c>IN</c> criterion exactly as <see cref="RenderPredicate"/> renders it, without negation.</summary>
     public string RenderInCollectionFragment(SqlPredicate predicate)
-        => RenderIn(RenderPredicateColumn(predicate), ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
+        => RenderInCollection(predicate, RenderPredicateColumn(predicate));
+
+    /// <summary>Renders a positive IN criterion over its collection transport. Override to read the predicate.</summary>
+    protected virtual string RenderInCollection(SqlPredicate predicate, string column)
+        => RenderIn(column, ParameterName(predicate.ParameterName!), predicate.Column.TypeClass);
+
+    /// <summary>
+    /// The assembly-wide <c>InListBinding</c> value, as its underlying int, that the store's assembly
+    /// selects. The generator sets it once per store emission.
+    /// </summary>
+    internal int DefaultInListBinding { get; set; }
+
+    /// <summary>
+    /// True when a positive IN criterion with the given <c>InListBinding</c> value (as its underlying int)
+    /// binds its list as one JSON parameter. Only providers that offer that choice override it.
+    /// </summary>
+    internal virtual bool UsesJsonInList(int requestedBinding) => false;
 
     /// <summary>The positive <c>IN</c> criterion over scalar placeholders (already dialect-named).</summary>
     public string RenderInScalarFragment(SqlPredicate predicate, IEnumerable<string> sqlParameterNames)

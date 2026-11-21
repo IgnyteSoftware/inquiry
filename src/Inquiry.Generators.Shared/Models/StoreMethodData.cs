@@ -26,6 +26,19 @@ internal enum ProcedureReturnKind
     TaskOfEntityList,
 }
 
+/// <summary>What a set-based <c>[InquiryUpdate]</c> returns, decided at discovery.</summary>
+internal enum PredicateUpdateReturn
+{
+    /// <summary><c>Task&lt;int&gt;</c>: the affected-row count.</summary>
+    RowCount,
+
+    /// <summary>The updated rows as the entity or an <c>[InquiryProjection]</c> of it.</summary>
+    Rows,
+
+    /// <summary>The updated value of the single SET column.</summary>
+    Scalar,
+}
+
 /// <summary>
 /// Value-equatable replacement for the old <c>StoreMethodModel</c>. Carries the store-method facts
 /// extracted in the discovery transform. <see cref="FieldNames"/> holds the raw
@@ -121,10 +134,28 @@ internal sealed record StoreMethodData(
     public int LockMode { get; init; }
 
     /// <summary>
+    /// For a non-eager select, the raw <c>Exclude</c> names (resolved and validated at emit, INQ122).
+    /// A null name is kept as an empty string so validation reports it. Empty means every column is read.
+    /// </summary>
+    public EquatableArray<string> ExcludedColumnNames { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>
     /// Whether a hard-delete operation was selected so a key, predicate, or table-wide delete emits a
     /// literal <c>DELETE</c> even when the entity declares a soft-delete column.
     /// </summary>
     public bool HardDelete { get; init; }
+
+    /// <summary>
+    /// For <see cref="StoreOperation.UpdateByPredicate"/>, whether <c>StampModified = true</c> was set so
+    /// the SET clause also writes the entity's modified-* auditing columns.
+    /// </summary>
+    public bool StampModified { get; init; }
+
+    /// <summary>
+    /// For <see cref="StoreOperation.Upsert"/>, the raw <c>MatchOn</c> property names in declaration
+    /// order. Empty means the upsert matches on the entity key. Validated at emit (INQ122).
+    /// </summary>
+    public EquatableArray<string> UpsertMatchOn { get; init; } = EquatableArray<string>.Empty;
 
     /// <summary>For <see cref="StoreOperation.SelectTopByOrder"/>, the raw column name (resolved at emit).</summary>
     public string? TopByOrderColumn { get; init; }
@@ -150,6 +181,23 @@ internal sealed record StoreMethodData(
     /// <c>ExecuteScalarAsync&lt;T&gt;</c>.
     /// </summary>
     public string? ScalarResultType { get; init; }
+
+    /// <summary>
+    /// For <see cref="StoreOperation.UpdateByPredicate"/>, what the method returns. With
+    /// <see cref="PredicateUpdateReturn.Rows"/>, <see cref="ResultElementTypeFqn"/> names the row type.
+    /// With <see cref="PredicateUpdateReturn.Scalar"/>, <see cref="ScalarResultType"/> names the value
+    /// type. <see cref="ReturnsList"/> selects the list form for both.
+    /// </summary>
+    public PredicateUpdateReturn PredicateUpdateReturn { get; init; }
+
+    /// <summary>
+    /// For a <see cref="PredicateUpdateReturn.Scalar"/> update, the value type without nullability,
+    /// compared with the SET column's property type.
+    /// </summary>
+    public string? ScalarResultComparisonType { get; init; }
+
+    /// <summary>For a <see cref="PredicateUpdateReturn.Scalar"/> update, whether the value type is <c>Nullable&lt;T&gt;</c>.</summary>
+    public bool ScalarResultIsNullableValueType { get; init; }
 
     /// <summary>
     /// For a select-list operation, the fully-qualified element type the method returns (the
@@ -207,4 +255,26 @@ internal sealed record StoreMethodData(
     /// <c>IReadOnlyList&lt;T&gt;</c> in the return tuple. Empty for non-multi-result methods.
     /// </summary>
     public EquatableArray<string> ProcedureResultSetTypeFqns { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>The SQL of an <c>[InquiryQuery]</c> method, as written.</summary>
+    public string? QuerySql { get; init; }
+
+    /// <summary>The shape an <c>[InquiryQuery]</c> method returns.</summary>
+    public QueryReturnKind QueryReturn { get; init; }
+
+    /// <summary>The row type of a list or single-row <c>[InquiryQuery]</c> method.</summary>
+    public string? QueryResultTypeFqn { get; init; }
+
+    /// <summary>The name-mapped struct materializer generated for <see cref="QueryResultTypeFqn"/>.</summary>
+    public string? QueryMaterializerFqn { get; init; }
+}
+
+/// <summary>The shape an <c>[InquiryQuery]</c> method returns, decided at discovery.</summary>
+internal enum QueryReturnKind
+{
+    None,
+    List,
+    SingleOrDefault,
+    RowCount,
+    Scalar,
 }

@@ -8,7 +8,7 @@ namespace Inquiry.Entities;
 /// per entity.
 /// </summary>
 /// <remarks>
-/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns. Timestamps are
+/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) do not touch auditing columns unless they set <see cref="Inquiry.Stores.InquiryUpdateAttribute.StampModified"/>. Timestamps are
 /// generated client-side in UTC.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]

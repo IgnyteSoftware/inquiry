@@ -10,7 +10,7 @@ namespace Inquiry.Entities;
 /// Set the ambient user with <see cref="Inquiry.InquiryAuditContext.BeginScope"/> (typically once per
 /// request). The column must be a <see cref="string"/> (nullable allowed) and must not be a key,
 /// database-generated, database-defaulted, the soft-delete indicator, or a concurrency token.
-/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) never touch auditing columns.
+/// Predicate updates (<c>[InquiryUpdate]</c> with <c>[InquiryWhere]</c>) do not touch auditing columns unless they set <see cref="Inquiry.Stores.InquiryUpdateAttribute.StampModified"/>.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryModifiedByAttribute : InquiryColumnAttribute

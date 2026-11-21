@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
-    <Description>Aspire client integration for Inquiry resource-name registration, telemetry, and health checks.</Description>
+    <Description>Provider-neutral Aspire client integration for Inquiry telemetry and health checks. Use it through an Ignyte.Inquiry.Aspire.* provider package.</Description>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn.Replace('CS1591', ''))</NoWarn>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -10,13 +10,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Inquiry\Inquiry.csproj" />
-    <ProjectReference Include="..\Inquiry.MariaDb\Inquiry.MariaDb.csproj" />
-    <ProjectReference Include="..\Inquiry.MySql\Inquiry.MySql.csproj" />
-    <ProjectReference Include="..\Inquiry.Oracle\Inquiry.Oracle.csproj" />
-    <ProjectReference Include="..\Inquiry.PostgreSql\Inquiry.PostgreSql.csproj" />
-    <ProjectReference Include="..\Inquiry.Sqlite\Inquiry.Sqlite.csproj" />
-    <ProjectReference Include="..\Inquiry.SqlServer\Inquiry.SqlServer.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Inquiry.Aspire.MariaDb" />
+    <InternalsVisibleTo Include="Inquiry.Aspire.MySql" />
+    <InternalsVisibleTo Include="Inquiry.Aspire.Oracle" />
+    <InternalsVisibleTo Include="Inquiry.Aspire.PostgreSql" />
+    <InternalsVisibleTo Include="Inquiry.Aspire.Sqlite" />
+    <InternalsVisibleTo Include="Inquiry.Aspire.SqlServer" />
   </ItemGroup>
 </Project>

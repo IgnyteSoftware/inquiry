@@ -33,7 +33,7 @@ only methods that report INQ039, never a method rejected by another error.
 
 Change severity with `<NoWarn>` or with `.editorconfig` or `.globalconfig` severity. `#pragma warning
 disable` has no effect on diagnostics from the Inquiry source generators, at any severity. Only INQ048
-comes from an analyzer, so it is the only Inquiry ID a pragma can suppress.
+and INQ120 come from analyzers, so they are the only Inquiry IDs a pragma can suppress.
 
 INQ048 is a SQL-injection warning. Suppress it locally only after verifying that dynamic SQL cannot
 contain untrusted values or identifiers. Bind values with InquirySql.Sql or the FormattableString APIs.
@@ -532,7 +532,7 @@ Operation is not supported by the target dialect. Default: error, enabled.
 
 Trigger: The selected dialect cannot emit this operation.
 
-Failing shape: A returning mutation form rejected for the active dialect. A `LockMode` the dialect cannot run: any lock on SQLite, `Share` on Oracle, `Distinct = true` with a lock on PostgreSQL or Oracle, or offset paging (`Paged = true` or an `InquiryPagedResult<T>` return) with a lock on Oracle.
+Failing shape: A returning mutation form rejected for the active dialect, such as a set-based `[InquiryUpdate]` that returns its updated rows or value on MySQL or MariaDB. A `LockMode` the dialect cannot run: any lock on SQLite, `Share` on Oracle, `Distinct = true` with a lock on PostgreSQL or Oracle, or offset paging (`Paged = true` or an `InquiryPagedResult<T>` return) with a lock on Oracle.
 
 Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. For a lock, remove `Distinct` or the paging, or remove the lock. Lowering severity project-wide deliberately emits throwing stubs, not working SQL. It is the only diagnostic whose severity changes the generated code; see [Severity and suppression](#severity-and-suppression).
 
@@ -686,7 +686,7 @@ Smallest correction: Choose one read-back channel; ReturnsValue requires Task&lt
 
 View-mapped entity is read-only. Default: error, enabled.
 
-Trigger: A write or procedure is declared against a read-only view entity.
+Trigger: A write, a stored procedure or an `[InquiryQuery]` method is declared against a read-only view entity.
 
 Failing shape: InquiryInsert on InquiryStore&lt;ViewRow&gt;.
 
@@ -1214,11 +1214,11 @@ Smallest correction: Use supported separate insert/update operations and preserv
 
 Mutation target is invalid. Default: error, enabled.
 
-Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker and protected filter columns.
+Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker and protected filter columns. For a set-based update that returns its changes, the trigger is also a single-row `Task<T?>` whose criteria can match more than one row, a value return on an update that sets more than one column, or a value type that does not match the updated column.
 
 Failing shape: A parameterless InquiryDelete without InquiryWhere.
 
-Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result. For an empty update, add a writable column or remove the update method.
+Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result. For an empty update, add a writable column or remove the update method. For a returning set-based update, return `Task<IReadOnlyList<T>>`, filter on the key or a unique column, or return the entity or a projection. See [Return the changed values](features/set-based-mutations.md#return-the-changed-values).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L255).
 
@@ -1467,5 +1467,84 @@ Trigger: A non-nullable column sets `UseDatabaseDefault = true` with no `Default
 Failing shape: `[InquiryColumn(UseDatabaseDefault = true)] public string Status { get; set; } = "";`
 
 Smallest correction: Add the default, `[InquiryColumn(DefaultExpression = "'New'", UseDatabaseDefault = true)]`. If the deployed table has its own default and Inquiry does not create the table, set `GenerateDdl = false` on the entity's `[InquiryTable]`.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ118
+
+StampModified update also assigns a stamped column. Default: error, enabled.
+
+Trigger: A set-based `[InquiryUpdate(StampModified = true)]` method also assigns an `[InquiryModifiedAt]` or `[InquiryModifiedBy]` column, through an update parameter or an `[InquirySet]` assignment. The generated update stamps that column itself, so the method would set it twice.
+
+Failing shape: `[InquiryUpdate(StampModified = true)] [InquiryWhere(nameof(Member.Id))]` on `SetStatusAsync(string status, DateTime tStamp, long id, CancellationToken ct)`, where `Member.TStamp` is `[InquiryModifiedAt]`.
+
+Smallest correction: Remove the `tStamp` parameter or the `[InquirySet]` assignment. To pass the value yourself, remove `StampModified` instead.
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ119
+
+InquiryDateTimeKind cannot apply to the column. Default: error, enabled.
+
+Trigger: `[InquiryDateTimeKind]` is on a mapped property whose value read from the database is not a `DateTime`, such as a `string`, a `DateTimeOffset`, an `[InquiryEnumAsString]` enum or a value converter whose provider type is not `DateTime`. It also reports a kind that is not a `DateTimeKind` member, on the property or in `[assembly: InquiryDateTimeKind(...)]`. An invalid assembly value is reported at the assembly attribute, once for each `DateTime` column that uses it, and the message names the column.
+
+Failing shape: `[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Utc)] public DateTimeOffset At { get; set; }`.
+
+Smallest correction: Remove the attribute from that property. `DateTimeOffset` already carries its offset. For a converter column, set the kind inside `FromProvider`, or use a converter whose provider type is `DateTime`. See [DateTime kind](entity-mapping.md#datetime-kind).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ120
+
+Handwritten SQL result columns do not match the result type. Default: warning, enabled.
+
+Trigger: Constant SQL passed to `QueryAsync<T>`, `QueryListAsync<T>` or `QuerySingleOrDefaultAsync<T>` on `IInquiry` or `IInquiryTransaction` cannot fill a property of `T`, where `T` is an `[InquiryAdHoc]` DTO, an `[InquiryProjection]`, or an `[InquiryTable]` or `[InquiryView]` entity declared in the same project. The same check applies to the SQL of an `[InquiryQuery]` store method that returns `Task<IReadOnlyList<T>>` or `Task<T?>`, and reports at the attribute. Results of handwritten SQL map to properties by column name, so the read would throw `InvalidOperationException` on the first call. The warning names `T`, the property and the column names the SQL returns. It reports a property whose column the SQL does not return, and a property that two result columns match. An entity property matches its mapped column name, not its property name.
+
+The analyzer reads the outer `SELECT` list after any CTEs, the first branch of a `UNION`, and the `OUTPUT` list of an `INSERT`, `UPDATE` or `DELETE` on SQL Server, or the `RETURNING` list on PostgreSQL, SQLite and MariaDB. It reads interpolated and raw string literals, `InquirySql.Sql($"...")`, `new InquiryCommand(constant)`, `FormattableStringFactory.Create(constant, ...)`, and a method in the same file whose body only returns one of these. It reports nothing when it cannot know the result names: SQL text that is not constant, `SELECT *`, a stored procedure, SQL that starts with another statement, `SELECT ... INTO`, `FOR XML` or `FOR JSON`, `COLLATE`, syntax it does not parse, an ambiguous dialect, and any expression whose name depends on provider rules. On SQL Server an expression without an alias has no name. PostgreSQL names it after its function or column, so on PostgreSQL an unaliased expression never reports. MySQL, MariaDB, Oracle and SQLite name it with its text, such as `COUNT(*)`, which cannot match a property name; a literal, a parameter or a parenthesized column such as `(Id)` can, so those report nothing. When one result column's name is not known, the analyzer reports no missing columns for that SQL, and on PostgreSQL every unaliased expression has the same effect. `QueryMultipleAsync` grid reads are not checked.
+
+Failing shape: `inquiry.QuerySingleOrDefaultAsync<CheckInCounts>($"SELECT (SELECT COUNT(*) FROM CheckIns), (SELECT COUNT(*) FROM CheckOuts)")` into a DTO with `CheckIns` and `CheckOuts`, or `SELECT [TMemberKey], [Outcome]` into a DTO whose property is `MemberKey`.
+
+Smallest correction: Alias each expression with the name of its property's column, such as `(SELECT COUNT(*) FROM CheckIns) AS CheckIns` or `[TMemberKey] AS [MemberKey]`. Give an unaliased `OUTPUT` expression an alias the same way.
+
+## INQ121
+
+Upsert MatchOn is invalid. Default: error, enabled.
+
+Trigger: An `[InquiryUpsert(MatchOn = ...)]` method that the generator cannot match on those properties. The message gives one reason:
+
+- A name is not a mapped property of the entity, or is listed twice.
+- The names contain the whole entity key. An upsert without `MatchOn` already matches on the key. A natural key may share some columns of a composite key.
+- A property gets its value from the database: generated, `UseDatabaseDefault` or computed.
+- A property is nullable, or is an auditing column that the upsert stamps. A `NULL` or a fresh stamp never matches an existing row.
+- No unique index covers exactly the `MatchOn` properties. The index can be `[InquiryIndex(..., IsUnique = true)]`, or `[InquiryColumn(IsUnique = true)]` for one property. A unique index on more or fewer properties does not count, and neither does `[InquiryColumn(IsUnique = true)]` on a string with no bounded `Length` on SQL Server, MySQL, MariaDB or Oracle, because generated DDL cannot index it there. On a `GenerateDdl = false` table the attribute creates no DDL. It asserts that the deployed table has that unique index.
+- On MySQL and MariaDB only, `ON DUPLICATE KEY UPDATE` fires on any unique key, so the upsert could update a row that a different unique key matched. INQ121 reports a key that is not `AUTO_INCREMENT`, because an assigned or database-default key can repeat an existing key, and any other unique key. A unique key that contains every match column, or the whole primary key, does not count.
+
+Failing shape: `[InquiryUpsert(MatchOn = new[] { nameof(Pref.MemberKey), nameof(Pref.TypeCode) })]` on an entity with no unique index on `(MemberKey, TypeCode)`.
+
+Smallest correction: Declare the index, `[InquiryIndex(nameof(MemberKey), nameof(TypeCode), IsUnique = true)]`, on the entity. See [match on a natural key](features/crud.md#match-on-a-unique-natural-key).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ122
+
+Select Exclude names a column the read cannot omit. Default: error, enabled.
+
+Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, `[InquirySelectAllByField]` or `[InquirySelectAllByPredicate]` names a key column, the `[InquiryConcurrencyToken]` column, the `[InquirySoftDelete]` column, an `[InquiryGlobalFilter]` column, a foreign key that an `[InquiryRelation]` or `[InquiryManyToMany]` on any entity joins on, a column in the method's `OrderBy`, or a C# `required` property. It also reports a name that is not a mapped property or column, a name that matches more than one column, a name listed twice, a list that leaves a keyless view with no column, and `Exclude` on a method that returns a projection. The message names the column and the reason.
+
+Failing shape: `[InquirySelectOneByKey(Exclude = new[] { nameof(Announcement.Id) })]`, where `Id` is the key.
+
+Smallest correction: Remove the column from `Exclude`. To read only a few columns into a different type, declare an [`[InquiryProjection]`](features/projections.md). See [Omit expensive columns](features/select-declarations.md#omit-expensive-columns).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ123
+
+InquiryQuery method is invalid. Default: error, enabled.
+
+Trigger: An `[InquiryQuery]` method cannot be generated. The SQL names a parameter that the method does not declare, or the method declares a parameter that the SQL does not use. Names match exactly, including case, and names in string literals, quoted identifiers and comments do not count. The diagnostic also reports two parameter names in the SQL that differ only in case, a parameter type that is not a bindable scalar, an unsupported return type, a row type that is not an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class of the same assembly, and `Scalar = true` on a row result. The message says which.
+
+Failing shape: `[InquiryQuery("SELECT * FROM [Activity] WHERE [TMemberKey] = @MemberKey")] Task<IReadOnlyList<Activity>> QueryAsync(int memberKey, CancellationToken cancellationToken = default);`
+
+Smallest correction: Make each SQL name match a parameter, here `@memberKey`, and use or remove every parameter. For SQL that declares local variables or changes at run time, use `IInquiry`. See [handwritten SQL](features/handwritten-queries.md).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

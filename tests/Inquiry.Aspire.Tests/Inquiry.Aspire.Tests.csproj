@@ -10,6 +10,12 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <ProjectReference Include="..\..\src\Inquiry.Aspire\Inquiry.Aspire.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.MariaDb\Inquiry.Aspire.MariaDb.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.MySql\Inquiry.Aspire.MySql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.Oracle\Inquiry.Aspire.Oracle.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.PostgreSql\Inquiry.Aspire.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.Sqlite\Inquiry.Aspire.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Inquiry.Aspire.SqlServer\Inquiry.Aspire.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.MariaDb\Inquiry.MariaDb.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.MySql\Inquiry.MySql.csproj" />
     <ProjectReference Include="..\..\src\Inquiry.Oracle\Inquiry.Oracle.csproj" />

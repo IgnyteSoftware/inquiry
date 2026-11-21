@@ -41,6 +41,12 @@
     <Project Path="src/Inquiry.SqlServer.Analyzer/Inquiry.SqlServer.Analyzer.csproj" />
     <Project Path="src/Inquiry.SqlServer/Inquiry.SqlServer.csproj" />
     <Project Path="src/Inquiry.Aspire/Inquiry.Aspire.csproj" />
+    <Project Path="src/Inquiry.Aspire.MariaDb/Inquiry.Aspire.MariaDb.csproj" />
+    <Project Path="src/Inquiry.Aspire.MySql/Inquiry.Aspire.MySql.csproj" />
+    <Project Path="src/Inquiry.Aspire.Oracle/Inquiry.Aspire.Oracle.csproj" />
+    <Project Path="src/Inquiry.Aspire.PostgreSql/Inquiry.Aspire.PostgreSql.csproj" />
+    <Project Path="src/Inquiry.Aspire.Sqlite/Inquiry.Aspire.Sqlite.csproj" />
+    <Project Path="src/Inquiry.Aspire.SqlServer/Inquiry.Aspire.SqlServer.csproj" />
     <Project Path="src/Inquiry.AspNetCore/Inquiry.AspNetCore.csproj" />
     <Project Path="src/Inquiry.Interceptors/Inquiry.Interceptors.csproj" />
     <Project Path="src/Inquiry.Testing/Inquiry.Testing.csproj" />

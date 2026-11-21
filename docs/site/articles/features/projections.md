@@ -46,6 +46,11 @@ private const string _sqlSelectSummaries =
     "SELECT \"ProductID\", \"ProductName\", \"UnitPrice\" FROM \"Products\"";
 ```
 
+Each projected column reads with its own `[InquiryColumn]` settings, such as `Converter`, and its own
+`[InquiryDateTimeKind]`. It does not copy them from the entity property. The assembly default
+`[assembly: InquiryDateTimeKind(...)]` applies to projections too. See
+[DateTime kind](../entity-mapping.md#datetime-kind).
+
 ## Soft-delete entities
 
 A projection over a [soft-delete](soft-delete.md) entity composes the active-row filter into the projected `SELECT`, even though the projected column subset doesn't include the soft-delete indicator:
