@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 
 namespace Inquiry.Sqlite.Analyzer;
@@ -25,6 +26,13 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
 
     public override string QuoteIdentifier(string identifier)
         => "\"" + identifier.Replace("\"", "\"\"") + "\"";
+
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new()
+    {
+        BindPrefixes = "@:$",
+        BracketIdentifiers = true,
+        BacktickIdentifiers = true,
+    };
 
     public override string BuildSelectByKeySql(SqlBuildContext context)
         => "SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " + AppendWhere(context.KeyWhereClause, context.ActiveRowPredicate);

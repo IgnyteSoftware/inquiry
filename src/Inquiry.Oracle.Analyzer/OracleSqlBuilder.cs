@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Oracle.Shared;
 
@@ -125,6 +126,9 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             : formalName;
 
     public override bool SupportsStoredProcedures => true;
+
+    // Oracle binds are :name. The Oracle runtime also binds @name, so the generator accepts both.
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BindPrefixes = ":@", OracleQuotedStrings = true };
 
     // Procedure read-backs bind DbTypes from the dialect-neutral mapper, and ODP.NET rejects some of
     // them (Guid, DateTime2) and rejects Size = -1 on OUT buffers. Only bindings with live Oracle

@@ -273,6 +273,10 @@ are ignored. A missing column throws before the first row is returned. These SQL
 map to `long`; check provider aggregate types when porting the report. The executed example returned `Tools / 11 / 1` after the stock update,
 excluding an archived product and another tenant's product.
 
+When the report SQL is fixed, it can also be a store method with `[InquiryQuery]`, which binds
+`@tenantId` and the other names to method parameters and checks them at build time. See
+[handwritten SQL](handwritten-queries.md).
+
 Raw SQL does not inherit generated global filters, ambient tenant predicates, or soft-delete
 policy. This author owns the explicit TenantId/IsDeleted conditions and must pass an authorized
 tenant. For full entity reads, prefer supported generated queries and column-list composition over

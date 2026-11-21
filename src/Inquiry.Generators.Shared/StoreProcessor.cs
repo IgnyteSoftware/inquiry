@@ -492,6 +492,31 @@ internal static class StoreProcessor
 
         var parameters = method.Parameters.Select(ToParameterData).ToImmutableArray();
 
+        string? querySql = null;
+        var queryReturn = QueryReturnKind.None;
+        string? queryResultTypeFqn = null;
+        string? queryMaterializerFqn = null;
+        if (operation == StoreOperation.Query)
+        {
+            querySql = GeneratorHelpers.GetConstructorString(attribute);
+            string? queryError;
+            if (string.IsNullOrWhiteSpace(querySql))
+            {
+                queryError = "the SQL is empty.";
+            }
+            else
+            {
+                queryError = ClassifyQueryReturn(method, attribute, out queryReturn, out queryResultTypeFqn, out queryMaterializerFqn, out scalarResultType)
+                    ?? FindUnbindableQueryParameter(parameters);
+            }
+
+            if (queryError is not null)
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.QueryInvalid, location, method.Name, queryError));
+                return null;
+            }
+        }
+
         string? procInOutParameterName = null;
         if (operation == StoreOperation.StoredProcedure && hasInOutParam)
         {
@@ -607,7 +632,158 @@ internal static class StoreProcessor
             ProcedureOutputIsDecimal = procOutputIsDecimal,
             ProcedureInOutParameterName = procInOutParameterName,
             ProcedureResultSetTypeFqns = new EquatableArray<string>(procResultSetTypeFqns),
+            QuerySql = querySql,
+            QueryReturn = queryReturn,
+            QueryResultTypeFqn = queryResultTypeFqn,
+            QueryMaterializerFqn = queryMaterializerFqn,
         };
+    }
+
+    /// <summary>
+    /// Decides the shape of an <c>[InquiryQuery]</c> method from its return type. Returns the INQ123
+    /// reason when the shape is not supported, or null.
+    /// </summary>
+    private static string? ClassifyQueryReturn(
+        IMethodSymbol method,
+        AttributeData attribute,
+        out QueryReturnKind kind,
+        out string? resultTypeFqn,
+        out string? materializerFqn,
+        out string? scalarType)
+    {
+        kind = QueryReturnKind.None;
+        resultTypeFqn = null;
+        materializerFqn = null;
+        scalarType = null;
+
+        const string supported = "Return Task<IReadOnlyList<T>>, Task<T?>, Task<int> for the affected-row count, or Task<TScalar>, where T is an [InquiryTable], [InquiryView], [InquiryProjection] or [InquiryAdHoc] type of this assembly.";
+        if (!IsTaskOfSingleTypeArgument(method.ReturnType))
+        {
+            return $"the return type '{method.ReturnType.ToDisplayString()}' is not supported. {supported}";
+        }
+
+        var scalar = GeneratorHelpers.GetNamedBool(attribute, "Scalar");
+        var result = ((INamedTypeSymbol)method.ReturnType).TypeArguments[0];
+        if (result is INamedTypeSymbol { IsGenericType: true } list &&
+            list.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Collections.Generic.IReadOnlyList<T>")
+        {
+            var element = list.TypeArguments[0];
+            materializerFqn = GetQueryMaterializer(element, method);
+            if (materializerFqn is null)
+            {
+                return $"the row type '{element.ToDisplayString()}' is not an [InquiryTable], [InquiryView], [InquiryProjection] or [InquiryAdHoc] class of this assembly, so no generated materializer can map its columns.";
+            }
+
+            kind = QueryReturnKind.List;
+            resultTypeFqn = element.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+        else if (GetQueryMaterializer(result, method) is { } rowMaterializer)
+        {
+            // No row is a null result, so a non-nullable declaration would not match the generated call.
+            if (result.NullableAnnotation == NullableAnnotation.NotAnnotated)
+            {
+                return $"a single-row method returns null when there is no row. Declare Task<{result.Name}?>.";
+            }
+
+            materializerFqn = rowMaterializer;
+            kind = QueryReturnKind.SingleOrDefault;
+            resultTypeFqn = result.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        }
+        else if (result.SpecialType == SpecialType.System_Int32 && !scalar)
+        {
+            kind = QueryReturnKind.RowCount;
+            return null;
+        }
+        else if (IsConvertibleQueryScalar(TypeData.Create(result, result.NullableAnnotation)))
+        {
+            kind = QueryReturnKind.Scalar;
+            scalarType = result.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
+            return null;
+        }
+        else
+        {
+            return $"the result type '{result.ToDisplayString()}' is neither a mapped row type nor a scalar Inquiry converts on every provider (byte, short, int, long, float, double, decimal, bool, string or DateTime). {supported} To read another single value, return a one-property [InquiryAdHoc] row.";
+        }
+
+        return scalar ? "Scalar = true cannot be combined with a row result. Remove Scalar, or return Task<TScalar>." : null;
+    }
+
+    // Scalar results go through ScalarConvert, which relies on Convert.ChangeType. Guid, DateOnly,
+    // TimeOnly, DateTimeOffset and byte[] arrive as text or another type on some providers. Unsigned
+    // values are stored as their signed partner, and Oracle returns enums as decimal, so neither
+    // converts back. Row materializers handle all of these.
+    private static bool IsConvertibleQueryScalar(TypeData type)
+        => !type.IsByteArray && !type.IsGuid && !type.IsDateOnly && !type.IsTimeOnly && !type.IsEnum
+            && type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte
+                or SpecialType.System_Int16 or SpecialType.System_Int32 or SpecialType.System_Int64
+                or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
+                or SpecialType.System_String or SpecialType.System_DateTime;
+
+    /// <summary>
+    /// The materializer for an <c>[InquiryQuery]</c> row type: the name-mapped struct that the entity,
+    /// projection and ad-hoc processors generate next to the type. Null for any other type.
+    /// </summary>
+    private static string? GetQueryMaterializer(ITypeSymbol type, IMethodSymbol method)
+    {
+        // The materializers are internal, so only a type of the store's own assembly has one.
+        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class } named ||
+            !SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, method.ContainingAssembly))
+        {
+            return null;
+        }
+
+        foreach (var attributeClass in named.GetAttributes().Select(static attribute => attribute.AttributeClass))
+        {
+            if (attributeClass?.ContainingNamespace?.ToDisplayString() != KnownSymbols.EntityAttributeNamespace)
+            {
+                continue;
+            }
+
+            // These names must match EntityProcessor, ProjectionProcessor and AdHocProcessor.
+            var suffix = attributeClass.Name switch
+            {
+                "InquiryTableAttribute" or "InquiryViewAttribute" => "InquiryEntityNameMappedMaterializer",
+                "InquiryProjectionAttribute" => "InquiryProjectionNameMappedMaterializer",
+                "InquiryAdHocAttribute" => "InquiryAdHocStructMaterializer",
+                _ => null,
+            };
+            if (suffix is not null)
+            {
+                return GeneratorHelpers.GetGeneratedTypeName(named, named.Name + suffix);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Returns the INQ123 reason when an <c>[InquiryQuery]</c> parameter cannot be bound, or null.</summary>
+    private static string? FindUnbindableQueryParameter(ImmutableArray<ParameterData> parameters)
+    {
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            if (parameter.IsCancellationToken)
+            {
+                if (i != parameters.Length - 1)
+                {
+                    return $"parameter '{parameter.Name}' is a CancellationToken before the last parameter. Declare one CancellationToken, last.";
+                }
+
+                continue;
+            }
+
+            if (parameter.IsInputOutput || parameter.TvpTypeName is not null)
+            {
+                return $"parameter '{parameter.Name}' sets IsInputOutput or TvpTypeName, which apply only to [InquiryStoredProcedure].";
+            }
+
+            if (parameter.DbTypeExpression is null)
+            {
+                return $"parameter '{parameter.Name}' has type '{parameter.TypeDisplay}', which is not a scalar type Inquiry can bind. Collections and other complex types are not supported; use IInquiry for dynamic SQL.";
+            }
+        }
+
+        return null;
     }
 
     private static StoreOperation InferMutationMode(
@@ -856,6 +1032,7 @@ internal static class StoreProcessor
             ProcedureValueExpression = BuildProcedureValueExpression(GeneratorHelpers.EscapeIdentifier(parameter.Name), typeData),
             TvpTypeName = paramAttr is not null ? GeneratorHelpers.GetNamedString(paramAttr, "TvpTypeName") : null,
             ElementDbTypeClass = elementTypeData is not null ? MapElementDbTypeClass(elementTypeData) : null,
+            ValueType = typeData,
         };
     }
 
@@ -997,7 +1174,7 @@ internal static class StoreProcessor
         return enumerable is { TypeArguments.Length: 1 } ? enumerable.TypeArguments[0] : null;
     }
 
-    // A null element stays as an empty name so INQ121 reports it instead of dropping it.
+    // A null element stays as an empty name so INQ123 reports it instead of dropping it.
     private static ImmutableArray<string> ReadUpsertMatchOn(AttributeData attribute)
     {
         foreach (var argument in attribute.NamedArguments)
@@ -1309,6 +1486,9 @@ internal static class StoreProcessor
                 case "InquiryGroupCountAttribute":
                     attribute = candidate;
                     return StoreOperation.GroupCount;
+                case "InquiryQueryAttribute":
+                    attribute = candidate;
+                    return StoreOperation.Query;
             }
         }
 
@@ -1379,6 +1559,8 @@ internal static class StoreProcessor
                 true,
             StoreOperation.StoredProcedure =>
                 ClassifyProcedureReturn(returnType, entityType) != ProcedureReturnKind.None,
+            // ClassifyQueryReturn reports INQ123 with the reason instead.
+            StoreOperation.Query => true,
             _ => false,
         };
     }
@@ -1990,7 +2172,7 @@ internal static class StoreProcessor
         {
             var suppressSoftDeleteForMethod = hasSoftDelete && m.IncludeDeleted;
             // An Exclude select reads a column subset, so its context never matches a shared one.
-            // Validation (INQ122) keeps the soft-delete and global-filter columns in the subset, so the
+            // Validation (INQ123) keeps the soft-delete and global-filter columns in the subset, so the
             // context still detects them and composes the active-row filter.
             if (m.ExcludedColumnNames.Count > 0)
             {
@@ -2379,6 +2561,21 @@ internal static class StoreProcessor
             if (method.Operation == StoreOperation.FullTextSearch)
             {
                 AppendSql("_sqlFts_" + method.MemberName, sqlBuilder.BuildFullTextSearchSql(CtxFor(method), fieldColumns));
+            }
+        }
+
+        // [InquiryQuery] SQL keeps the developer's text and rewrites only each parameter to the
+        // dialect's form. InquiryResultColumnAnalyzer checks its result columns (INQ120).
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation == StoreOperation.Query)
+            {
+                var tokens = HandwrittenSql.FindBindTokens(method.QuerySql!, sqlBuilder.HandwrittenSqlSyntax);
+                AppendSql("_sqlQuery_" + method.MemberName, HandwrittenSql.Rewrite(method.QuerySql!, tokens, sqlBuilder.ParameterName));
+
+                // The body names the const through the store type, so a method parameter with the
+                // same name cannot replace the SQL.
+                baseSelectFields[method.MemberName] = store.FullyQualifiedName + "._sqlQuery_" + method.MemberName;
             }
         }
 
@@ -3030,6 +3227,9 @@ internal static class StoreProcessor
             case StoreOperation.FullTextSearch:
                 Add("query", "_sqlFts_" + method.MemberName);
                 break;
+            case StoreOperation.Query:
+                Add("command", "_sqlQuery_" + method.MemberName);
+                break;
             case StoreOperation.Insert:
                 Add("command", method.ReturnsEntity ? "_sqlInsertReturning" : "_sqlInsert");
                 break;
@@ -3138,6 +3338,58 @@ internal static class StoreProcessor
         return sqlBuilder.GetUnsupportedProcedureReadBackReason(readBack);
     }
 
+    /// <summary>
+    /// Checks that every named parameter in <c>[InquiryQuery]</c> SQL has a method parameter of that
+    /// exact name, and that the SQL uses every method parameter. Reports INQ123 otherwise.
+    /// </summary>
+    private static bool TryValidateQueryBinding(EmissionCollector context, StoreMethodData method, SqlBuilder sqlBuilder)
+    {
+        var sql = method.QuerySql!;
+        var tokens = HandwrittenSql.FindBindTokens(sql, sqlBuilder.HandwrittenSqlSyntax);
+        var parameterNames = method.Parameters.AsImmutableArray()
+            .Where(static parameter => !parameter.IsCancellationToken)
+            .Select(static parameter => parameter.Name)
+            .ToList();
+        var usedNames = new HashSet<string>(tokens.Select(static token => token.Name), StringComparer.Ordinal);
+        var valid = true;
+
+        void Report(string reason)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.QueryInvalid, method.Location?.ToLocation(), method.Name, reason));
+            valid = false;
+        }
+
+        var unknown = tokens
+            .Where(token => !parameterNames.Contains(token.Name))
+            .Select(token => "'" + sql.Substring(token.Start, token.Length) + "'")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (unknown.Count > 0)
+        {
+            var declared = parameterNames.Count == 0
+                ? "The method declares no parameters."
+                : "Its parameters are " + string.Join(", ", parameterNames.Select(static name => "'" + name + "'")) + ".";
+            Report($"the SQL names {string.Join(", ", unknown)}, which match no method parameter. Names match exactly, including case. {declared}");
+        }
+
+        var unused = parameterNames.Where(name => !usedNames.Contains(name)).ToList();
+        if (unused.Count > 0)
+        {
+            Report($"the SQL does not use {string.Join(", ", unused.Select(static name => "'" + name + "'"))}. Reference each parameter as @name in the SQL, or remove it.");
+        }
+
+        // Most providers match parameter names without case, so two such names would bind one value.
+        var caseCollision = usedNames
+            .GroupBy(static name => name, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(static group => group.Count() > 1);
+        if (caseCollision is not null)
+        {
+            Report($"the SQL uses {string.Join(" and ", caseCollision.Select(static name => "'" + name + "'"))}, which differ only in case. Providers match parameter names without case, so rename one.");
+        }
+
+        return valid;
+    }
+
     private static bool IsMutatingOperation(StoreOperation operation)
         => operation is StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert
             or StoreOperation.DeleteOneByKey or StoreOperation.RestoreOneByKey
@@ -3151,9 +3403,9 @@ internal static class StoreProcessor
         selectPlan = null;
 
         // A view-mapped entity is read-only: reject any non-read operation up front (INQ052). That
-        // is every mutating operation, plus [InquiryStoredProcedure] — a procedure is arbitrary SQL
-        // not bound to the view and can write, so it must not ride a read-only view store.
-        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation == StoreOperation.StoredProcedure))
+        // is every mutating operation, plus [InquiryStoredProcedure] and [InquiryQuery]. Both run arbitrary SQL
+        // that is not bound to the view and can write, so neither may ride a read-only view store.
+        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation is StoreOperation.StoredProcedure or StoreOperation.Query))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
             return false;
@@ -3164,6 +3416,17 @@ internal static class StoreProcessor
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.StoredProcedureNotSupported, method.Location?.ToLocation(), method.Name, sqlBuilder.DialectName, procedureReason));
             return false;
+        }
+
+        if (method.Operation == StoreOperation.Query)
+        {
+            if (method.Parameters.Count == 0 || !method.Parameters[method.Parameters.Count - 1].IsCancellationToken)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));
+                return false;
+            }
+
+            return TryValidateQueryBinding(context, method, sqlBuilder);
         }
 
         // A key-based select or eager load needs a key. Only a keyless view can reach this (tables
@@ -3854,7 +4117,7 @@ internal static class StoreProcessor
             parameters[filterCount + 1].ComparisonDisplay == "int";
     }
 
-    /// <summary>The INQ121 reason for an invalid <c>MatchOn</c>, or null when it is valid.</summary>
+    /// <summary>The INQ123 reason for an invalid <c>MatchOn</c>, or null when it is valid.</summary>
     private static string? UpsertMatchOnError(StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder)
     {
         var names = method.UpsertMatchOn.AsImmutableArray();
@@ -5235,7 +5498,7 @@ internal static class StoreProcessor
                 string.Equals(foreignKey.ForeignKeySchema, entity.Schema, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Validates a select's <c>Exclude</c> names (INQ122). The read must keep every column that
+    /// Validates a select's <c>Exclude</c> names (INQ123). The read must keep every column that
     /// identifies the row, guards a later write, filters the active rows, or that the SQL or the
     /// materializer needs, so excluding one of those is an error rather than a silently wrong read.
     /// </summary>

@@ -477,7 +477,65 @@ internal static class StoreOperationEmitter
                 // The procedure body owns its result columns, so rows map by column name, not ordinal.
                 EmitStoredProcedure(source, sqlBuilder, method, parameters, entityType, entity.NameMappedMaterializerFullName, cancellation, entities, procedureTvpBindings);
                 break;
+
+            case StoreOperation.Query:
+                EmitHandwrittenQuery(source, sqlBuilder, method, parameters, cancellation, baseSelectField ?? "_sqlQuery_" + method.MemberName);
+                break;
         }
+    }
+
+    /// <summary>
+    /// Emits an <c>[InquiryQuery]</c> body. Each method parameter binds as a column of its own type,
+    /// so enums, unsigned values and provider date types bind as they do in generated predicates.
+    /// </summary>
+    private static void EmitHandwrittenQuery(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string cancellation, string sqlField)
+    {
+        var state = new GeneratedCommandState(method.Parameters);
+        var call = method.QueryReturn switch
+        {
+            QueryReturnKind.List => $"QueryListAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.SingleOrDefault => $"QuerySingleOrDefaultAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.RowCount => "ExecuteAsync",
+            _ => $"ExecuteScalarAsync<{method.ScalarResultType}, {state.Type}>",
+        };
+
+        // Developer parameter names are free, so the body declares no locals and the binder reads the
+        // generated state, never a developer name. "this." keeps a parameter named Inquiry from hiding the store's.
+        AppendHeader(source, method, parameters, isAsync: false);
+        source.AppendLine($"        return this.Inquiry.{call}(");
+        source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+        source.AppendLine($"                {sqlField},");
+        source.AppendLine($"                {state.Value},");
+        source.AppendLine($"                static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
+        source.AppendLine("                {");
+        for (var i = 0; i < method.Parameters.Count - 1; i++)
+        {
+            var parameter = method.Parameters[i];
+            var column = new ColumnData
+            {
+                PropertyName = parameter.Name,
+                ColumnName = parameter.Name,
+                Type = parameter.ValueType!,
+                Length = parameter.DeclaredLength,
+                Precision = parameter.DeclaredPrecision,
+                Scale = parameter.DeclaredScale,
+                IsUnicode = parameter.DeclaredIsUnicode,
+            };
+            source.AppendLine($"                    var _p{i} = _c.CreateParameter();");
+            source.AppendLine($"                    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(parameter.Name))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", "                    ", predicate: true);
+            source.AppendLine($"                    _p{i}.Value = {BuildParameterValueExpression(column, state.Reference(i), sqlBuilder, parameter.IsNullable)};");
+            source.AppendLine($"                    _c.Parameters.Add(_p{i});");
+        }
+
+        source.AppendLine("                }),");
+        if (method.QueryReturn is QueryReturnKind.List or QueryReturnKind.SingleOrDefault)
+        {
+            source.AppendLine("            default,");
+        }
+
+        source.AppendLine($"            {cancellation});");
+        source.AppendLine("    }");
     }
 
     private static void EmitRotatingUpdate(
@@ -3338,6 +3396,13 @@ internal static class StoreOperationEmitter
                 ProcedureReturnKind.TaskOfMultipleResultSets => "Buffered result sets in tuple order; an empty set becomes an empty list.",
                 _ => "A deferred stream of procedure result rows.",
             },
+            StoreOperation.Query => method.QueryReturn switch
+            {
+                QueryReturnKind.List => "Buffered result rows, mapped to properties by column name; an empty result becomes an empty list.",
+                QueryReturnKind.SingleOrDefault => "The sole result row, mapped to properties by column name, or null when empty. Multiple rows are rejected.",
+                QueryReturnKind.RowCount => "The provider's affected-row count, which may be -1 for a statement that reports none.",
+                _ => "The first column of the first row, converted to the declared type; no row or SQL NULL becomes default(T).",
+            },
             _ => stream ? "A deferred stream of matching rows." : "Buffered matching results, including page metadata when declared.",
         };
         if (!member.Elements("summary").Any())
@@ -3368,9 +3433,12 @@ internal static class StoreOperationEmitter
             }
             else
             {
-                help = method.Operation == StoreOperation.StoredProcedure
-                    ? "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument."
-                    : "The declared key, filter, paging, batch, or option input used by this operation.";
+                help = method.Operation switch
+                {
+                    StoreOperation.StoredProcedure => "The bound procedure input. An INOUT replacement is returned as the task result, not assigned to this argument.",
+                    StoreOperation.Query => "The value bound to the SQL parameter of the same name.",
+                    _ => "The declared key, filter, paging, batch, or option input used by this operation.",
+                };
             }
 
             member.Add(new XElement("param", new XAttribute("name", parameter.Name), help));
@@ -3392,6 +3460,13 @@ internal static class StoreOperationEmitter
         if (method.Operation == StoreOperation.StoredProcedure && method.ProcedureReturn == ProcedureReturnKind.TaskOfEntity)
         {
             AddException("System.InvalidOperationException", "The procedure returns more than one row.");
+        }
+
+        if (method.Operation == StoreOperation.Query && method.QueryReturn is QueryReturnKind.List or QueryReturnKind.SingleOrDefault)
+        {
+            AddException("System.InvalidOperationException", method.QueryReturn == QueryReturnKind.SingleOrDefault
+                ? "The query returns more than one row, or a result column cannot be mapped to the row type."
+                : "A result column cannot be mapped to the row type.");
         }
 
         if (method.HasConcurrencyToken && method.Operation is (StoreOperation.Update or StoreOperation.DeleteOneByKey))

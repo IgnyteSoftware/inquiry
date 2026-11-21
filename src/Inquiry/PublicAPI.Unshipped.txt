@@ -20,3 +20,8 @@ Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.get -> string![]?
 Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.set -> void
 Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.get -> string![]?
 Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.set -> void
+Inquiry.Stores.InquiryQueryAttribute
+Inquiry.Stores.InquiryQueryAttribute.InquiryQueryAttribute(string! sql) -> void
+Inquiry.Stores.InquiryQueryAttribute.Scalar.get -> bool
+Inquiry.Stores.InquiryQueryAttribute.Scalar.set -> void
+Inquiry.Stores.InquiryQueryAttribute.Sql.get -> string!

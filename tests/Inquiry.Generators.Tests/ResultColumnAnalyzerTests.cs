@@ -147,6 +147,42 @@ public sealed class ResultColumnAnalyzerTests
     private static string Message(Diagnostic diagnostic)
         => diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
 
+    // The harness runs no generator, so each [InquiryQuery] method has a body. The analyzer reads the
+    // attribute and the return type, not the body.
+    [Fact]
+    public async Task InquiryQueryMethodsReportTheSameMismatches()
+    {
+        var diagnostics = await AnalyzeAsync(""""
+            [Inquiry.Stores.InquiryQuery("SELECT [member_key] FROM [Members] WHERE [member_key] = @key")]
+            public Task<IReadOnlyList<Member>> ListAsync(Guid key, System.Threading.CancellationToken ct) => throw null!;
+
+            [Inquiry.Stores.InquiryQuery("SELECT (SELECT COUNT(*) FROM [CheckIns]), COUNT(*) AS CheckOuts FROM [CheckOuts]")]
+            public Task<CheckInCounts?> CountsAsync(System.Threading.CancellationToken ct) => throw null!;
+            """");
+
+        Assert.Equal(2, diagnostics.Length);
+        Assert.All(diagnostics, static d => Assert.Equal("INQ120", d.Id));
+        Assert.Contains(diagnostics, static d => Message(d).Contains("no column named 'email_address' for property 'Email'", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, static d => Message(d).Contains("no column named 'CheckIns' for property 'CheckIns'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InquiryQueryMethodsWithMatchingColumnsOrNoRowTypeReportNothing()
+    {
+        var diagnostics = await AnalyzeAsync(""""
+            [Inquiry.Stores.InquiryQuery("SELECT [member_key], [email_address] FROM [Members]")]
+            public Task<IReadOnlyList<Member>> ListAsync(System.Threading.CancellationToken ct) => throw null!;
+
+            [Inquiry.Stores.InquiryQuery("SELECT COUNT(*) FROM [Members]")]
+            public Task<long> CountAsync(System.Threading.CancellationToken ct) => throw null!;
+
+            [Inquiry.Stores.InquiryQuery("SELECT * FROM [Members]")]
+            public Task<Member?> FindAsync(System.Threading.CancellationToken ct) => throw null!;
+            """");
+
+        Assert.Empty(diagnostics);
+    }
+
     [Fact]
     public async Task UnaliasedScalarSubqueriesReportEachExpectedProperty()
     {

@@ -686,7 +686,7 @@ Smallest correction: Choose one read-back channel; ReturnsValue requires Task&lt
 
 View-mapped entity is read-only. Default: error, enabled.
 
-Trigger: A write or procedure is declared against a read-only view entity.
+Trigger: A write, a stored procedure or an `[InquiryQuery]` method is declared against a read-only view entity.
 
 Failing shape: InquiryInsert on InquiryStore&lt;ViewRow&gt;.
 
@@ -1498,7 +1498,7 @@ Smallest correction: Remove the attribute from that property. `DateTimeOffset` a
 
 Handwritten SQL result columns do not match the result type. Default: warning, enabled.
 
-Trigger: Constant SQL passed to `QueryAsync<T>`, `QueryListAsync<T>` or `QuerySingleOrDefaultAsync<T>` on `IInquiry` or `IInquiryTransaction` cannot fill a property of `T`, where `T` is an `[InquiryAdHoc]` DTO, an `[InquiryProjection]`, or an `[InquiryTable]` or `[InquiryView]` entity declared in the same project. Results of handwritten SQL map to properties by column name, so the read would throw `InvalidOperationException` on the first call. The warning names `T`, the property and the column names the SQL returns. It reports a property whose column the SQL does not return, and a property that two result columns match. An entity property matches its mapped column name, not its property name.
+Trigger: Constant SQL passed to `QueryAsync<T>`, `QueryListAsync<T>` or `QuerySingleOrDefaultAsync<T>` on `IInquiry` or `IInquiryTransaction` cannot fill a property of `T`, where `T` is an `[InquiryAdHoc]` DTO, an `[InquiryProjection]`, or an `[InquiryTable]` or `[InquiryView]` entity declared in the same project. The same check applies to the SQL of an `[InquiryQuery]` store method that returns `Task<IReadOnlyList<T>>` or `Task<T?>`, and reports at the attribute. Results of handwritten SQL map to properties by column name, so the read would throw `InvalidOperationException` on the first call. The warning names `T`, the property and the column names the SQL returns. It reports a property whose column the SQL does not return, and a property that two result columns match. An entity property matches its mapped column name, not its property name.
 
 The analyzer reads the outer `SELECT` list after any CTEs, the first branch of a `UNION`, and the `OUTPUT` list of an `INSERT`, `UPDATE` or `DELETE` on SQL Server, or the `RETURNING` list on PostgreSQL, SQLite and MariaDB. It reads interpolated and raw string literals, `InquirySql.Sql($"...")`, `new InquiryCommand(constant)`, `FormattableStringFactory.Create(constant, ...)`, and a method in the same file whose body only returns one of these. It reports nothing when it cannot know the result names: SQL text that is not constant, `SELECT *`, a stored procedure, SQL that starts with another statement, `SELECT ... INTO`, `FOR XML` or `FOR JSON`, `COLLATE`, syntax it does not parse, an ambiguous dialect, and any expression whose name depends on provider rules. On SQL Server an expression without an alias has no name. PostgreSQL names it after its function or column, so on PostgreSQL an unaliased expression never reports. MySQL, MariaDB, Oracle and SQLite name it with its text, such as `COUNT(*)`, which cannot match a property name; a literal, a parameter or a parenthesized column such as `(Id)` can, so those report nothing. When one result column's name is not known, the analyzer reports no missing columns for that SQL, and on PostgreSQL every unaliased expression has the same effect. `QueryMultipleAsync` grid reads are not checked.
 
@@ -1534,5 +1534,17 @@ Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, 
 Failing shape: `[InquirySelectOneByKey(Exclude = new[] { nameof(Announcement.Id) })]`, where `Id` is the key.
 
 Smallest correction: Remove the column from `Exclude`. To read only a few columns into a different type, declare an [`[InquiryProjection]`](features/projections.md). See [Omit expensive columns](features/select-declarations.md#omit-expensive-columns).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ123
+
+InquiryQuery method is invalid. Default: error, enabled.
+
+Trigger: An `[InquiryQuery]` method cannot be generated. The SQL names a parameter that the method does not declare, or the method declares a parameter that the SQL does not use. Names match exactly, including case, and names in string literals, quoted identifiers and comments do not count. The diagnostic also reports two parameter names in the SQL that differ only in case, a parameter type that is not a bindable scalar, an unsupported return type, a row type that is not an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class of the same assembly, and `Scalar = true` on a row result. The message says which.
+
+Failing shape: `[InquiryQuery("SELECT * FROM [Activity] WHERE [TMemberKey] = @MemberKey")] Task<IReadOnlyList<Activity>> QueryAsync(int memberKey, CancellationToken cancellationToken = default);`
+
+Smallest correction: Make each SQL name match a parameter, here `@memberKey`, and use or remove every parameter. For SQL that declares local variables or changes at run time, use `IInquiry`. See [handwritten SQL](features/handwritten-queries.md).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

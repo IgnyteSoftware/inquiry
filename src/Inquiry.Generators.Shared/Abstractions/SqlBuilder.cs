@@ -144,6 +144,9 @@ public abstract class SqlBuilder
     public virtual string StoredProcedureParameterName(string formalName)
         => formalName.Length > 0 && formalName[0] is '@' or ':' or '$' or '?' ? formalName : "@" + formalName;
 
+    /// <summary>The quoting and parameter rules used to bind names in <c>[InquiryQuery]</c> SQL.</summary>
+    internal virtual HandwrittenSqlSyntax HandwrittenSqlSyntax => HandwrittenSqlSyntax.Standard;
+
     /// <summary>
     /// Wraps a stored procedure call in a provider-specific block that surfaces OUT REF CURSOR
     /// results through implicit result sets (<c>DBMS_SQL.RETURN_RESULT</c>). Returns <c>null</c>

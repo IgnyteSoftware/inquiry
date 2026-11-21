@@ -27,6 +27,7 @@
     <Compile Include="..\Shared\UpsertMatchOnScenarios.cs" Link="Shared\UpsertMatchOnScenarios.cs" />
     <Compile Include="..\Shared\UpsertMatchOnAssignedKeyScenarios.cs" Link="Shared\UpsertMatchOnAssignedKeyScenarios.cs" />
     <Compile Include="..\Shared\UpdateReturningScenarios.cs" Link="Shared\UpdateReturningScenarios.cs" />
+    <Compile Include="..\Shared\HandwrittenQueryScenarios.cs" Link="Shared\HandwrittenQueryScenarios.cs" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
   </ItemGroup>
 
