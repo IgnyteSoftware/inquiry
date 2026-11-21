@@ -150,7 +150,7 @@ NuGet **Trusted Publishing** (OIDC via `NuGet/login`) bound to the `nuget-releas
 long-lived API key is stored in the repository.
 
 Every release run packs from an immutable detached snapshot of the exact merge commit and re-verifies
-the full package contract before pushing. For local package-contract verification, pack the twelve
+the full package contract before pushing. For local package-contract verification, pack the eighteen
 manifest entries at an exact commit:
 
 ```powershell
@@ -183,7 +183,8 @@ namespaces remain `Inquiry.*`:
 | `Ignyte.Inquiry.MariaDb` | MariaDB provider + bundled analyzer |
 | `Ignyte.Inquiry.Oracle` | Oracle provider + bundled analyzer |
 | `Ignyte.Inquiry.Sqlite` | SQLite provider + bundled analyzer |
-| `Ignyte.Inquiry.Aspire` | Aspire resource-name registration, telemetry, and health checks |
+| `Ignyte.Inquiry.Aspire` | Provider-neutral Aspire telemetry and health-check defaults |
+| `Ignyte.Inquiry.Aspire.SqlServer` / `.PostgreSql` / `.MySql` / `.MariaDb` / `.Oracle` / `.Sqlite` | Aspire resource-name registration for one provider |
 | `Ignyte.Inquiry.AspNetCore` | ASP.NET Core audit-context middleware |
 | `Ignyte.Inquiry.Interceptors` | Opt-in slow-query logging + sqlcommenter |
 | `Ignyte.Inquiry.Sqlite.Testing` | In-memory SQLite fixture |
@@ -218,8 +219,10 @@ Use `-RuntimeIdentifier win-x64` on Windows with the NativeAOT C++ toolchain ins
 For a prerelease bundle, also pass its exact `-PackageVersion` and the `-RepositoryBranch` used when packing.
 The runner uses fresh NuGet caches and maps every manifest package ID exclusively to the candidate feed.
 It compiles all six provider generators, runs SQLite CRUD and companion APIs on each framework,
-and publishes and executes SQLite CRUD as a .NET 10 native binary. Server-provider SQL execution
-remains covered by the required integration matrix.
+and registers each Aspire provider package from a resource name in a web application on each framework.
+Each Aspire consumer must restore no driver or Inquiry package of another provider. On .NET 10 it must
+also restore no Microsoft.Extensions 11 package. The runner then publishes and executes SQLite CRUD as a
+.NET 10 native binary. Server-provider SQL execution remains covered by the required integration matrix.
 
 Restore probes on .NET 10 prove that a mixed set of Inquiry packages fails. The runner copies candidate
 packages and rewrites their nuspec version to an older and a newer version. These copies stay in its
@@ -260,7 +263,7 @@ Stable releases also require nonempty Shipped API baselines and empty Unshipped
 baselines in every manifest package. Previews allow Unshipped APIs. These controls do not close the
 remaining performance, documentation, or final release decisions in #360.
 
-Before uploading any package, preflight inspects all twelve package versions in both registries.
+Before uploading any package, preflight inspects all eighteen package versions in both registries.
 Existing GitHub packages must have identical archive bytes. NuGet adds a repository signature, so its
 existing packages must pass trusted-signature verification and have identical payload entries; duplicate or
 unsafe entry paths are rejected. Evidence records both archive hashes. Any lookup error or mismatch
@@ -287,6 +290,6 @@ expose original `.snupkg` archives for comparison: retries use the retained, loc
 allow duplicate symbol uploads to be skipped. This does **not** verify remote symbol archive bytes.
 
 A local recovery rehearsal can replace only the registry transport with a disposable directory: seed
-five packages in each registry, compute the plan (10 existing, 14 missing), copy the missing files, and
-rerun (24 existing). Changing one existing archive must fail preflight. Such a rehearsal does not publish
+five packages in each registry, compute the plan (10 existing, 26 missing), copy the missing files, and
+rerun (36 existing). Changing one existing archive must fail preflight. Such a rehearsal does not publish
 packages or establish real security results; the release workflow must supply those results.

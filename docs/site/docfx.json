@@ -7,6 +7,12 @@
           "files": [
             "Inquiry/Inquiry.csproj",
             "Inquiry.Aspire/Inquiry.Aspire.csproj",
+            "Inquiry.Aspire.MariaDb/Inquiry.Aspire.MariaDb.csproj",
+            "Inquiry.Aspire.MySql/Inquiry.Aspire.MySql.csproj",
+            "Inquiry.Aspire.Oracle/Inquiry.Aspire.Oracle.csproj",
+            "Inquiry.Aspire.PostgreSql/Inquiry.Aspire.PostgreSql.csproj",
+            "Inquiry.Aspire.Sqlite/Inquiry.Aspire.Sqlite.csproj",
+            "Inquiry.Aspire.SqlServer/Inquiry.Aspire.SqlServer.csproj",
             "Inquiry.Testing/Inquiry.Testing.csproj",
             "Inquiry.Sqlite/Inquiry.Sqlite.csproj",
             "Inquiry.Sqlite.Testing/Inquiry.Sqlite.Testing.csproj",

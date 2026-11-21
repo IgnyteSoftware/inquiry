@@ -43,7 +43,10 @@ $expectedChecks = @(
     'net10.0/sqlite/docs-recipe-n-plus-one'
     'net10.0/sqlserver/docs-sample-schema-evolution'
     foreach ($tfm in @('net10.0', 'net11.0')) {
-        foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) { "$tfm/$provider/analyzer-and-generated-crud-build" }
+        foreach ($provider in @('MariaDb', 'MySql', 'Oracle', 'PostgreSql', 'Sqlite', 'SqlServer')) {
+            "$tfm/$provider/analyzer-and-generated-crud-build"
+            "$tfm/$provider/aspire-provider-package"
+        }
         "$tfm/sqlite/crud"
         "$tfm/companions"
         "$tfm/sqlite/journeys"

@@ -40,20 +40,21 @@ Behavioral bug fixes that correct documented-but-wrong behavior are not consider
 
 ## Provider support matrix
 
-| Provider       | Package                     | ADO.NET driver                |
-|----------------|-----------------------------|-------------------------------|
-| SQLite         | `Ignyte.Inquiry.Sqlite`     | `Microsoft.Data.Sqlite`       |
-| SQL Server     | `Ignyte.Inquiry.SqlServer`  | `Microsoft.Data.SqlClient`    |
-| PostgreSQL     | `Ignyte.Inquiry.PostgreSql` | `Npgsql`                      |
-| MySQL          | `Ignyte.Inquiry.MySql`      | `MySqlConnector`              |
-| MariaDB        | `Ignyte.Inquiry.MariaDb`    | `MySqlConnector`              |
-| Oracle         | `Ignyte.Inquiry.Oracle`     | `Oracle.ManagedDataAccess.Core` |
+| Provider       | Package                     | ADO.NET driver                | Aspire integration |
+|----------------|-----------------------------|-------------------------------|--------------------|
+| SQLite         | `Ignyte.Inquiry.Sqlite`     | `Microsoft.Data.Sqlite`       | `Ignyte.Inquiry.Aspire.Sqlite` |
+| SQL Server     | `Ignyte.Inquiry.SqlServer`  | `Microsoft.Data.SqlClient`    | `Ignyte.Inquiry.Aspire.SqlServer` |
+| PostgreSQL     | `Ignyte.Inquiry.PostgreSql` | `Npgsql`                      | `Ignyte.Inquiry.Aspire.PostgreSql` |
+| MySQL          | `Ignyte.Inquiry.MySql`      | `MySqlConnector`              | `Ignyte.Inquiry.Aspire.MySql` |
+| MariaDB        | `Ignyte.Inquiry.MariaDb`    | `MySqlConnector`              | `Ignyte.Inquiry.Aspire.MariaDb` |
+| Oracle         | `Ignyte.Inquiry.Oracle`     | `Oracle.ManagedDataAccess.Core` | `Ignyte.Inquiry.Aspire.Oracle` |
 
 ## Companion packages
 
 | Package                       | Purpose                                                        |
 |-------------------------------|----------------------------------------------------------------|
-| `Ignyte.Inquiry.Aspire` | Resource-name registration, telemetry, and health checks |
+| `Ignyte.Inquiry.Aspire` | Provider-neutral Aspire telemetry and health-check defaults |
+| `Ignyte.Inquiry.Aspire.SqlServer` / `.PostgreSql` / `.MySql` / `.MariaDb` / `.Oracle` / `.Sqlite` | Aspire resource-name registration for one provider |
 | `Ignyte.Inquiry.AspNetCore`   | ASP.NET Core audit-context middleware (`UseInquiryAuditContext`) |
 | `Ignyte.Inquiry.Interceptors` | Slow-query logging, sqlcommenter trace-context tagging, N+1 detection |
 | `Ignyte.Inquiry.Testing`      | Provider-neutral recording, entity factories, transaction sandboxes, and reset helpers |

@@ -16,10 +16,18 @@ remove or change them. See [Support](https://github.com/IgnyteSoftware/inquiry/b
 - Every `Ignyte.Inquiry*` package now depends on the other Inquiry packages at exactly its own version.
   Set every `Ignyte.Inquiry*` reference to the same version and update them together. A mix fails restore
   with `NU1107` or `NU1605`, or warns with `NU1608`.
-- `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb` and `Ignyte.Inquiry.Aspire` depend on MySqlConnector
-  3.0.0. If your own code uses MySqlConnector, check its 3.0 release notes.
-- `Ignyte.Inquiry.Aspire` depends on the Microsoft.Extensions 11.0.0 packages, which OpenTelemetry 1.21.0
-  needs. The other packages still depend on Microsoft.Extensions 10.0.15.
+- `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb`, `Ignyte.Inquiry.Aspire.MySql` and
+  `Ignyte.Inquiry.Aspire.MariaDb` depend on MySqlConnector 3.0.0. If your own code uses MySqlConnector,
+  check its 3.0 release notes.
+- The Aspire registrations moved from `Ignyte.Inquiry.Aspire` to one package per provider, such as
+  `Ignyte.Inquiry.Aspire.SqlServer` for `AddInquirySqlServer`. Replace the `Ignyte.Inquiry.Aspire`
+  reference with the package for your provider. Calls such as `builder.AddInquirySqlServer("name")`
+  compile unchanged. A call through the class name, such as
+  `InquiryAspireExtensions.AddInquirySqlServer(builder, "name")`, must use the new class, such as
+  `InquiryAspireSqlServerExtensions`. See [Aspire integration](features/aspire.md).
+- On .NET 11, `Ignyte.Inquiry.Aspire` and the `Ignyte.Inquiry.Aspire.*` provider packages depend on the
+  Microsoft.Extensions 11.0.0 packages, which OpenTelemetry 1.21.0 needs there. On .NET 10, they and the
+  other packages depend on Microsoft.Extensions 10.0.15. `1.0.0-rc.1` used 11.0.0 on both targets.
 - If you upgrade from `1.0.0-preview.10` or earlier: `SqliteInquiryFixture` moved to the
   `Ignyte.Inquiry.Sqlite.Testing` package and the `Inquiry.Sqlite.Testing` namespace in
   `1.0.0-preview.11`. Add that package and change the `using` directive.

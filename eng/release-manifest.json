@@ -31,29 +31,15 @@
       "project": "src/Inquiry.Aspire/Inquiry.Aspire.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "[1.0.0]",
-        "Ignyte.Inquiry.MariaDb": "[1.0.0]",
-        "Ignyte.Inquiry.MySql": "[1.0.0]",
-        "Ignyte.Inquiry.Oracle": "[1.0.0]",
-        "Ignyte.Inquiry.PostgreSql": "[1.0.0]",
-        "Ignyte.Inquiry.Sqlite": "[1.0.0]",
-        "Ignyte.Inquiry.SqlServer": "[1.0.0]",
-        "Microsoft.Data.SqlClient": "7.1.2",
-        "Microsoft.Data.Sqlite": "10.0.15",
-        "Microsoft.Extensions.Configuration": "11.0.0",
-        "Microsoft.Extensions.Configuration.Abstractions": "11.0.0",
-        "Microsoft.Extensions.DependencyInjection": "11.0.0",
-        "Microsoft.Extensions.DependencyInjection.Abstractions": "11.0.0",
-        "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
-        "Microsoft.Extensions.Hosting.Abstractions": "11.0.0",
-        "Microsoft.Extensions.Logging": "11.0.0",
-        "Microsoft.Extensions.Logging.Abstractions": "11.0.0",
-        "MySqlConnector": "3.0.0",
-        "Npgsql": "10.0.3",
-        "OpenTelemetry.Extensions.Hosting": "1.21.0",
-        "Oracle.ManagedDataAccess.Core": "23.26.400",
-        "SQLitePCLRaw.lib.e_sqlite3": "3.53.3",
-        "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Hosting.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "OpenTelemetry.Extensions.Hosting": "1.21.0"
       },
       "libTfms": [
         "net10.0",
@@ -68,6 +54,241 @@
           "Microsoft.Extensions.Hosting.Abstractions",
           "Microsoft.Extensions.Logging.Abstractions"
         ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.MariaDb",
+      "project": "src/Inquiry.Aspire.MariaDb/Inquiry.Aspire.MariaDb.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.MariaDb": "[1.0.0]",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "MySqlConnector": "3.0.0"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.MySql",
+      "project": "src/Inquiry.Aspire.MySql/Inquiry.Aspire.MySql.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.MySql": "[1.0.0]",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "MySqlConnector": "3.0.0"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.Oracle",
+      "project": "src/Inquiry.Aspire.Oracle/Inquiry.Aspire.Oracle.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.Oracle": "[1.0.0]",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "Oracle.ManagedDataAccess.Core": "23.26.400",
+        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.PostgreSql",
+      "project": "src/Inquiry.Aspire.PostgreSql/Inquiry.Aspire.PostgreSql.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.PostgreSql": "[1.0.0]",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "Npgsql": "10.0.3"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.Sqlite",
+      "project": "src/Inquiry.Aspire.Sqlite/Inquiry.Aspire.Sqlite.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.Sqlite": "[1.0.0]",
+        "Microsoft.Data.Sqlite": "10.0.15",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "SQLitePCLRaw.lib.e_sqlite3": "3.53.3"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
+      }
+    },
+    {
+      "id": "Ignyte.Inquiry.Aspire.SqlServer",
+      "project": "src/Inquiry.Aspire.SqlServer/Inquiry.Aspire.SqlServer.csproj",
+      "dependencies": {
+        "Ignyte.Inquiry.Aspire": "[1.0.0]",
+        "Ignyte.Inquiry.SqlServer": "[1.0.0]",
+        "Microsoft.Data.SqlClient": "7.1.2",
+        "Microsoft.Extensions.Configuration": "10.0.15",
+        "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection": "10.0.15",
+        "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
+        "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
+        "Microsoft.Extensions.Logging": "10.0.15",
+        "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
+        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Security.Cryptography.Pkcs": "10.0.13"
+      },
+      "libTfms": [
+        "net10.0",
+        "net11.0"
+      ],
+      "analyzers": [],
+      "frameworkReferences": [],
+      "prunedDependencies": {
+        "net11.0": [
+          "Microsoft.Extensions.Configuration.Abstractions",
+          "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "Microsoft.Extensions.Logging.Abstractions"
+        ]
+      },
+      "tfmDependencyVersions": {
+        "net11.0": {
+          "Microsoft.Extensions.Configuration": "11.0.0",
+          "Microsoft.Extensions.DependencyInjection": "11.0.0",
+          "Microsoft.Extensions.Diagnostics.HealthChecks": "11.0.0",
+          "Microsoft.Extensions.Logging": "11.0.0"
+        }
       }
     },
     {
