@@ -8,10 +8,7 @@ namespace Inquiry.SqlServer;
 /// </summary>
 public sealed class SqlServerAppLockException : Exception
 {
-    /// <summary>Initializes the exception for a refused lock request.</summary>
-    /// <param name="resource">The lock resource name.</param>
-    /// <param name="failure">The outcome <c>sp_getapplock</c> reported.</param>
-    public SqlServerAppLockException(string resource, SqlServerAppLockFailure failure)
+    internal SqlServerAppLockException(string resource, SqlServerAppLockFailure failure)
         : base(CreateMessage(resource, failure))
     {
         Resource = resource;

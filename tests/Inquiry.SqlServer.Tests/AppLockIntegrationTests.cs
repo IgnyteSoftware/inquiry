@@ -193,6 +193,22 @@ public sealed class AppLockIntegrationTests
     }
 
     [SkippableFact]
+    public async Task RequestWithoutAnActiveServerTransactionIsInvalid()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "AppLock");
+
+        // SQL Server reports this case as an informational message (15626, level 0) and returns -999.
+        await using var worker = await BeginAsync(harness);
+        await worker.Transaction.ExecuteAsync($"IF @@TRANCOUNT > 0 ROLLBACK");
+        var error = await Assert.ThrowsAsync<SqlServerAppLockException>(
+            () => worker.Transaction.AcquireAppLockAsync("applock:invalid", SqlServerAppLockMode.Exclusive, TimeSpan.Zero));
+
+        Assert.Equal(SqlServerAppLockFailure.InvalidRequest, error.Failure);
+        Assert.Equal(-999, error.ReturnCode);
+    }
+
+    [SkippableFact]
     public async Task CallerCancellationStopsTheWait()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

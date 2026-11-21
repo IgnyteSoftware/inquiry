@@ -3,7 +3,6 @@ Inquiry.SqlServer.SqlServerAppLockException
 Inquiry.SqlServer.SqlServerAppLockException.Failure.get -> Inquiry.SqlServer.SqlServerAppLockFailure
 Inquiry.SqlServer.SqlServerAppLockException.Resource.get -> string!
 Inquiry.SqlServer.SqlServerAppLockException.ReturnCode.get -> int
-Inquiry.SqlServer.SqlServerAppLockException.SqlServerAppLockException(string! resource, Inquiry.SqlServer.SqlServerAppLockFailure failure) -> void
 Inquiry.SqlServer.SqlServerAppLockFailure
 Inquiry.SqlServer.SqlServerAppLockFailure.Canceled = -2 -> Inquiry.SqlServer.SqlServerAppLockFailure
 Inquiry.SqlServer.SqlServerAppLockFailure.Deadlock = -3 -> Inquiry.SqlServer.SqlServerAppLockFailure

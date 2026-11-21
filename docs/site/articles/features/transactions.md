@@ -255,6 +255,11 @@ open after the exception, with the locks it already holds, so roll it back or le
 `ExecuteInTransactionAsync` roll it back. When the caller's cancellation token stops the wait, the
 call throws `OperationCanceledException`, as described in [Errors](../error-contracts.md).
 
+The `-3` outcome applies when SQL Server chooses this lock request as the deadlock victim, also in a
+deadlock that involves row locks. When SQL Server chooses another statement in the transaction, such as
+an `UPDATE`, that statement fails with error 1205. The error rolls the transaction back and releases
+its application locks.
+
 The mode follows the SQL Server lock compatibility matrix: `Shared` holders coexist, `Exclusive`
 blocks every other holder, and `Update`, `IntentShared` and `IntentExclusive` match their SQL Server
 modes. Other providers' advisory locks, such as PostgreSQL `pg_advisory_xact_lock` and MySQL

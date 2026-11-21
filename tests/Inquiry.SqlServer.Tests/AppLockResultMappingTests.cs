@@ -21,6 +21,10 @@ public sealed class AppLockResultMappingTests
         var command = Assert.Single(transaction.Commands);
         Assert.Contains("@LockOwner = N'Transaction'", command.CommandText, StringComparison.Ordinal);
         Assert.Equal(new object?[] { "orders", "Exclusive", 5000 }, command.Parameters.Select(p => p.Value));
+
+        // These types and sizes match sp_getapplock's own nvarchar(255) and varchar(32) parameters.
+        Assert.Equal(new DbType?[] { DbType.String, DbType.AnsiString, DbType.Int32 }, command.Parameters.Select(p => p.DbType));
+        Assert.Equal(new int?[] { 255, 32, null }, command.Parameters.Select(p => p.Size));
         Assert.Equal(35, command.CommandTimeout);
     }
 
