@@ -119,7 +119,8 @@ Because every `@name` must be a method parameter, SQL that declares SQL Server l
 
 `T` is an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class in the
 same assembly as the store. Entity and projection rows match their mapped column names, such as an
-`[InquiryColumn]` name. Ad-hoc rows match property names. A missing column throws before the first row is returned.
+`[InquiryColumn]` name. Ad-hoc rows match property names. A missing column throws before the first row is returned. When the
+SQL names its result columns, the build warns about a missing or duplicate column first ([INQ120](../diagnostics.md#inq120)).
 
 To read an `int` scalar instead of the row count, set `Scalar = true`:
 `[InquiryQuery("SELECT COUNT(*) FROM [Activity]", Scalar = true)] Task<int> CountAsync(...)`.

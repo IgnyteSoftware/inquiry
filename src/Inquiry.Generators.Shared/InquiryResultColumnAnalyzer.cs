@@ -51,7 +51,68 @@ public sealed class InquiryResultColumnAnalyzer : DiagnosticAnalyzer
             start.RegisterOperationAction(
                 operation => AnalyzeInvocation(operation, dialect.Value, symbols, shapes),
                 OperationKind.Invocation);
+            start.RegisterSymbolAction(
+                symbol => AnalyzeQueryMethod(symbol, dialect.Value, shapes),
+                SymbolKind.Method);
         });
+    }
+
+    /// <summary>
+    /// Checks the SQL of an <c>[InquiryQuery]</c> store method that returns rows, so a store method and
+    /// an <c>IInquiry</c> call with the same SQL report the same result-column mistakes.
+    /// </summary>
+    private static void AnalyzeQueryMethod(
+        SymbolAnalysisContext context,
+        SqlResultDialect dialect,
+        ConcurrentDictionary<INamedTypeSymbol, ImmutableArray<ColumnData>?> shapes)
+    {
+        var method = (IMethodSymbol)context.Symbol;
+        if (method.PartialDefinitionPart is not null ||
+            method.ReturnType is not INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } task ||
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) != "global::System.Threading.Tasks.Task<TResult>")
+        {
+            return;
+        }
+
+        var attribute = method.GetAttributes().FirstOrDefault(static candidate =>
+            candidate.AttributeClass?.Name == "InquiryQueryAttribute" &&
+            candidate.AttributeClass.ContainingNamespace?.ToDisplayString() == KnownSymbols.StoreAttributeNamespace);
+        if (attribute is null || GeneratorHelpers.GetConstructorString(attribute) is not { Length: > 0 } sql)
+        {
+            return;
+        }
+
+        var result = task.TypeArguments[0];
+        if (result is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } list &&
+            list.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Collections.Generic.IReadOnlyList<T>")
+        {
+            result = list.TypeArguments[0];
+        }
+
+        // Scalar and row-count methods have no result type to check. ResultShape returns null for them.
+        if (result is not INamedTypeSymbol resultType)
+        {
+            return;
+        }
+
+        var compilation = context.Compilation;
+        var cancellationToken = context.CancellationToken;
+        var columns = shapes.GetOrAdd(resultType, type => ResultShape(type, compilation, cancellationToken));
+        if (columns is null)
+        {
+            return;
+        }
+
+        var returned = SqlResultColumnReader.Read(sql, dialect);
+        if (returned is null)
+        {
+            return;
+        }
+
+        var location = attribute.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation()
+            ?? method.Locations.FirstOrDefault()
+            ?? Location.None;
+        Report(context.ReportDiagnostic, location, resultType, columns.Value, returned.Value);
     }
 
     private static void AnalyzeInvocation(
@@ -97,11 +158,11 @@ public sealed class InquiryResultColumnAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        Report(context, argument.Syntax.GetLocation(), resultType, columns.Value, returned.Value);
+        Report(context.ReportDiagnostic, argument.Syntax.GetLocation(), resultType, columns.Value, returned.Value);
     }
 
     private static void Report(
-        OperationAnalysisContext context,
+        Action<Diagnostic> reportDiagnostic,
         Location location,
         INamedTypeSymbol resultType,
         ImmutableArray<ColumnData> columns,
@@ -133,7 +194,7 @@ public sealed class InquiryResultColumnAnalyzer : DiagnosticAnalyzer
             }
 
             description ??= Describe(returned);
-            context.ReportDiagnostic(Diagnostic.Create(
+            reportDiagnostic(Diagnostic.Create(
                 InquiryDiagnosticDescriptors.ResultColumnMismatch,
                 location,
                 resultType.ToDisplayString(),

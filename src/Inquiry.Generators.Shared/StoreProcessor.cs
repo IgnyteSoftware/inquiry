@@ -2565,8 +2565,7 @@ internal static class StoreProcessor
         }
 
         // [InquiryQuery] SQL keeps the developer's text and rewrites only each parameter to the
-        // dialect's form. Hook for #605: its build-time result-column check applies here, to
-        // method.QuerySql and method.QueryResultTypeFqn.
+        // dialect's form. InquiryResultColumnAnalyzer checks its result columns (INQ120).
         foreach (var (method, _, _, _) in valid)
         {
             if (method.Operation == StoreOperation.Query)
