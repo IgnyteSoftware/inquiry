@@ -159,7 +159,10 @@ the test connection string with `UseSetting` in the factory's `ConfigureWebHost`
 argument:
 
 ```csharp
-builder.UseSetting("ConnectionStrings:orders", TestDatabase.ConnectionString);
+protected override void ConfigureWebHost(IWebHostBuilder builder)
+{
+    builder.UseSetting("ConnectionStrings:orders", TestDatabase.ConnectionString);
+}
 ```
 
 See [Test hosts](aspire.md#test-hosts) in the Aspire guide for the full pattern.

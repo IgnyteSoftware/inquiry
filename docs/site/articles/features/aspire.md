@@ -71,8 +71,9 @@ public sealed class OrdersApiFactory : WebApplicationFactory<Program>
 
 The factory passes `UseSetting` values to the application as command-line arguments. The
 application must pass its `args` to `WebApplication.CreateBuilder(args)`. If it calls
-`CreateBuilder()` without them, the `AddInquiry*` call does not see the test value and registers
-the data source against the original connection string.
+`CreateBuilder()` without them, the application does not see the test value, content root, or
+environment. The `AddInquiry*` call then registers the original connection string, or throws when
+no `appsettings.json` is found in the working directory.
 
 The key is `ConnectionStrings:` followed by the resource name passed to `AddInquiry*`. The value
 takes precedence over `appsettings.json`, user secrets, and environment variables, so the
@@ -88,9 +89,11 @@ call throws before those callbacks run.
 A test that never opens a connection still needs a value. The `AddInquiry*` call rejects a missing
 or blank one. Some providers, such as PostgreSQL, also parse the value when they build the data
 source, so it must be a valid connection string for that provider. The value does not need a
-reachable server: registration builds the data source without opening a connection. To use a container per test run, start it
-before the factory builds the host, for example in the factory's `InitializeAsync` with xUnit's
-`IAsyncLifetime`, and pass its connection string to `UseSetting`.
+reachable server: registration builds the data source without opening a connection.
+
+To use a container per test run, start it before the factory builds the host, for example in the
+factory's `InitializeAsync` with xUnit's `IAsyncLifetime`, and pass its connection string to
+`UseSetting`.
 
 ## Existing data sources
 
