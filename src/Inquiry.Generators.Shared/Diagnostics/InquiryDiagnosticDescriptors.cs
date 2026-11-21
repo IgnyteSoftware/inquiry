@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ120. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ121. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -68,6 +68,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ118         Set-based modified stamp       ([InquiryUpdate(StampModified = true)] also assigns a modified-audit column) [IN USE]
     //   INQ119         DateTime read kind              ([InquiryDateTimeKind] on a column that does not read a DateTime, or an undefined kind) [IN USE]
     //   INQ120         Handwritten SQL result columns (a generated result shape's column is missing from, or matched twice by, constant SQL read through IInquiry) [IN USE]
+    //   INQ121         Upsert MatchOn                 (MatchOn names no unique index, an unusable property, or competes with another unique key on MySQL/MariaDB) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1133,6 +1134,14 @@ internal static class InquiryDiagnosticDescriptors
         "The SQL read into '{0}' {1}. The SQL returns: {2}. Give each result column the name of the column its property maps to, for example with an alias.",
         "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq120");
+
+    // INQ121 (Error): a MatchOn upsert relies on a unique index over exactly those columns. Without
+    // one, ON CONFLICT does not compile and the SQL Server and Oracle forms can update several rows.
+    public static readonly DiagnosticDescriptor UpsertMatchOnInvalid = new(
+        "INQ121", "Upsert MatchOn is invalid",
+        "Upsert method '{0}' on entity '{1}' has an invalid MatchOn: {2}.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq121");
 
     public static readonly DiagnosticDescriptor StoreMethodSignatureNotSupported = new(
         "INQ111", "Store method signature cannot be generated",

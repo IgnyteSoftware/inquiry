@@ -17,7 +17,7 @@ This page shows the **complete, unedited generator output** for a `Shipper` stor
 | `[InquiryUpdate]` | `Task<bool>` or `Task<T?>` | Updates an entity by primary key; the return type selects the command shape |
 | `[InquiryUpdate]` with `IEnumerable<T>` | `Task<int>` | Batched updates, each row matched by primary key |
 | `[InquiryUpdate]` + `[InquiryWhere]` | `Task<int>` | Partially updates inferred columns for matching rows |
-| `[InquiryUpsert]` | `Task<int>` or `Task<T?>` | Dialect-specific, with returning SQL selected by the return type |
+| `[InquiryUpsert]` | `Task<int>` or `Task<T?>` | Dialect-specific, with returning SQL selected by the return type. Matches on the key, or on a unique natural key with `MatchOn` ([below](#match-on-a-unique-natural-key)) |
 | `[InquiryDelete]` | `Task<bool>` or `Task<T?>` | Deletes one row by primary key; the return type selects the command shape |
 | `[InquiryDelete]` + `[InquiryWhere]` | `Task<int>` | Deletes rows matching the predicate |
 | `[InquiryDeleteAll]` | `Task<int>` | Explicitly deletes every row |
@@ -379,6 +379,96 @@ the no-op `ON DUPLICATE KEY UPDATE key = key`; an `AUTO_INCREMENT` key uses
 The `Task<TEntity?>` variant therefore returns the matched row on conflict rather
 than `null`, unlike PostgreSQL, SQLite, and SQL Server which return `null` when no columns are
 modified. Design for this if your code branches on the returning upsert's null/non-null result.
+
+## Match on a unique natural key
+
+An upsert matches on the entity key by default. A table with a surrogate key often identifies a row by
+other columns, such as a unique `(MemberKey, TypeCode)`. Name those properties in `MatchOn`:
+
+```csharp
+[InquiryTable("Pref")]
+[InquiryIndex(nameof(MemberKey), nameof(TypeCode), IsUnique = true)]
+public sealed class Pref
+{
+    [InquiryKey(IsGenerated = true)]
+    public int Id { get; set; }
+
+    [InquiryColumn]
+    public int MemberKey { get; set; }
+
+    [InquiryColumn(Length = 20)]
+    public string TypeCode { get; set; } = "";
+
+    [InquiryColumn]
+    public bool Enabled { get; set; }
+}
+
+public partial class PrefStore : InquiryStore<Pref>
+{
+    [InquiryUpsert(MatchOn = new[] { nameof(Pref.MemberKey), nameof(Pref.TypeCode) })]
+    public partial Task<int> UpsertAsync(Pref pref, CancellationToken cancellationToken = default);
+
+    [InquiryUpsert(MatchOn = new[] { nameof(Pref.MemberKey), nameof(Pref.TypeCode) })]
+    public partial Task<Pref?> UpsertReturningAsync(Pref pref, CancellationToken cancellationToken = default);
+}
+```
+
+The rules:
+
+- The entity must declare a unique index on exactly the `MatchOn` properties:
+  `[InquiryIndex(..., IsUnique = true)]`, or `[InquiryColumn(IsUnique = true)]` for one property. A string
+  property needs a bounded `Length` on SQL Server, MySQL, MariaDB and Oracle, which cannot index an
+  unbounded string. On a `GenerateDdl = false` table the attribute creates no DDL. It asserts that the
+  deployed table has that unique index. Matching on a partial or filtered index is not supported. A missing index, an unmapped
+  or repeated name, a set that holds the whole key, or a property the database supplies reports [INQ121](../diagnostics.md#inq121).
+- Each `MatchOn` property must be non-nullable, and so must the value its converter stores, if it has
+  one. `NULL = NULL` is never true, so a `NULL` value would never find the row to update. An auditing column that the upsert stamps (`[InquiryCreatedAt]`,
+  `[InquiryModifiedAt]` and the `By` forms) cannot be matched either. Both report `INQ121`.
+- The update branch sets every column that a key upsert sets, except the `MatchOn` columns and the
+  key. An existing row keeps its key, generated or assigned.
+- The insert branch inserts the same columns as `[InquiryInsert]`. A generated key comes from the
+  database, and the method does not bind the key value you pass. An assigned key is inserted as given.
+- The `Task<TEntity?>` form returns the inserted or updated row with its key, as for a key upsert.
+  When the update branch has nothing to set, because every non-key column is a `MatchOn` column, SQLite,
+  PostgreSQL and SQL Server return `null` for an existing row, as for a key upsert (see
+  [Upsert concurrency semantics](#upsert-concurrency-semantics)). MySQL, MariaDB and Oracle return it.
+  The `Task<int>` form does not write a key back to your object. When it updates an existing row, an
+  unset `SequentialGuid` key that the method filled in before the statement is not the row's key. Use
+  the `Task<TEntity?>` form when you need the stored key.
+- A soft-deleted row still matches. The update branch does not restore it, as for a key upsert.
+- An entity with a concurrency token, or an `EnforceOnWrites` filter, rejects upserts as it does for key
+  upserts (`INQ113`, `INQ095`).
+
+Each dialect uses its key-upsert statement with the match columns in place of the key. For the
+`Pref` example:
+
+| Dialect | `Task<int>` form | `Task<Pref?>` form |
+|---|---|---|
+| SQLite, PostgreSQL | `INSERT INTO "Pref" ("MemberKey", "TypeCode", "Enabled") VALUES (@MemberKey, @TypeCode, @Enabled) ON CONFLICT ("MemberKey", "TypeCode") DO UPDATE SET "Enabled" = @Enabled` | The same, with `RETURNING "Id", "MemberKey", "TypeCode", "Enabled"` |
+| SQL Server | `BEGIN TRANSACTION; UPDATE [Pref] WITH (UPDLOCK, SERIALIZABLE) SET [Enabled] = @Enabled WHERE [MemberKey] = @MemberKey AND [TypeCode] = @TypeCode; IF @@ROWCOUNT = 0 INSERT INTO [Pref] ([MemberKey], [TypeCode], [Enabled]) VALUES (@MemberKey, @TypeCode, @Enabled); COMMIT TRANSACTION;` | The same, with `OUTPUT INSERTED.*` into `@_out` on both branches and a final `SELECT … FROM @_out` |
+| MySQL | ``INSERT INTO `Pref` (`MemberKey`, `TypeCode`, `Enabled`) VALUES (@MemberKey, @TypeCode, @Enabled) ON DUPLICATE KEY UPDATE `Enabled` = VALUES(`Enabled`)`` | The same, then ``SELECT … FROM `Pref` WHERE `MemberKey` = @MemberKey AND `TypeCode` = @TypeCode`` |
+| MariaDB | As MySQL | The same, with native `RETURNING` |
+| Oracle | `MERGE INTO Pref target USING (SELECT :MemberKey AS k0, :TypeCode AS k1 FROM dual) source ON (target.MemberKey = source.k0 AND target.TypeCode = source.k1) WHEN MATCHED THEN UPDATE SET Enabled = :Enabled WHEN NOT MATCHED THEN INSERT (MemberKey, TypeCode, Enabled) VALUES (:MemberKey, :TypeCode, :Enabled)` | A PL/SQL block that runs the `MERGE` and opens `:rc` over the row selected by `MemberKey` and `TypeCode` |
+
+Oracle supports a `MatchOn` upsert on an entity with a database-generated key, which a key upsert does
+not support. The `MERGE` joins on the match columns, which the caller supplies.
+
+Concurrency follows the key upsert. Parallel upserts of one natural key all succeed on SQLite,
+PostgreSQL, MySQL, MariaDB and SQL Server, and end with one row. On Oracle, a parallel caller can fail
+with `ORA-00001`, as for a key upsert; retry it, or serialize the callers.
+
+On **MySQL** and **MariaDB**, `ON DUPLICATE KEY UPDATE` has no conflict target. It takes the update
+branch for whichever unique key conflicts. Inquiry therefore defines `MatchOn` there as follows:
+
+- The key must be database-generated (`AUTO_INCREMENT`), so each insert gets a key no other row has.
+  An assigned key or a database default can repeat an existing key, and the statement would update that
+  row instead, so `INQ121` rejects them. Use a key upsert, or an explicit insert and update, for those
+  tables.
+- The match index must be the only other unique key that can conflict, or `INQ121` reports the other
+  one. A unique key that contains every match column, or the whole primary key, can only conflict on the
+  row the match index or the key already finds, so it does not count. `INQ121` sees only the unique keys
+  the entity declares. On a `GenerateDdl = false` table, declare every unique key of the deployed table,
+  or an undeclared one can still take the update branch.
 
 ## See also
 

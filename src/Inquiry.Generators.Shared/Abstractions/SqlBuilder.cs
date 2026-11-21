@@ -117,6 +117,12 @@ public abstract class SqlBuilder
     internal virtual string RenderDefaultExpression(string expression) => expression;
     internal virtual string RenderCheckExpression(string expression) => expression;
 
+    /// <summary>
+    /// Whether the upsert's conflict branch fires on any unique key rather than on a named target.
+    /// A <c>MatchOn</c> upsert then requires that no other unique key can conflict (INQ121).
+    /// </summary>
+    public virtual bool UpsertConflictsOnAnyUniqueKey => false;
+
     /// <summary>Whether this provider has a native database-generated concurrency-token contract.</summary>
     public virtual bool SupportsDatabaseGeneratedConcurrencyToken => false;
 

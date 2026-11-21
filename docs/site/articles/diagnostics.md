@@ -1506,4 +1506,21 @@ Failing shape: `inquiry.QuerySingleOrDefaultAsync<CheckInCounts>($"SELECT (SELEC
 
 Smallest correction: Alias each expression with the name of its property's column, such as `(SELECT COUNT(*) FROM CheckIns) AS CheckIns` or `[TMemberKey] AS [MemberKey]`. Give an unaliased `OUTPUT` expression an alias the same way.
 
+## INQ121
+
+Upsert MatchOn is invalid. Default: error, enabled.
+
+Trigger: An `[InquiryUpsert(MatchOn = ...)]` method that the generator cannot match on those properties. The message gives one reason:
+
+- A name is not a mapped property of the entity, or is listed twice.
+- The names contain the whole entity key. An upsert without `MatchOn` already matches on the key. A natural key may share some columns of a composite key.
+- A property gets its value from the database: generated, `UseDatabaseDefault` or computed.
+- A property is nullable, or is an auditing column that the upsert stamps. A `NULL` or a fresh stamp never matches an existing row.
+- No unique index covers exactly the `MatchOn` properties. The index can be `[InquiryIndex(..., IsUnique = true)]`, or `[InquiryColumn(IsUnique = true)]` for one property. A unique index on more or fewer properties does not count, and neither does `[InquiryColumn(IsUnique = true)]` on a string with no bounded `Length` on SQL Server, MySQL, MariaDB or Oracle, because generated DDL cannot index it there. On a `GenerateDdl = false` table the attribute creates no DDL. It asserts that the deployed table has that unique index.
+- On MySQL and MariaDB only, `ON DUPLICATE KEY UPDATE` fires on any unique key, so the upsert could update a row that a different unique key matched. INQ121 reports a key that is not `AUTO_INCREMENT`, because an assigned or database-default key can repeat an existing key, and any other unique key. A unique key that contains every match column, or the whole primary key, does not count.
+
+Failing shape: `[InquiryUpsert(MatchOn = new[] { nameof(Pref.MemberKey), nameof(Pref.TypeCode) })]` on an entity with no unique index on `(MemberKey, TypeCode)`.
+
+Smallest correction: Declare the index, `[InquiryIndex(nameof(MemberKey), nameof(TypeCode), IsUnique = true)]`, on the entity. See [match on a natural key](features/crud.md#match-on-a-unique-natural-key).
+
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
