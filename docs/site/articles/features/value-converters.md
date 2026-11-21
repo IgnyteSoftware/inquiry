@@ -57,3 +57,11 @@ public OrderStatus Status { get; set; }
 ```
 
 The generator emits `Enum.Parse<OrderStatus>(reader.GetString(i))` and `value.ToString()` directly, no converter type to declare.
+
+## DateTime kind
+
+[`[InquiryDateTimeKind]`](../entity-mapping.md#datetime-kind) applies to the value the database returns, before the converter runs:
+
+- **Provider type is `DateTime`:** the generated read stamps the kind, then passes the value to `FromProvider`. For `IInquiryValueConverter<Instant, DateTime>`, the materializer emits `FromProvider(DateTime.SpecifyKind(reader.GetDateTime(i), DateTimeKind.Utc))`. The assembly default also applies to these columns.
+- **Provider type is not `DateTime`:** nothing is stamped, even when the model type is `DateTime`. A `DateTime` stored as `long` ticks, for example, gets whatever kind its `FromProvider` creates. The assembly default skips the column, and the attribute on the property is build error [INQ119](../diagnostics.md#inq119).
+- **Writes:** `ToProvider` output binds unchanged. The declaration does not change it.

@@ -51,6 +51,7 @@ services.AddInquiryMariaDb("Server=localhost;Database=app;User=app;Password=…"
   `INSERT…ON DUPLICATE KEY UPDATE…RETURNING` for insert-returning and upsert-returning operations.
   This halves round trips compared to the emulated two-statement batch that MySQL requires.
   `UPDATE…RETURNING` is not supported by MariaDB, so update-returning stays emulated.
+- **DateTime kind:** MySqlConnector reads `DATETIME`, `TIMESTAMP` and `DATE` with the kind its `DateTimeKind` connection option sets, `Unspecified` by default. `[InquiryDateTimeKind]` replaces that kind on generated reads. Keep the connection option `Unspecified` or equal to the declared kind, so values read and written back agree. The server converts `TIMESTAMP` values to the session `time_zone` on read, so declare `Utc` for a `TIMESTAMP` column only when that zone is `+00:00`. See [DateTime kind](../entity-mapping.md#datetime-kind).
 - **Delete returning:** declare a by-key method returning `Task<TEntity?>` to receive the deleted row,
   or `null` when no row matches. On an entity with `[InquirySoftDelete]`, use `[InquiryHardDelete]`;
   MariaDB has no `UPDATE…RETURNING`, so soft-delete

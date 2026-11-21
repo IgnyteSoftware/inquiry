@@ -23,7 +23,7 @@ internal static class AdHocProcessor
         var diagnostics = ImmutableArray.CreateBuilder<DiagnosticData>();
         var location = symbol.Locations.FirstOrDefault();
 
-        var columns = DiscoverColumns(symbol, cancellationToken);
+        var columns = DiscoverColumns(symbol, diagnostics, cancellationToken);
         var isMapped = true;
 
         if (columns.Count == 0)
@@ -82,7 +82,7 @@ internal static class AdHocProcessor
         return new EntityRegistration(adHocType, adHoc.ClassMaterializerFullName);
     }
 
-    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol, CancellationToken cancellationToken)
+    private static List<ColumnData> DiscoverColumns(INamedTypeSymbol symbol, ImmutableArray<DiagnosticData>.Builder diagnostics, CancellationToken cancellationToken)
     {
         var columns = new List<ColumnData>();
 
@@ -116,6 +116,7 @@ internal static class AdHocProcessor
                 ColumnName = property.Name,
                 Type = typeData,
                 EnumAsString = enumAsString,
+                DateTimeKind = EntityProcessor.ResolveDateTimeKind(property, typeData, enumAsString, converter: null, symbol, diagnostics),
             });
         }
 

@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ118. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ119. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -66,6 +66,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ116         Typed foreign key property     ([InquiryForeignKey(typeof(T), "Name")] names no property of T) [IN USE]
     //   INQ117         Database default without DDL default (non-nullable UseDatabaseDefault column with no DefaultExpression in generated DDL) [IN USE]
     //   INQ118         Set-based modified stamp       ([InquiryUpdate(StampModified = true)] also assigns a modified-audit column) [IN USE]
+    //   INQ119         DateTime read kind              ([InquiryDateTimeKind] on a column that does not read a DateTime, or an undefined kind) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1117,6 +1118,12 @@ internal static class InquiryDiagnosticDescriptors
         "Entity '{0}' column '{1}' sets UseDatabaseDefault = true with no DefaultExpression. Generated inserts omit the column, and generated DDL creates it NOT NULL with no DEFAULT, so those inserts fail. Add a DefaultExpression, make the property nullable, or set GenerateDdl = false on the entity if the deployed table has its own default.",
         "Inquiry", DiagnosticSeverity.Warning, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq117");
+
+    public static readonly DiagnosticDescriptor DateTimeKindInvalid = new(
+        "INQ119", "InquiryDateTimeKind cannot apply to the column",
+        "'{0}.{1}' cannot use [InquiryDateTimeKind]: {2}. Apply it only to a column that reads a System.DateTime, and pass DateTimeKind.Utc, DateTimeKind.Local or DateTimeKind.Unspecified.",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq119");
 
     public static readonly DiagnosticDescriptor StoreMethodSignatureNotSupported = new(
         "INQ111", "Store method signature cannot be generated",

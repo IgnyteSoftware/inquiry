@@ -114,13 +114,15 @@ internal static class ProjectionProcessor
             // Only the fields MaterializerEmitter reads are populated (projections never feed DDL or
             // mutations); the rest default. The converter is resolved as it is for an entity column, so
             // a projected column reads the same provider value the entity does.
+            var converter = EntityProcessor.ResolveConverter(property, columnAttribute, typeData, symbol, compilation, diagnostics);
             columns.Add(new ColumnData
             {
                 PropertyName = property.Name,
                 ColumnName = columnName,
                 Type = typeData,
                 EnumAsString = enumAsString,
-                Converter = EntityProcessor.ResolveConverter(property, columnAttribute, typeData, symbol, compilation, diagnostics),
+                Converter = converter,
+                DateTimeKind = EntityProcessor.ResolveDateTimeKind(property, typeData, enumAsString, converter, symbol, diagnostics),
             });
 
             // The materializer assigns through an object initializer, so a get-only or private-setter

@@ -291,20 +291,40 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.Aggregate:
-                // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
-                AppendHeader(source, method, parameters, isAsync: false);
-                if (predicatePlan!.Bindings.Count == 0)
                 {
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.MemberName, filterBinder)}, {cancellation});");
+                    // SUM/AVG/MIN/MAX returns the method's declared scalar type via the scalar path.
+                    // A DateTime result from a column with a declared kind gets that kind, like a row read.
+                    var aggregateKind = AggregateDateTimeKind(entity, method);
+                    AppendHeader(source, method, parameters, isAsync: aggregateKind is not null);
+                    string call;
+                    if (predicatePlan!.Bindings.Count == 0)
+                    {
+                        call = $"Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, byte>({EmptyGeneratedCommand("_sqlAgg_" + method.MemberName, filterBinder)}, {cancellation})";
+                    }
+                    else
+                    {
+                        EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, filterBinder);
+                        var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
+                        call = $"Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation})";
+                    }
+
+                    if (aggregateKind is null)
+                    {
+                        source.AppendLine($"        return {call};");
+                    }
+                    else
+                    {
+                        var value = UnusedParameterName(method, "_value");
+                        var set = UnusedParameterName(method, "_set");
+                        source.AppendLine($"        var {value} = await {call}.ConfigureAwait(false);");
+                        source.AppendLine(method.ScalarResultType!.EndsWith("?", StringComparison.Ordinal)
+                            ? $"        return {value} is {{ }} {set} ? global::System.DateTime.SpecifyKind({set}, global::System.DateTimeKind.{aggregateKind}) : null;"
+                            : $"        return global::System.DateTime.SpecifyKind({value}, global::System.DateTimeKind.{aggregateKind});");
+                    }
+
+                    source.AppendLine("    }");
+                    break;
                 }
-                else
-                {
-                    EmitPredicateBoundCommand(source, sqlBuilder, method, predicatePlan, "_sqlAgg_" + method.MemberName, filterBinder);
-                    var aggregateState = new GeneratedCommandState(method.Parameters, includeMaxParameters: predicatePlan.Bindings.Any(binding => binding.IsCollection));
-                    source.AppendLine($"        return Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {aggregateState.Type}>(_cmd, {cancellation});");
-                }
-                source.AppendLine("    }");
-                break;
 
             case StoreOperation.SelectTopByOrder:
                 // Top-1-by-order: parameterless single-row select with ORDER BY + LIMIT 1.
@@ -336,7 +356,7 @@ internal static class StoreOperationEmitter
                     source.AppendLine($"    internal readonly struct {matName} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{gcType}>");
                     source.AppendLine("    {");
                     source.AppendLine($"        public {gcType} Materialize(global::System.Data.Common.DbDataReader reader)");
-                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter);
+                    var keyRead = MaterializerEmitter.ReadExpression(groupColumn.Type, 0, sqlBuilder, groupColumn.EnumAsString, groupColumn.Converter, dateTimeKind: groupColumn.DateTimeKind);
                     var countType = new TypeData(
                         "global::System.Int64", "global::System.Int64", SpecialType.System_Int64,
                         SpecialType.None, false, true, false, false);
@@ -2874,14 +2894,14 @@ internal static class StoreOperationEmitter
                         // `reader` — MaterializerEmitter.ReadExpression hard-codes that receiver.
                         source.AppendLine("        await _grid.ReadRowsAsync(reader =>");
                         source.AppendLine("        {");
-                        source.AppendLine($"            {NullableLocalType(jParentFk.Type)} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter)};");
+                        source.AppendLine($"            {NullableLocalType(jParentFk.Type)} _jParentKey = {MaterializerEmitter.ReadExpression(jParentFk.Type, 0, sqlBuilder, jParentFk.EnumAsString, jParentFk.Converter, dateTimeKind: jParentFk.DateTimeKind)};");
                         for (var i = 0; i < jChildFks.Length; i++)
                         {
                             var fk = jChildFks[i];
                             // Unsuffixed for the single-column case, so a single-key association's
                             // generated store is unchanged by composite support landing.
                             var local = jChildFks.Length == 1 ? "_jChildKey" : $"_jChildKey{i}";
-                            source.AppendLine($"            {NullableLocalType(fk.Type)} {local} = {MaterializerEmitter.ReadExpression(fk.Type, i + 1, sqlBuilder, fk.EnumAsString, fk.Converter)};");
+                            source.AppendLine($"            {NullableLocalType(fk.Type)} {local} = {MaterializerEmitter.ReadExpression(fk.Type, i + 1, sqlBuilder, fk.EnumAsString, fk.Converter, dateTimeKind: fk.DateTimeKind)};");
                             jChildAccess[i] = local;
                         }
 
@@ -3116,6 +3136,30 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: false);
         source.AppendLine($"        throw new global::System.NotSupportedException({GeneratorHelpers.Literal(reason)});");
         source.AppendLine("    }");
+    }
+
+    // Generated locals share the method scope with its parameters, so add underscores until no parameter uses the name.
+    private static string UnusedParameterName(StoreMethodData method, string name)
+    {
+        var underscores = 0;
+        while (method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, new string('_', underscores) + name, StringComparison.Ordinal)))
+        {
+            underscores++;
+        }
+
+        return new string('_', underscores) + name;
+    }
+
+    private static string? AggregateDateTimeKind(EntityData entity, StoreMethodData method)
+    {
+        if (method.ScalarResultType is not ("global::System.DateTime" or "global::System.DateTime?"))
+        {
+            return null;
+        }
+
+        return entity.Columns.AsImmutableArray().FirstOrDefault(column =>
+            string.Equals(column.PropertyName, method.AggregateColumn, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(column.ColumnName, method.AggregateColumn, StringComparison.OrdinalIgnoreCase))?.DateTimeKind;
     }
 
     private static void AppendHeader(StringBuilder source, StoreMethodData method, string parameters, bool isAsync)

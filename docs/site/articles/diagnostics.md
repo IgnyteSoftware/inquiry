@@ -1481,3 +1481,15 @@ Failing shape: `[InquiryUpdate(StampModified = true)] [InquiryWhere(nameof(Membe
 Smallest correction: Remove the `tStamp` parameter or the `[InquirySet]` assignment. To pass the value yourself, remove `StampModified` instead.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ119
+
+InquiryDateTimeKind cannot apply to the column. Default: error, enabled.
+
+Trigger: `[InquiryDateTimeKind]` is on a mapped property whose value read from the database is not a `DateTime`, such as a `string`, a `DateTimeOffset`, an `[InquiryEnumAsString]` enum or a value converter whose provider type is not `DateTime`. It also reports a kind that is not a `DateTimeKind` member, on the property or in `[assembly: InquiryDateTimeKind(...)]`. An invalid assembly value is reported at the assembly attribute, once for each `DateTime` column that uses it, and the message names the column.
+
+Failing shape: `[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Utc)] public DateTimeOffset At { get; set; }`.
+
+Smallest correction: Remove the attribute from that property. `DateTimeOffset` already carries its offset. For a converter column, set the kind inside `FromProvider`, or use a converter whose provider type is `DateTime`. See [DateTime kind](entity-mapping.md#datetime-kind).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

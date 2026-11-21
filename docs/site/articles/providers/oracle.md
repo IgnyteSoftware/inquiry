@@ -55,6 +55,8 @@ services.AddInquiryOracle("User Id=app;Password=…;Data Source=//localhost:1521
 
 ## Temporal values
 
+ODP.NET reads `DATE` and `TIMESTAMP` columns as `DateTime` with `DateTimeKind.Unspecified`. Declare [`InquiryDateTimeKind`](../entity-mapping.md#datetime-kind) to read them as UTC. `TIMESTAMP WITH TIME ZONE` maps to `DateTimeOffset` and is not affected.
+
 `DateOnly` binds as a midnight `DateTime` with `DbType.Date`. `TimeOnly` binds as `TimeSpan` without an explicit `DbType`, allowing ODP.NET to infer `INTERVAL DAY TO SECOND`. `DateTimeOffset` binds unchanged as `TIMESTAMP WITH TIME ZONE`. Generated readers reverse these bridges. ODP.NET normalizes interval fractions to microsecond precision (10 .NET ticks), while numeric offsets such as `-04:30` are preserved.
 
 ## GUID and boolean values
