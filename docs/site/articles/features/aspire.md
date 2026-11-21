@@ -80,6 +80,10 @@ takes precedence over `appsettings.json`, user secrets, and environment variable
 application registers its data source against the test database. Every Inquiry store and the
 `inquiry` health check then use that database.
 
+A configuration source that `Program` adds after `CreateBuilder` and before `AddInquiry*`, such
+as Azure Key Vault or an extra JSON file, overrides the test value. If that source holds the
+connection string, skip the source in tests or set the test value in it.
+
 Do not use `ConfigureAppConfiguration` or `ConfigureTestServices` for this setting. With
 `WebApplication.CreateBuilder`, the factory applies those callbacks after `Program` has called
 `AddInquiry*`. The data source has already been built from the original connection string by then,
