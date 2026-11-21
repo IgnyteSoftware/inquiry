@@ -118,6 +118,23 @@ internal static class GeneratorHelpers
         return result;
     }
 
+    /// <summary>
+    /// Reads a named <c>string[]</c> argument. Returns an empty array when the argument is absent or
+    /// null, and keeps a null element as null so validation can reject it.
+    /// </summary>
+    public static string?[] GetNamedStringArray(AttributeData attribute, string name)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == name && argument.Value.Kind == TypedConstantKind.Array && !argument.Value.IsNull)
+            {
+                return argument.Value.Values.Select(static value => value.Value as string).ToArray();
+            }
+        }
+
+        return Array.Empty<string?>();
+    }
+
     public static string? GetNamedString(AttributeData attribute, string name)
     {
         foreach (var argument in attribute.NamedArguments)

@@ -134,6 +134,12 @@ internal sealed record StoreMethodData(
     public int LockMode { get; init; }
 
     /// <summary>
+    /// For a non-eager select, the raw <c>Exclude</c> names (resolved and validated at emit, INQ122).
+    /// A null name is kept as an empty string so validation reports it. Empty means every column is read.
+    /// </summary>
+    public EquatableArray<string> ExcludedColumnNames { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>
     /// Whether a hard-delete operation was selected so a key, predicate, or table-wide delete emits a
     /// literal <c>DELETE</c> even when the entity declares a soft-delete column.
     /// </summary>
@@ -147,7 +153,7 @@ internal sealed record StoreMethodData(
 
     /// <summary>
     /// For <see cref="StoreOperation.Upsert"/>, the raw <c>MatchOn</c> property names in declaration
-    /// order. Empty means the upsert matches on the entity key. Validated at emit (INQ121).
+    /// order. Empty means the upsert matches on the entity key. Validated at emit (INQ122).
     /// </summary>
     public EquatableArray<string> UpsertMatchOn { get; init; } = EquatableArray<string>.Empty;
 

@@ -1524,3 +1524,15 @@ Failing shape: `[InquiryUpsert(MatchOn = new[] { nameof(Pref.MemberKey), nameof(
 Smallest correction: Declare the index, `[InquiryIndex(nameof(MemberKey), nameof(TypeCode), IsUnique = true)]`, on the entity. See [match on a natural key](features/crud.md#match-on-a-unique-natural-key).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ122
+
+Select Exclude names a column the read cannot omit. Default: error, enabled.
+
+Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, `[InquirySelectAllByField]` or `[InquirySelectAllByPredicate]` names a key column, the `[InquiryConcurrencyToken]` column, the `[InquirySoftDelete]` column, an `[InquiryGlobalFilter]` column, a foreign key that an `[InquiryRelation]` or `[InquiryManyToMany]` on any entity joins on, a column in the method's `OrderBy`, or a C# `required` property. It also reports a name that is not a mapped property or column, a name that matches more than one column, a name listed twice, a list that leaves a keyless view with no column, and `Exclude` on a method that returns a projection. The message names the column and the reason.
+
+Failing shape: `[InquirySelectOneByKey(Exclude = new[] { nameof(Announcement.Id) })]`, where `Id` is the key.
+
+Smallest correction: Remove the column from `Exclude`. To read only a few columns into a different type, declare an [`[InquiryProjection]`](features/projections.md). See [Omit expensive columns](features/select-declarations.md#omit-expensive-columns).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

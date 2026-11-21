@@ -685,6 +685,7 @@ internal static class EntityProcessor
                 Type = typeData,
                 IsKey = isKey,
                 IsGenerated = isGenerated,
+                IsRequiredMember = property.IsRequired,
                 IsSequentialGuid = isSequentialGuid,
                 UseDatabaseDefault = useDatabaseDefault,
                 SoftDelete = softDelete,
