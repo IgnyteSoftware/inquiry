@@ -26,7 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- On .NET 10, `Ignyte.Inquiry.Aspire` now depends on the Microsoft.Extensions 10.0.15 packages instead of 11.0.0. Before, a .NET 10 application that referenced it got Microsoft.Extensions 11.0.0, which overrode the application's own 10.0 versions. Only the .NET 11 dependencies of OpenTelemetry 1.21.0 need version 11. The .NET 11 target still depends on Microsoft.Extensions 11.0.0. OpenTelemetry 1.21.0 still brings System.Diagnostics.DiagnosticSource 11.0.0 on both targets.
+- On .NET 10, `Ignyte.Inquiry.Aspire` and the new `Ignyte.Inquiry.Aspire.*` provider packages depend on the Microsoft.Extensions 10.0.15 packages instead of 11.0.0. Before, a .NET 10 application that referenced it got Microsoft.Extensions 11.0.0, which overrode the application's own 10.0 versions. Only the .NET 11 dependencies of OpenTelemetry 1.21.0 need version 11. Their .NET 11 targets still depend on Microsoft.Extensions 11.0.0. OpenTelemetry 1.21.0 still brings System.Diagnostics.DiagnosticSource 11.0.0 on both targets.
 
 ## [1.0.0-rc.1] - 2026-11-20
 

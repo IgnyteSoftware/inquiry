@@ -97,6 +97,9 @@ public static class PackageVerifier
                     $"{package.Id} sets versions for dependencies that are not declared for {versions.Key}.");
                 Require(versions.Value is not null && versions.Value.Keys.All(id => !packagesById.ContainsKey(id)),
                     $"{package.Id} cannot set Inquiry package dependency versions for {versions.Key}.");
+                var prunedForTfm = package.PrunedDependencies?.GetValueOrDefault(versions.Key) ?? [];
+                Require(versions.Value is not null && versions.Value.Keys.All(id => !prunedForTfm.Contains(id, StringComparer.Ordinal)),
+                    $"{package.Id} sets versions for dependencies that are pruned for {versions.Key}.");
             }
             Require(dependencies.All(dependency => !string.IsNullOrWhiteSpace(dependency.Key) && !string.IsNullOrWhiteSpace(dependency.Value)),
                 $"{package.Id} dependencies must map non-empty IDs to exact versions.");
