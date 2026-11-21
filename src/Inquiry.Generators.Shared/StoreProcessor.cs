@@ -555,6 +555,10 @@ internal static class StoreProcessor
         var upsertMatchOn = operation == StoreOperation.Upsert
             ? ReadUpsertMatchOn(attribute)
             : ImmutableArray<string>.Empty;
+        var excludedColumnNames = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
+            or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
+            ? GeneratorHelpers.GetNamedStringArray(attribute, "Exclude").Select(static name => name ?? string.Empty).ToImmutableArray()
+            : ImmutableArray<string>.Empty;
 
         return new StoreMethodData(
             Name: method.Name,
@@ -583,6 +587,7 @@ internal static class StoreProcessor
             StampModified = stampModified,
             LockMode = lockMode,
             UpsertMatchOn = new EquatableArray<string>(upsertMatchOn),
+            ExcludedColumnNames = new EquatableArray<string>(excludedColumnNames),
             TopByOrderColumn = topByOrderColumn,
             TopByOrderDescending = topByOrderDescending,
             GroupCountColumn = groupCountColumn,
@@ -1646,7 +1651,8 @@ internal static class StoreProcessor
         IReadOnlyDictionary<string, ProjectionData> projections,
         SqlBuilder sqlBuilder,
         bool emitUnsupportedOperationStubs,
-        ISet<string>? invalidEntityNames = null)
+        ISet<string>? invalidEntityNames = null,
+        ISet<string>? incomingRelationKeys = null)
     {
         if (!store.IsEmittable)
         {
@@ -1686,7 +1692,7 @@ internal static class StoreProcessor
         var valid = new List<(StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan)>();
         foreach (var method in store.Methods)
         {
-            if (TryValidateForEmit(context, method, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan))
+            if (TryValidateForEmit(context, method, entity, relationChildEntities, relationJunctionEntities, sqlBuilder, out var fieldColumns, out var predicatePlan, out var selectPlan, incomingRelationKeys))
             {
                 valid.Add((method, fieldColumns, predicatePlan, selectPlan));
             }
@@ -1983,6 +1989,20 @@ internal static class StoreProcessor
         SqlBuildContext CtxFor(StoreMethodData m)
         {
             var suppressSoftDeleteForMethod = hasSoftDelete && m.IncludeDeleted;
+            // An Exclude select reads a column subset, so its context never matches a shared one.
+            // Validation (INQ122) keeps the soft-delete and global-filter columns in the subset, so the
+            // context still detects them and composes the active-row filter.
+            if (m.ExcludedColumnNames.Count > 0)
+            {
+                return new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, ToColumnList(ReadColumns(m)),
+                    suppressSoftDelete: suppressSoftDeleteForMethod,
+                    hasSecondaryUniqueConstraint: hasSecondaryUniqueConstraint,
+                    ignoredGlobalFilterNames: m.IgnoredFilterNames.Count > 0 ? new HashSet<string>(m.IgnoredFilterNames.AsImmutableArray(), StringComparer.Ordinal) : null)
+                {
+                    LockMode = m.LockMode,
+                };
+            }
+
             // A locking select never shares a context: SQL Server writes its lock hint from the context.
             if (m.LockMode != 0)
             {
@@ -2019,6 +2039,16 @@ internal static class StoreProcessor
             return built;
         }
 
+        // The columns an Exclude select reads, in entity order. The SELECT list and the subset
+        // materializer both use this list, so each column's ordinal matches its read.
+        EquatableArray<ColumnData> ReadColumns(StoreMethodData m)
+        {
+            var excludedProperties = new HashSet<string>(m.ExcludedColumnNames.AsImmutableArray()
+                .Select(name => ResolveExcludedColumn(entity, name, out _)!.PropertyName), StringComparer.Ordinal);
+            return new EquatableArray<ColumnData>(entity.Columns.AsImmutableArray()
+                .Where(column => !excludedProperties.Contains(column.PropertyName)).ToImmutableArray());
+        }
+
         // Keyless (view) entities have no key column; the database-supplied-key upsert check below is
         // upsert-only, and views reject upserts (INQ052), so a keyless entity short-circuits to false.
         var key = entity.Keys.Count > 0 ? entity.Keys[0] : null;
@@ -2039,7 +2069,7 @@ internal static class StoreProcessor
         // consts and a bypass method silently falling back to filtered SQL.
         bool UsesSharedSelect((StoreMethodData Method, IReadOnlyList<ColumnData> FieldColumns, ResolvedPredicatePlan? PredicatePlan, ResolvedSelectPlan? SelectPlan) m)
             => !(hasSoftDelete && m.Method.IncludeDeleted) && !m.Method.Distinct && m.Method.LockMode == 0
-                && m.Method.IgnoredFilterNames.Count == 0;
+                && m.Method.IgnoredFilterNames.Count == 0 && m.Method.ExcludedColumnNames.Count == 0;
 
         var needsSelectAll = valid.Any(m => UsesSharedSelect(m) &&
             ((m.Method.Operation == StoreOperation.SelectAll && m.SelectPlan is null) ||
@@ -2413,7 +2443,7 @@ internal static class StoreProcessor
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
             var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0
-                || method.IgnoredFilterNames.Count > 0;
+                || method.IgnoredFilterNames.Count > 0 || method.ExcludedColumnNames.Count > 0;
             // A projection method runs its _sqlProj_ const, built below, so an entity const here is never used.
             if (!needsPerMethodSql || selectPlan is not null || projectionMethods.ContainsKey(method.MemberName))
             {
@@ -2789,6 +2819,22 @@ internal static class StoreProcessor
             else
             {
                 baseSelectFields.TryGetValue(method.MemberName, out var baseSelectField);
+                // An Exclude select reads a column subset, so the entity's full-row materializer would
+                // read past the SELECT list. A per-method struct reads only the selected columns.
+                string? subsetMaterializer = null;
+                if (method.ExcludedColumnNames.Count > 0)
+                {
+                    subsetMaterializer = "__InquiryReadMaterializer_" + method.MemberName;
+                    source.AppendLine($"    private readonly struct {subsetMaterializer} : global::Inquiry.Materialization.IInquiryEntityMaterializer<{entity.FullyQualifiedName}>");
+                    source.AppendLine("    {");
+                    source.AppendLine($"        public {entity.FullyQualifiedName} Materialize(global::System.Data.Common.DbDataReader reader)");
+                    source.AppendLine("        {");
+                    MaterializerEmitter.EmitMaterializeBody(source, ReadColumns(method), entity.FullyQualifiedName, sqlBuilder, indent: "            ");
+                    source.AppendLine("        }");
+                    source.AppendLine("    }");
+                    source.AppendLine();
+                }
+
                 var documentedMethod = method with
                 {
                     HasConcurrencyToken = entity.ConcurrencyToken is not null,
@@ -2797,7 +2843,7 @@ internal static class StoreProcessor
                 };
                 documentedMethods[method] = documentedMethod;
                 StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, WithLoadedRelations(entity, method), relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, baseSelectField, entities: entities,
+                    sqlBuilder, baseSelectField, structMatOverride: subsetMaterializer, entities: entities,
                     procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings2) ? tvpBindings2 : null);
             }
         }
@@ -3098,7 +3144,7 @@ internal static class StoreProcessor
             or StoreOperation.InsertAll or StoreOperation.BulkInsert or StoreOperation.UpdateAll
             or StoreOperation.DeleteAll or StoreOperation.UpdateByPredicate or StoreOperation.DeleteByPredicate;
 
-    private static bool TryValidateForEmit(EmissionCollector context, StoreMethodData method, EntityData entity, Dictionary<string, EntityData> relationChildEntities, Dictionary<string, EntityData> relationJunctionEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan)
+    private static bool TryValidateForEmit(EmissionCollector context, StoreMethodData method, EntityData entity, Dictionary<string, EntityData> relationChildEntities, Dictionary<string, EntityData> relationJunctionEntities, SqlBuilder sqlBuilder, out IReadOnlyList<ColumnData> fieldColumns, out ResolvedPredicatePlan? predicatePlan, out ResolvedSelectPlan? selectPlan, ISet<string>? incomingRelationKeys = null)
     {
         fieldColumns = Array.Empty<ColumnData>();
         predicatePlan = null;
@@ -3276,6 +3322,11 @@ internal static class StoreProcessor
                     return false;
                 }
             }
+        }
+
+        if (method.ExcludedColumnNames.Count > 0 && !TryValidateExcludedColumns(context, method, entity, incomingRelationKeys))
+        {
+            return false;
         }
 
         if (method.Operation is StoreOperation.Update or StoreOperation.UpdateAll &&
@@ -5182,6 +5233,112 @@ internal static class StoreProcessor
         => string.Equals(foreignKey.ForeignKeyTable, entity.TableName, StringComparison.OrdinalIgnoreCase) &&
             (foreignKey.ForeignKeySchema is null || entity.Schema is null ||
                 string.Equals(foreignKey.ForeignKeySchema, entity.Schema, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Validates a select's <c>Exclude</c> names (INQ122). The read must keep every column that
+    /// identifies the row, guards a later write, filters the active rows, or that the SQL or the
+    /// materializer needs, so excluding one of those is an error rather than a silently wrong read.
+    /// </summary>
+    private static bool TryValidateExcludedColumns(EmissionCollector context, StoreMethodData method, EntityData entity, ISet<string>? incomingRelationKeys)
+    {
+        bool Reject(string name, string reason)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                InquiryDiagnosticDescriptors.SelectExcludeInvalid, method.Location?.ToLocation(), method.Name, name, reason));
+            return false;
+        }
+
+        if (method.ResultElementTypeFqn is not null && method.ResultElementTypeFqn != entity.FullyQualifiedName)
+        {
+            return Reject(method.ExcludedColumnNames[0],
+                "the method returns a projection, which already reads only its own columns");
+        }
+
+        var excluded = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in method.ExcludedColumnNames)
+        {
+            var ambiguous = false;
+            var column = string.IsNullOrWhiteSpace(name) ? null : ResolveExcludedColumn(entity, name, out ambiguous);
+            if (column is null)
+            {
+                return Reject(name, ambiguous
+                    ? $"the name matches more than one column of entity '{entity.Name}'. Use the property name exactly, as nameof gives it"
+                    : $"entity '{entity.Name}' has no mapped property or column with that name");
+            }
+
+            if (!excluded.Add(column.PropertyName))
+            {
+                return Reject(name, "the column is listed more than once");
+            }
+
+            if (GetExcludeRejection(method, entity, column) is { } reason)
+            {
+                return Reject(name, reason);
+            }
+
+            if (incomingRelationKeys?.Contains(column.PropertyName) == true)
+            {
+                return Reject(name, "it is a foreign key that a relation on another entity joins on");
+            }
+        }
+
+        // Only a keyless view can reach this, because a table keeps its key column.
+        if (excluded.Count == entity.Columns.Count)
+        {
+            return Reject(method.ExcludedColumnNames[0], "no column would remain to select");
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Resolves one <c>Exclude</c> name. An exact property name wins, because <c>nameof</c> gives one.
+    /// Otherwise the name must match exactly one property or mapped column name, ignoring case.
+    /// </summary>
+    internal static ColumnData? ResolveExcludedColumn(EntityData entity, string name, out bool ambiguous)
+    {
+        ambiguous = false;
+        var exact = FindRelationColumn(entity, name);
+        return exact ?? FindUniqueColumn(entity, name, out ambiguous);
+    }
+
+    private static string? GetExcludeRejection(StoreMethodData method, EntityData entity, ColumnData column)
+    {
+        if (column.IsKey)
+        {
+            return "it is a key column";
+        }
+
+        if (column.IsConcurrencyToken)
+        {
+            return "it is the concurrency token, which a later update or delete must send back";
+        }
+
+        if (column.SoftDelete != SoftDeleteKind.None)
+        {
+            return "it is the soft-delete column";
+        }
+
+        if (column.IsGlobalFilter)
+        {
+            return "it is a global-filter column";
+        }
+
+        if (column.IsRequiredMember)
+        {
+            return "the property is a required member, which the materializer must set";
+        }
+
+        if (entity.Relations.AsImmutableArray().Any(relation => !relation.IsCollection && !relation.IsManyToMany &&
+            string.Equals(relation.ForeignKeyProperty, column.PropertyName, StringComparison.Ordinal)))
+        {
+            return "it is the foreign key of a relation";
+        }
+
+        return method.OrderBy.AsImmutableArray().Any(order => FindColumn(entity, order.Field) == column)
+            ? "the method orders by it"
+            : null;
+    }
 
     private static ColumnData? FindColumn(EntityData entity, string nameOrColumn)
         => entity.Columns.AsImmutableArray().FirstOrDefault(column =>

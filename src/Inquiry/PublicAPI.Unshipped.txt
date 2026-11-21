@@ -12,3 +12,11 @@ Inquiry.Stores.InListBinding.Json = 2 -> Inquiry.Stores.InListBinding
 Inquiry.Stores.InListBinding.TableValuedParameter = 1 -> Inquiry.Stores.InListBinding
 Inquiry.Stores.InquiryWhereAttribute.InListBinding.get -> Inquiry.Stores.InListBinding
 Inquiry.Stores.InquiryWhereAttribute.InListBinding.set -> void
+Inquiry.Stores.InquirySelectAllAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllByFieldAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectAllByPredicateAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectOneByKeyAttribute.Exclude.set -> void

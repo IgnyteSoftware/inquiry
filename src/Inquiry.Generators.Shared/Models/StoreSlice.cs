@@ -17,6 +17,13 @@ internal sealed record StoreSlice(
     bool Emit,
     int DefaultInListBinding = 0)
 {
+    /// <summary>
+    /// The store entity's properties that a relation declared on another entity joins on. Collected only
+    /// when a method uses <c>Exclude</c>, because only Exclude validation (INQ122) reads it, and an
+    /// empty set keeps every other store's slice unchanged.
+    /// </summary>
+    public EquatableArray<string> IncomingRelationKeys { get; init; } = EquatableArray<string>.Empty;
+
     public static StoreSlice Build(StoreData store, EntityIndex index, ProjectionIndex projections, (bool EmitUnsupportedOperationStubs, int DefaultInListBinding) options)
     {
         if (!index.Emit)
@@ -50,7 +57,41 @@ internal sealed record StoreSlice(
             }
         }
 
-        return new StoreSlice(store, entities, mappedProjections.ToImmutable(), invalid, options.EmitUnsupportedOperationStubs, true, options.DefaultInListBinding);
+        return new StoreSlice(store, entities, mappedProjections.ToImmutable(), invalid, options.EmitUnsupportedOperationStubs, true, options.DefaultInListBinding)
+        {
+            IncomingRelationKeys = methods.Any(static method => method.ExcludedColumnNames.Count > 0)
+                ? IncomingRelationKeysOf(store.EntityFullyQualifiedName, index)
+                : EquatableArray<string>.Empty,
+        };
+    }
+
+    private static EquatableArray<string> IncomingRelationKeysOf(string entityName, EntityIndex index)
+    {
+        var keys = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var other in index.Mapped.Values)
+        {
+            foreach (var relation in other.Relations)
+            {
+                if (relation.IsManyToMany)
+                {
+                    if (relation.JunctionEntityFullyQualifiedName == entityName)
+                    {
+                        if (relation.JunctionParentForeignKeyProperty is { } parentKey)
+                        {
+                            keys.Add(parentKey);
+                        }
+
+                        keys.UnionWith(relation.JunctionChildForeignKeyProperties.AsImmutableArray());
+                    }
+                }
+                else if (relation.IsCollection && relation.ChildEntityFullyQualifiedName == entityName)
+                {
+                    keys.Add(relation.ForeignKeyProperty);
+                }
+            }
+        }
+
+        return new EquatableArray<string>(keys.ToImmutableArray());
     }
 }
 
@@ -100,7 +141,8 @@ internal sealed record StoreEmission(
             projections,
             sqlBuilder,
             slice.EmitUnsupportedOperationStubs,
-            new HashSet<string>(slice.InvalidEntityNames.AsImmutableArray(), StringComparer.Ordinal));
+            new HashSet<string>(slice.InvalidEntityNames.AsImmutableArray(), StringComparer.Ordinal),
+            new HashSet<string>(slice.IncomingRelationKeys.AsImmutableArray(), StringComparer.Ordinal));
         return new StoreEmission(store.Name, collector.Sources, collector.Diagnostics,
             new StoreFacts(store.Name, emission?.Registration, emission?.Artifacts ?? ImmutableArray<CollectionParameterArtifact>.Empty));
     }
