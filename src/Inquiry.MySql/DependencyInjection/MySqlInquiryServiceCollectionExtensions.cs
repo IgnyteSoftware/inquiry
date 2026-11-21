@@ -12,6 +12,10 @@ namespace Inquiry.MySql.DependencyInjection;
 /// </summary>
 public static class MySqlInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static MySqlInquiryServiceCollectionExtensions() => MySqlInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the MySQL connection factory with an externally owned data source.
     /// </summary>

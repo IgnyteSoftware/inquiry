@@ -23,6 +23,49 @@ replace every failure with a universal exception.
 | Unsupported generated operation | Normally an `INQ039` build error. Deliberately configuring that diagnostic as warning/none project-wide emits a stub that throws `NotSupportedException` synchronously. Only methods that report `INQ039` get a stub. |
 | Rejected store declaration | Any other Inquiry error that rejects a store method or a whole store, such as an invalid entity or an unsupported method signature, fails the build. Suppressing or lowering it does not produce a stub or a working method: the rejected method has no generated implementation and reports CS8795. See [severity and suppression](diagnostics.md#severity-and-suppression). |
 
+## Unique-key violations
+
+`IsUniqueViolation()` tells you if an exception reports a duplicate primary key or a duplicate unique
+key, without provider error numbers. It does not wrap or replace the exception: catch the exception
+that Inquiry threw, and keep it for logging.
+
+```csharp
+try
+{
+    await customers.InsertAsync(customer, cancellationToken);
+}
+catch (Exception ex) when (ex.IsUniqueViolation())
+{
+    return Results.Conflict("A customer with this email already exists.");
+}
+```
+
+The check returns `true` for the exception itself, and also when that exception is the inner exception
+of an `OperationCanceledException`, or one of the inner exceptions of an `AggregateException`. Those are
+the two wrappers described above for cancellation and cleanup failures. Foreign-key, check, `NOT NULL`
+and every other provider error return `false`.
+
+| Provider | Exception | Codes that return `true` |
+|---|---|---|
+| SQL Server | `SqlException` | Error number 2601 (duplicate key in a unique index) or 2627 (`PRIMARY KEY` or `UNIQUE` constraint), in any entry of `Errors` |
+| PostgreSQL | `PostgresException` | SQLSTATE `23505` (`unique_violation`) |
+| MySQL | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`), 1022 (`ER_DUP_KEY`) or 1169 (`ER_DUP_UNIQUE`). Their SQLSTATE, `23000`, also covers foreign-key errors, so the check does not use it. |
+| MariaDB | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`), 1022 (`ER_DUP_KEY`) or 1169 (`ER_DUP_UNIQUE`) |
+| Oracle | `OracleException` | `ORA-00001` (`Number` 1), for a unique constraint, a unique index or a primary key, in `Number` or in any entry of `Errors`. A batch write that Inquiry sends with array binding fails as `ORA-24381` and lists each failed row in `Errors`. A deferred unique constraint fails at commit as `ORA-02091` (`Number` 2091), which returns `true` only when its message reports `ORA-00001` as the cause. |
+| SQLite | `SqliteException` | Extended result code `SQLITE_CONSTRAINT_UNIQUE` (2067), `SQLITE_CONSTRAINT_PRIMARYKEY` (1555) or `SQLITE_CONSTRAINT_ROWID` (2579, a duplicate rowid on a table without a declared primary key) |
+
+A bulk insert on MySQL or MariaDB uses `LOAD DATA LOCAL INFILE`, which skips a duplicate row instead of failing. MySqlConnector then throws `MySqlException` with `ErrorCode` `BulkCopyFailed`, because fewer rows were inserted than copied. That error does not say why, so `IsUniqueViolation()` returns `false` for it. See [Partial writes and retries](features/bulk-insert.md#partial-writes-and-retries).
+
+The check does not report the name of the violated constraint or index. Read it from the provider
+exception when you need it, such as `PostgresException.ConstraintName`.
+
+A provider package adds its codes when you first call one of its registration methods, such as
+`AddInquirySqlServer`, or when Inquiry creates its connection factory. From then on the check
+classifies every exception of that provider's type in the process, including exceptions from code that
+does not use Inquiry. Before that point, and in an application that implements
+`IInquiryConnectionFactory` itself without calling a provider registration method, the check returns
+`false`.
+
 ## When failures appear
 
 Catch around both invocation and awaiting. Synchronous wrappers and generated argument preparation can

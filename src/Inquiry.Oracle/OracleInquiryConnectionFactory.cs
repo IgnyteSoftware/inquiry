@@ -12,6 +12,50 @@ namespace Inquiry.Oracle;
 /// </summary>
 internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
+    // Registering here runs before any instance opens a connection, so the core check can classify
+    // this provider's exceptions without a reference to its driver.
+    static OracleInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
+        => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
+
+    // ORA-00001 covers a unique constraint, a unique index and a primary key. An array-bound batch
+    // fails as ORA-24381 with each row's error in Errors, so check every entry. A deferred
+    // constraint fails at commit as ORA-02091, and ODP.NET puts the ORA-00001 cause only in the message.
+    private static bool IsUniqueViolation(DbException exception)
+    {
+        if (exception is not OracleException oracleException)
+        {
+            return false;
+        }
+
+        foreach (OracleError error in oracleException.Errors)
+        {
+            if (error.Number == 1)
+            {
+                return true;
+            }
+        }
+
+        return oracleException.Number == 1
+            || (oracleException.Number == 2091 && HasErrorStackEntry(oracleException.Message, "ORA-00001:"));
+    }
+
+    // Each error in the stack starts a new line. Matching only at a line start stops a constraint
+    // name that contains the text from matching.
+    private static bool HasErrorStackEntry(string message, string prefix)
+    {
+        foreach (var line in message.AsSpan().EnumerateLines())
+        {
+            if (line.TrimStart().StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

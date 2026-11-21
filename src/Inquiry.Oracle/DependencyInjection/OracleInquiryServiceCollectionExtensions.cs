@@ -11,6 +11,10 @@ namespace Inquiry.Oracle.DependencyInjection;
 /// </summary>
 public static class OracleInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static OracleInquiryServiceCollectionExtensions() => OracleInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the Oracle connection factory with an externally owned data source.
     /// </summary>

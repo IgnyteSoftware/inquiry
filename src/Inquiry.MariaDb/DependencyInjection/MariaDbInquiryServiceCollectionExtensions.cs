@@ -12,6 +12,10 @@ namespace Inquiry.MariaDb.DependencyInjection;
 /// </summary>
 public static class MariaDbInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static MariaDbInquiryServiceCollectionExtensions() => MariaDbInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the MariaDB connection factory with an externally owned data source.
     /// </summary>

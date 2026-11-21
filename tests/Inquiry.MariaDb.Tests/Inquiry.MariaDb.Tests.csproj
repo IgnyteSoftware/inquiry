@@ -38,6 +38,7 @@
     <Compile Include="..\Shared\SmallInListScenarios.cs" Link="Shared\SmallInListScenarios.cs" />
     <Compile Include="..\Shared\UpsertMatchOnScenarios.cs" Link="Shared\UpsertMatchOnScenarios.cs" />
     <Compile Include="..\Shared\HandwrittenQueryScenarios.cs" Link="Shared\HandwrittenQueryScenarios.cs" />
+    <Compile Include="..\Shared\UniqueViolationScenarios.cs" Link="Shared\UniqueViolationScenarios.cs" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" Link="Shared\ManyToManyExtensionAssertions.cs" />
     <Compile Include="..\Shared\BulkCopierConnectionOwnershipAssertions.cs" Link="Shared\BulkCopierConnectionOwnershipAssertions.cs" />
     <Compile Include="..\Inquiry.FeatureCatalog\LockingRegression\*.cs" LinkBase="FeatureCatalog\LockingRegression" />

@@ -19,6 +19,18 @@ namespace Inquiry.MariaDb;
 /// </remarks>
 internal sealed class MariaDbInquiryConnectionFactory : IInquiryConnectionFactory, IAsyncDisposable, IDisposable
 {
+    // Registering here runs before any instance opens a connection, so the core check can classify
+    // this provider's exceptions without a reference to its driver.
+    static MariaDbInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
+        => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
+
+    // 1062 is ER_DUP_ENTRY, 1022 is ER_DUP_KEY and 1169 is ER_DUP_UNIQUE. Their SQLSTATE, 23000, also
+    // covers foreign-key errors, so check the number.
+    private static bool IsUniqueViolation(DbException exception)
+        => exception is MySqlException { Number: 1062 or 1022 or 1169 };
+
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;
