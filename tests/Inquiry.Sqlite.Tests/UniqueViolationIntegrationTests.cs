@@ -43,4 +43,33 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_FOREIGNKEY, exception.SqliteExtendedErrorCode);
     }
+
+    [Fact]
+    public async Task NotNullViolationIsNotUniqueViolation()
+    {
+        var harness = await SqliteTestHarness.CreateAsync(Ddl, "Uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.NotNullViolationAsync<SqliteException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_NOTNULL, exception.SqliteExtendedErrorCode);
+    }
+
+    [Fact]
+    public async Task DuplicateRowidIsUniqueViolation()
+    {
+        var harness = await SqliteTestHarness.CreateAsync("CREATE TABLE UvRowid (Value TEXT);", "Uv");
+        await using var _ = harness;
+
+        await using var connection = new SqliteConnection(harness.ConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO UvRowid (rowid, Value) VALUES (1, 'a');";
+        await command.ExecuteNonQueryAsync();
+
+        var exception = await Assert.ThrowsAsync<SqliteException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal(SQLitePCL.raw.SQLITE_CONSTRAINT_ROWID, exception.SqliteExtendedErrorCode);
+        Assert.True(exception.IsUniqueViolation());
+    }
 }

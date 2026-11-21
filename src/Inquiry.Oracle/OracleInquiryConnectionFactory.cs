@@ -14,12 +14,18 @@ internal sealed class OracleInquiryConnectionFactory : IInquiryConnectionFactory
 {
     // Registering here runs before any instance opens a connection, so the core check can classify
     // this provider's exceptions without a reference to its driver.
-    static OracleInquiryConnectionFactory()
+    static OracleInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
         => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
 
-    // ORA-00001 covers a unique constraint, a unique index and a primary key.
+    // ORA-00001 covers a unique constraint, a unique index and a primary key. A deferred constraint
+    // fails at commit as ORA-02091, and ODP.NET puts the ORA-00001 cause only in the message.
     private static bool IsUniqueViolation(DbException exception)
-        => exception is OracleException { Number: 1 };
+        => exception is OracleException oracleException
+            && (oracleException.Number == 1
+                || (oracleException.Number == 2091 && oracleException.Message.Contains("ORA-00001:", StringComparison.Ordinal)));
+
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

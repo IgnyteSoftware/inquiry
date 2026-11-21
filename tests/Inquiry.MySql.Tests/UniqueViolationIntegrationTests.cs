@@ -51,4 +51,16 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(MySqlErrorCode.NoReferencedRow2, exception.ErrorCode);
     }
+
+    [SkippableFact]
+    public async Task NotNullViolationIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await MySqlTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.NotNullViolationAsync<MySqlException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(MySqlErrorCode.ColumnCannotBeNull, exception.ErrorCode);
+    }
 }

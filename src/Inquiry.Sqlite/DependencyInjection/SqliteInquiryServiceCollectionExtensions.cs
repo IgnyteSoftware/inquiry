@@ -11,6 +11,10 @@ namespace Inquiry.Sqlite.DependencyInjection;
 /// </summary>
 public static class SqliteInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static SqliteInquiryServiceCollectionExtensions() => SqliteInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the SQLite connection factory with an externally owned data source.
     /// </summary>

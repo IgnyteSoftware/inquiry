@@ -20,12 +20,15 @@ internal sealed class MySqlInquiryConnectionFactory : IInquiryConnectionFactory,
 {
     // Registering here runs before any instance opens a connection, so the core check can classify
     // this provider's exceptions without a reference to its driver.
-    static MySqlInquiryConnectionFactory()
+    static MySqlInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
         => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
 
     // 1062 is ER_DUP_ENTRY. Its SQLSTATE, 23000, also covers foreign-key errors, so check the number.
     private static bool IsUniqueViolation(DbException exception)
         => exception is MySqlException { ErrorCode: MySqlErrorCode.DuplicateKeyEntry };
+
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;

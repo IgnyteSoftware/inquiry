@@ -24,8 +24,9 @@ public static class InquiryExceptionExtensions
     /// <see langword="false"/>.
     /// </returns>
     /// <remarks>
-    /// A provider recognizes its exceptions after its connection factory is created, which happens
-    /// before Inquiry runs any command on that provider.
+    /// A provider package adds its codes when one of its registration methods, such as
+    /// <c>AddInquirySqlServer</c>, is first called, or when its connection factory is created.
+    /// Before then, the check returns <see langword="false"/> for that provider's exceptions.
     /// </remarks>
     public static bool IsUniqueViolation(this Exception exception)
     {

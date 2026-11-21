@@ -11,7 +11,9 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
 {
     // Registering here runs before any instance opens a connection, so the core check can classify
     // this provider's exceptions without a reference to its driver.
-    static SqlServerInquiryConnectionFactory()
+    static SqlServerInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
         => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
 
     // 2601 is a duplicate key in a unique index. 2627 is a PRIMARY KEY or UNIQUE constraint violation.
@@ -31,6 +33,7 @@ internal sealed class SqlServerInquiryConnectionFactory : IInquiryConnectionFact
 
         return false;
     }
+
     private readonly DbDataSource? _dataSource;
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;

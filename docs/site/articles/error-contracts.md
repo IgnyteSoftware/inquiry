@@ -51,15 +51,18 @@ and every other provider error return `false`.
 | PostgreSQL | `PostgresException` | SQLSTATE `23505` (`unique_violation`) |
 | MySQL | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`). Its SQLSTATE, `23000`, also covers foreign-key errors, so the check does not use it. |
 | MariaDB | `MySqlException` | Error 1062 (`ER_DUP_ENTRY`) |
-| Oracle | `OracleException` | `ORA-00001` (`Number` 1), for a unique constraint, a unique index or a primary key |
-| SQLite | `SqliteException` | Extended result code `SQLITE_CONSTRAINT_UNIQUE` (2067) or `SQLITE_CONSTRAINT_PRIMARYKEY` (1555) |
+| Oracle | `OracleException` | `ORA-00001` (`Number` 1), for a unique constraint, a unique index or a primary key. A deferred unique constraint fails at commit as `ORA-02091` (`Number` 2091), which returns `true` only when its message reports `ORA-00001` as the cause. |
+| SQLite | `SqliteException` | Extended result code `SQLITE_CONSTRAINT_UNIQUE` (2067), `SQLITE_CONSTRAINT_PRIMARYKEY` (1555) or `SQLITE_CONSTRAINT_ROWID` (2579, a duplicate rowid on a table without a declared primary key) |
 
 The check does not report the name of the violated constraint or index. Read it from the provider
 exception when you need it, such as `PostgresException.ConstraintName`.
 
-Each provider package adds its codes when Inquiry creates that provider's connection factory, which
-happens before Inquiry runs a command. If you implement `IInquiryConnectionFactory` yourself and never
-create a built-in provider factory, the check returns `false` for that provider's exceptions.
+A provider package adds its codes when you first call one of its registration methods, such as
+`AddInquirySqlServer`, or when Inquiry creates its connection factory. From then on the check
+classifies every exception of that provider's type in the process, including exceptions from code that
+does not use Inquiry. Before that point, and in an application that implements
+`IInquiryConnectionFactory` itself without calling a provider registration method, the check returns
+`false`.
 
 ## When failures appear
 

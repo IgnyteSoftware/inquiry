@@ -20,11 +20,14 @@ internal sealed class PostgreSqlInquiryConnectionFactory : IInquiryConnectionFac
 {
     // Registering here runs before any instance opens a connection, so the core check can classify
     // this provider's exceptions without a reference to its driver.
-    static PostgreSqlInquiryConnectionFactory()
+    static PostgreSqlInquiryConnectionFactory() => RegisterErrorClassifiers();
+
+    internal static void RegisterErrorClassifiers()
         => InquiryExceptionExtensions.RegisterUniqueViolationClassifier(IsUniqueViolation);
 
     private static bool IsUniqueViolation(DbException exception)
         => exception is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
+
     private readonly string _connectionString;
     private readonly string? _failoverConnectionString;
     private readonly RetryingConnectionOpener? _retryingOpener;

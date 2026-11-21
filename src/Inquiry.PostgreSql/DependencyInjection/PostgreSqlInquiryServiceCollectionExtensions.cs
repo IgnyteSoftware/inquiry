@@ -12,6 +12,10 @@ namespace Inquiry.PostgreSql.DependencyInjection;
 /// </summary>
 public static class PostgreSqlInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static PostgreSqlInquiryServiceCollectionExtensions() => PostgreSqlInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the PostgreSQL connection factory with an externally owned data source.
     /// </summary>

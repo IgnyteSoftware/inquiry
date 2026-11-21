@@ -12,6 +12,10 @@ namespace Inquiry.SqlServer.DependencyInjection;
 /// </summary>
 public static class SqlServerInquiryServiceCollectionExtensions
 {
+    // The provider's error codes must be known from registration on, not only after the lazy
+    // factory singleton is first resolved.
+    static SqlServerInquiryServiceCollectionExtensions() => SqlServerInquiryConnectionFactory.RegisterErrorClassifiers();
+
     /// <summary>
     /// Registers the SQL Server connection factory with an externally owned data source.
     /// </summary>

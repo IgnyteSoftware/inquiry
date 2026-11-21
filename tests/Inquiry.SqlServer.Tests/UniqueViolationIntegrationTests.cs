@@ -51,4 +51,16 @@ public sealed class UniqueViolationIntegrationTests
 
         Assert.Equal(547, exception.Number);
     }
+
+    [SkippableFact]
+    public async Task NotNullViolationIsNotUniqueViolation()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        var harness = await SqlServerTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, Ddl, "uv");
+        await using var _ = harness;
+
+        var exception = await UniqueViolationScenarios.NotNullViolationAsync<SqlException>(harness.GetRequiredService<UvParentStore>());
+
+        Assert.Equal(515, exception.Number);
+    }
 }

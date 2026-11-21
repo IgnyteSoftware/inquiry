@@ -79,6 +79,16 @@ internal static class UniqueViolationScenarios
         return exception;
     }
 
+    public static async Task<TException> NotNullViolationAsync<TException>(UvParentStore store)
+        where TException : Exception
+    {
+        var exception = await Assert.ThrowsAsync<TException>(
+            () => store.InsertAsync(new UvParent { Id = 1, Code = null! }));
+
+        Assert.False(exception.IsUniqueViolation());
+        return exception;
+    }
+
     private static void AssertUniqueViolation(Exception exception)
     {
         Assert.True(exception.IsUniqueViolation());
