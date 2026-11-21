@@ -47,16 +47,19 @@ public sealed class AppLockIntegrationTests
         await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "AppLock");
         const string resource = "applock:commit";
 
-        Task<string> waiter;
+        // Open the waiter first, so the blocked check covers the lock wait and not the connection open.
+        await using var waiter = await BeginAsync(harness);
+        Task waiting;
         await using (var holder = await BeginAsync(harness))
         {
             await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
-            waiter = Task.Run(() => AcquireInNewTransactionAsync(harness, resource, SqlServerAppLockMode.Exclusive, _completesWithin));
-            await AssertBlockedAsync(waiter);
+            waiting = Task.Run(() => waiter.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, _completesWithin));
+            await AssertBlockedAsync(waiting);
             await holder.Transaction.CommitAsync();
         }
 
-        Assert.Equal("Exclusive", await waiter.WaitAsync(_completesWithin));
+        await waiting.WaitAsync(_completesWithin);
+        Assert.Equal("Exclusive", await LockModeAsync(waiter.Transaction, resource));
     }
 
     [SkippableFact]
