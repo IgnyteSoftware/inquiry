@@ -108,7 +108,7 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     public override bool SupportsStoredProcedures => true;
 
-    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BracketIdentifiers = true };
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BracketIdentifiers = true, NestedBlockComments = true };
     public override bool SupportsProcedureReturnValue => true;
 
     public override string QuoteIdentifier(string identifier)

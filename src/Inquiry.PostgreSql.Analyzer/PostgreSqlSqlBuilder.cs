@@ -7,7 +7,7 @@ internal sealed class PostgreSqlSqlBuilder : SqlBuilder
 {
     public override bool ComputedColumnDeclaresStoreType => true;
 
-    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { PostgreSqlLiterals = true };
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { PostgreSqlLiterals = true, NestedBlockComments = true };
 
     public override string BuildParameterValueExpression(ParameterValueExpressionContext context)
         => context.ProviderSpecialType == Microsoft.CodeAnalysis.SpecialType.System_DateTime

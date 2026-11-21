@@ -15,7 +15,7 @@ Both map result columns to properties by name, as [ad-hoc DTOs](ad-hoc-dtos.md) 
 |---|---|---|
 | SQL text | A compile-time constant. `const` fragments can be concatenated. | Built at the call. |
 | Parameters | Named. An unknown or unused name is build error `INQ123`. | One per interpolation hole. |
-| Call site | A typed store method. It is on the generated store interface, so tests can replace it. | Any code that has an `IInquiry`. |
+| Call site | A typed store method. With `[InquiryGenerateInterface]` it is also on the generated store interface, so tests can replace it. | Any code that has an `IInquiry`. |
 | Results | A list, one row or `null`, a scalar, or an affected-row count. | Also streaming (`QueryAsync<T>`) and multiple result sets. |
 
 Use `[InquiryQuery]` when the SQL is fixed: reports, CTE queries and statements that the generated
@@ -83,8 +83,9 @@ method, replace each placeholder with `@name` and declare a parameter of that na
 - Two parameters whose names differ only in case cannot both appear in the SQL, because providers
   match parameter names without case.
 - The generator does not read names inside string literals, quoted identifiers or comments. A
-  prefix that follows a letter, a digit or the same prefix is not a parameter, so SQL Server
-  `@@ROWCOUNT`, PostgreSQL `value::int` and an Oracle `table@link` stay as written.
+  prefix that follows a letter, a digit, a closing identifier quote or the same prefix is not a
+  parameter, so SQL Server `@@ROWCOUNT`, PostgreSQL `value::int` and an Oracle `table@link` or
+  `"Order Details"@link` stay as written.
 - Parameters are scalar values: numbers, strings, `bool`, `Guid`, dates and times, `byte[]` and enums.
   `[InquiryParameter(Length = …, Precision = …, Scale = …, IsUnicode = …)]` sets the parameter metadata.
   Collections are not supported.
@@ -94,10 +95,10 @@ Write parameters with `@` on every dialect. The generated command uses the diale
 
 | Dialect | Accepted prefixes | Also skipped by the scan |
 |---|---|---|
-| SQL Server | `@` | `[bracketed]` identifiers |
+| SQL Server | `@` | `[bracketed]` identifiers, nested comments |
 | PostgreSQL | `@` | `$tag$` strings, `E'…'` strings, nested comments |
-| MySQL, MariaDB | `@` | `` `backtick` `` identifiers, `#` comments, backslash escapes |
-| Oracle | `:` and `@` | `q'[…]'` strings |
+| MySQL, MariaDB | `@` | `` `backtick` `` identifiers, `#` comments, backslash escapes. `--` starts a comment only before a space. |
+| Oracle | `:` and `@` | `q'[…]'` and `nq'[…]'` strings |
 | SQLite | `@`, `:` and `$` | `[bracketed]` and `` `backtick` `` identifiers |
 
 Every dialect also skips `'…'` strings, `"…"` identifiers, `--` comments and `/* … */` comments.
@@ -113,11 +114,11 @@ Because every `@name` must be a method parameter, SQL that declares SQL Server l
 | `Task<IReadOnlyList<T>>` | Every row. An empty result is an empty list. |
 | `Task<T?>` | The only row, or `null`. More than one row throws `InvalidOperationException`. |
 | `Task<int>` | The affected-row count from the provider. |
-| `Task<TScalar>` | The first column of the first row, converted to `TScalar`. No row or SQL `NULL` gives `default`. |
+| `Task<TScalar>` | The first column of the first row, converted to `TScalar`. No row or SQL `NULL` gives `default`. `TScalar` is a number, `bool`, `string`, `DateTime` or enum, or a nullable one. |
 
 `T` is an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class in the
-same assembly as the store. Entity rows match their mapped column names. Projection and ad-hoc rows
-match property names. A missing column throws before the first row is returned.
+same assembly as the store. Entity and projection rows match their mapped column names, such as an
+`[InquiryColumn]` name. Ad-hoc rows match property names. A missing column throws before the first row is returned.
 
 To read an `int` scalar instead of the row count, set `Scalar = true`:
 `[InquiryQuery("SELECT COUNT(*) FROM [Activity]", Scalar = true)] Task<int> CountAsync(...)`.

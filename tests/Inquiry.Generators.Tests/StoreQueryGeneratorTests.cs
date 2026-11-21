@@ -69,7 +69,7 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains("_p0.ParameterName = \"@memberKey\";", text);
         Assert.Contains("_p0.DbType = global::System.Data.DbType.Int32;", text);
         Assert.Contains("_p1.ParameterName = \"@startUtc\";", text);
-        Assert.Contains("return Inquiry.QueryListAsync<global::Demo.ActivitySummaryRow, (int Arg0, global::System.DateTime Arg1), global::Demo.ActivitySummaryRowInquiryAdHocStructMaterializer>(_cmd, default, cancellationToken);", text);
+        Assert.Contains("return this.Inquiry.QueryListAsync<global::Demo.ActivitySummaryRow, (int Arg0, global::System.DateTime Arg1), global::Demo.ActivitySummaryRowInquiryAdHocStructMaterializer>(", text);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed partial class InquiryGeneratorTests
 
         Assert.Contains("_p0.ParameterName = \"@memberKey\";", text);
         Assert.DoesNotContain("_p1", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<long, int>(_cmd, cancellationToken);", text);
+        Assert.Contains("return this.Inquiry.ExecuteScalarAsync<long, int>(", text);
     }
 
     [Fact]
@@ -209,10 +209,10 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
         var text = GetActivityStore(result);
 
-        Assert.Contains("return Inquiry.QuerySingleOrDefaultAsync<global::Demo.Activity, long, global::Demo.ActivityInquiryEntityNameMappedMaterializer>(_cmd, default, cancellationToken);", text);
-        Assert.Contains("return Inquiry.ExecuteAsync(_cmd, cancellationToken);", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<int, byte>(_cmd, cancellationToken);", text);
-        Assert.Contains("return Inquiry.ExecuteScalarAsync<int?, byte>(_cmd, cancellationToken);", text);
+        Assert.Contains("return this.Inquiry.QuerySingleOrDefaultAsync<global::Demo.Activity, long, global::Demo.ActivityInquiryEntityNameMappedMaterializer>(", text);
+        Assert.Contains("return this.Inquiry.ExecuteAsync(", text);
+        Assert.Contains("return this.Inquiry.ExecuteScalarAsync<int, byte>(", text);
+        Assert.Contains("return this.Inquiry.ExecuteScalarAsync<int?, byte>(", text);
     }
 
     [Theory]
@@ -220,6 +220,8 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("public partial Task<IReadOnlyList<Uri>> RunAsync(CancellationToken cancellationToken = default);", "is not an [InquiryTable]")]
     [InlineData("public partial Task<Uri> RunAsync(CancellationToken cancellationToken = default);", "neither a mapped row type nor a scalar")]
     [InlineData("public partial Task<int> RunAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);", "not a scalar type Inquiry can bind")]
+    [InlineData("public partial Task<DateOnly> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
+    [InlineData("public partial Task<Guid?> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
     public void Query_UnsupportedShapesReportINQ123(string declaration, string expected)
     {
         var source = QueryHeader + $$"""
@@ -277,5 +279,41 @@ public sealed partial class InquiryGeneratorTests
         var result = RunGenerator(source);
         var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ052");
         Assert.Contains("ClearAsync", diagnostic.GetMessage(CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void Query_ParameterNamesMatchingGeneratedNamesStillCompile()
+    {
+        var source = QueryHeader + """
+                [InquiryQuery("SELECT COUNT(*) FROM Activity WHERE Id IN (@_args, @_c, @_cmd, @_p0, @Inquiry)")]
+                public partial Task<long> CountAsync(long _args, long _c, long _cmd, long _p0, long Inquiry, CancellationToken cancellationToken = default);
+
+                [InquiryQuery("SELECT * FROM Activity WHERE Id = @_args")]
+                public partial Task<Activity?> FindAsync(long _args, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+    }
+
+    [Theory]
+    [InlineData("SqlServer", "SELECT COUNT(*) FROM Activity WHERE Id = @id /* outer /* inner */ @ignored */")]
+    [InlineData("PostgreSql", "SELECT COUNT(*) FROM Activity WHERE Id = @id /* outer /* inner */ @ignored */")]
+    [InlineData("MySql", "SELECT COUNT(*) FROM Activity WHERE Id = 10--@id")]
+    [InlineData("MySql", "SELECT COUNT(*) FROM Activity WHERE Id = @id -- @ignored")]
+    [InlineData("Oracle", "SELECT COUNT(*) FROM \"Order Details\"@remote WHERE Id = :id")]
+    [InlineData("Oracle", "SELECT COUNT(*) FROM ACTIVITY#@remote WHERE Id = :id")]
+    [InlineData("Oracle", "SELECT COUNT(*) FROM Activity WHERE Id = :id AND Note <> nq'[it's @ghost]'")]
+    public void Query_DialectScanFindsOnlyRealParameters(string dialect, string sql)
+    {
+        var source = QueryHeader + $$"""
+                [InquiryQuery("{{sql.Replace("\"", "\\\"", StringComparison.Ordinal)}}")]
+                public partial Task<long> CountAsync(long id, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source, dialect: dialect);
+        AssertNoErrors(result);
     }
 }

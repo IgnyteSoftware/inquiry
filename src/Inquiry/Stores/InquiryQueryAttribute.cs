@@ -18,7 +18,8 @@ namespace Inquiry.Stores;
 /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> or <c>Task&lt;T?&gt;</c> (single row or <see langword="null"/>),
 /// where <c>T</c> is an <c>[InquiryTable]</c>, <c>[InquiryView]</c>, <c>[InquiryProjection]</c> or
 /// <c>[InquiryAdHoc]</c> type of the same assembly; <c>Task&lt;int&gt;</c> for the affected-row
-/// count; or <c>Task&lt;TScalar&gt;</c> for the first column of the first row. Result columns map to
+/// count; or <c>Task&lt;TScalar&gt;</c> for the first column of the first row, where <c>TScalar</c> is a number,
+/// <c>bool</c>, <c>string</c>, <see cref="DateTime"/> or an enum. Result columns map to
 /// properties by name. Set <see cref="Scalar"/> to read a <c>Task&lt;int&gt;</c> method as a scalar.
 /// </para>
 /// <para>

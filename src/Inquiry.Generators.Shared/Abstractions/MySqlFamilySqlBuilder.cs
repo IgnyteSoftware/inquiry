@@ -22,6 +22,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
         BacktickIdentifiers = true,
         BackslashEscapes = true,
         HashComments = true,
+        DashCommentNeedsSpace = true,
     };
 
     public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";

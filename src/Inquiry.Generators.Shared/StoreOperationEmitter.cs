@@ -491,13 +491,23 @@ internal static class StoreOperationEmitter
     private static void EmitHandwrittenQuery(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string cancellation)
     {
         var state = new GeneratedCommandState(method.Parameters);
+        var call = method.QueryReturn switch
+        {
+            QueryReturnKind.List => $"QueryListAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.SingleOrDefault => $"QuerySingleOrDefaultAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>",
+            QueryReturnKind.RowCount => "ExecuteAsync",
+            _ => $"ExecuteScalarAsync<{method.ScalarResultType}, {state.Type}>",
+        };
+
+        // Developer parameter names are free, so the body declares no locals and the binder reads the
+        // generated state, never a developer name. "this." keeps a parameter named Inquiry from hiding the store's.
         AppendHeader(source, method, parameters, isAsync: false);
-        source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
-        source.AppendLine($"            _sqlQuery_{method.MemberName},");
-        source.AppendLine($"            {state.Value},");
-        source.AppendLine($"            static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
-        source.AppendLine("            {");
-        AppendGeneratedStateAliases(source, method.Parameters, state, "                ");
+        source.AppendLine($"        return this.Inquiry.{call}(");
+        source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
+        source.AppendLine($"                _sqlQuery_{method.MemberName},");
+        source.AppendLine($"                {state.Value},");
+        source.AppendLine($"                static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
+        source.AppendLine("                {");
         for (var i = 0; i < method.Parameters.Count - 1; i++)
         {
             var parameter = method.Parameters[i];
@@ -511,23 +521,20 @@ internal static class StoreOperationEmitter
                 Scale = parameter.DeclaredScale,
                 IsUnicode = parameter.DeclaredIsUnicode,
             };
-            source.AppendLine($"                var _p{i} = _c.CreateParameter();");
-            source.AppendLine($"                _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(parameter.Name))}\";");
-            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", "                ", predicate: true);
-            source.AppendLine($"                _p{i}.Value = {BuildParameterValueExpression(column, parameter.Identifier, sqlBuilder, parameter.IsNullable)};");
-            source.AppendLine($"                _c.Parameters.Add(_p{i});");
+            source.AppendLine($"                    var _p{i} = _c.CreateParameter();");
+            source.AppendLine($"                    _p{i}.ParameterName = \"{GeneratorHelpers.Escape(sqlBuilder.RuntimeParameterName(parameter.Name))}\";");
+            AppendColumnParameterMetadata(source, column, sqlBuilder, $"_p{i}", "                    ", predicate: true);
+            source.AppendLine($"                    _p{i}.Value = {BuildParameterValueExpression(column, state.Reference(i), sqlBuilder, parameter.IsNullable)};");
+            source.AppendLine($"                    _c.Parameters.Add(_p{i});");
         }
 
-        source.AppendLine("            });");
-
-        var call = method.QueryReturn switch
+        source.AppendLine("                }),");
+        if (method.QueryReturn is QueryReturnKind.List or QueryReturnKind.SingleOrDefault)
         {
-            QueryReturnKind.List => $"Inquiry.QueryListAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>(_cmd, default, {cancellation})",
-            QueryReturnKind.SingleOrDefault => $"Inquiry.QuerySingleOrDefaultAsync<{method.QueryResultTypeFqn}, {state.Type}, {method.QueryMaterializerFqn}>(_cmd, default, {cancellation})",
-            QueryReturnKind.RowCount => $"Inquiry.ExecuteAsync(_cmd, {cancellation})",
-            _ => $"Inquiry.ExecuteScalarAsync<{method.ScalarResultType}, {state.Type}>(_cmd, {cancellation})",
-        };
-        source.AppendLine($"        return {call};");
+            source.AppendLine("            default,");
+        }
+
+        source.AppendLine($"            {cancellation});");
         source.AppendLine("    }");
     }
 

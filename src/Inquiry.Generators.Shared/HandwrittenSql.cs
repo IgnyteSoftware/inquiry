@@ -25,10 +25,16 @@ internal sealed class HandwrittenSqlSyntax
     /// <summary><c>#</c> starts a line comment.</summary>
     public bool HashComments { get; init; }
 
-    /// <summary>PostgreSQL <c>$tag$…$tag$</c> and <c>E'…'</c> strings, and nested block comments.</summary>
+    /// <summary><c>--</c> starts a comment only before whitespace, as in MySQL, where <c>10--@x</c> subtracts.</summary>
+    public bool DashCommentNeedsSpace { get; init; }
+
+    /// <summary>A <c>/*</c> inside a block comment opens a nested comment.</summary>
+    public bool NestedBlockComments { get; init; }
+
+    /// <summary>PostgreSQL <c>$tag$…$tag$</c> and <c>E'…'</c> strings.</summary>
     public bool PostgreSqlLiterals { get; init; }
 
-    /// <summary>Oracle <c>q'[…]'</c> alternative-quote strings.</summary>
+    /// <summary>Oracle <c>q'[…]'</c> and <c>nq'[…]'</c> alternative-quote strings.</summary>
     public bool OracleQuotedStrings { get; init; }
 }
 
@@ -51,13 +57,14 @@ internal static class HandwrittenSql
             var c = sql[i];
             var next = i + 1 < sql.Length ? sql[i + 1] : '\0';
 
-            if ((c == '-' && next == '-') || (c == '#' && syntax.HashComments))
+            if ((c == '-' && next == '-' && (!syntax.DashCommentNeedsSpace || i + 2 >= sql.Length || char.IsWhiteSpace(sql[i + 2]) || char.IsControl(sql[i + 2])))
+                || (c == '#' && syntax.HashComments))
             {
                 i = SkipLine(sql, i);
             }
             else if (c == '/' && next == '*')
             {
-                i = SkipBlockComment(sql, i, syntax.PostgreSqlLiterals);
+                i = SkipBlockComment(sql, i, syntax.NestedBlockComments);
             }
             else if (c == '\'')
             {
@@ -86,6 +93,10 @@ internal static class HandwrittenSql
             else if (syntax.OracleQuotedStrings && (c is 'q' or 'Q') && next == '\'' && !PrecededByWord(sql, i) && i + 2 < sql.Length)
             {
                 i = SkipOracleQuoted(sql, i);
+            }
+            else if (syntax.OracleQuotedStrings && (c is 'n' or 'N') && (next is 'q' or 'Q') && i + 3 < sql.Length && sql[i + 2] == '\'' && !PrecededByWord(sql, i))
+            {
+                i = SkipOracleQuoted(sql, i + 1);
             }
             else if (syntax.BindPrefixes.IndexOf(c) >= 0 && IsBindStart(sql, i, c))
             {
@@ -123,16 +134,16 @@ internal static class HandwrittenSql
         return builder.ToString();
     }
 
-    // A prefix after a word character or a second prefix is not a parameter: SQL Server @@ROWCOUNT,
-    // PostgreSQL x::int and an Oracle table@dblink stay as written.
+    // A prefix after a word, a closing identifier quote or a second prefix is not a parameter: SQL
+    // Server @@ROWCOUNT, PostgreSQL x::int and Oracle table@dblink or "Order Details"@dblink stay as written.
     private static bool IsBindStart(string sql, int index, char prefix)
         => index + 1 < sql.Length
             && IsNameStart(sql[index + 1])
             && !PrecededByWord(sql, index)
-            && (index == 0 || sql[index - 1] != prefix);
+            && (index == 0 || (sql[index - 1] != prefix && sql[index - 1] is not ('"' or ']' or '`')));
 
     private static bool PrecededByWord(string sql, int index)
-        => index > 0 && (IsNamePart(sql[index - 1]) || sql[index - 1] == '$');
+        => index > 0 && (IsNamePart(sql[index - 1]) || sql[index - 1] is '$' or '#');
 
     private static bool IsNameStart(char c) => c == '_' || char.IsLetter(c);
 

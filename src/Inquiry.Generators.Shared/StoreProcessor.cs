@@ -688,7 +688,7 @@ internal static class StoreProcessor
             kind = QueryReturnKind.RowCount;
             return null;
         }
-        else if (DbTypeMapper.TryGetDbTypeExpression(TypeData.Create(result, result.NullableAnnotation)) is not null)
+        else if (IsConvertibleQueryScalar(TypeData.Create(result, result.NullableAnnotation)))
         {
             kind = QueryReturnKind.Scalar;
             scalarType = result.ToDisplayString(KnownSymbols.FullyQualifiedNullableFormat);
@@ -696,11 +696,22 @@ internal static class StoreProcessor
         }
         else
         {
-            return $"the result type '{result.ToDisplayString()}' is neither a mapped row type nor a scalar. {supported}";
+            return $"the result type '{result.ToDisplayString()}' is neither a mapped row type nor a scalar Inquiry converts on every provider (a number, bool, string, DateTime or enum). {supported} To read another single value, return a one-property [InquiryAdHoc] row.";
         }
 
         return scalar ? "Scalar = true cannot be combined with a row result. Remove Scalar, or return Task<TScalar>." : null;
     }
+
+    // Scalar results go through ScalarConvert, which relies on Convert.ChangeType. Guid, DateOnly,
+    // TimeOnly, DateTimeOffset and byte[] arrive as text or another type on some providers and do not convert.
+    private static bool IsConvertibleQueryScalar(TypeData type)
+        => !type.IsByteArray && !type.IsGuid && !type.IsDateOnly && !type.IsTimeOnly
+            && (type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType) is SpecialType.System_Boolean
+                or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16
+                or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32
+                or SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single
+                or SpecialType.System_Double or SpecialType.System_Decimal or SpecialType.System_String
+                or SpecialType.System_DateTime;
 
     /// <summary>
     /// The materializer for an <c>[InquiryQuery]</c> row type: the name-mapped struct that the entity,
