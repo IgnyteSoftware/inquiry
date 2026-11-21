@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0-rc.2] - 2026-11-21
+
 ### Added
 
 - `[InquiryUpdate(StampModified = true)]` makes a set-based update, one with `[InquiryWhere]` criteria, also write the entity's `[InquiryModifiedAt]` and `[InquiryModifiedBy]` columns with `UtcNow` and `InquiryAuditContext.CurrentUser`, as entity updates do. The method takes no parameters for those columns, so a call can no longer forget them and leave a stale stamp. `[InquirySet]` expression updates stamp the same way. Without the property, generated SQL is unchanged. `INQ118` is a new build error for a method that opts in and also assigns a modified column through a parameter or `[InquirySet]`.
@@ -28,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** The Aspire registrations moved from `Ignyte.Inquiry.Aspire` to six new packages, one per provider: `Ignyte.Inquiry.Aspire.SqlServer`, `.PostgreSql`, `.MySql`, `.MariaDb`, `.Oracle` and `.Sqlite`. Before, `Ignyte.Inquiry.Aspire` depended on every provider, so a SQL Server application also restored and published Npgsql, MySqlConnector, Oracle.ManagedDataAccess.Core, Microsoft.Data.Sqlite and the native SQLite library. Now an application restores only the driver of its provider. `Ignyte.Inquiry.Aspire` keeps the provider-neutral telemetry and health-check defaults. To upgrade, replace the `Ignyte.Inquiry.Aspire` reference with the package for your provider. Calls such as `builder.AddInquirySqlServer("name")` compile unchanged. Each method is now in its own class, such as `InquiryAspireSqlServerExtensions`, so a call through the class name `InquiryAspireExtensions` must use the new class name. Rebuild assemblies compiled against the old package.
-- **Breaking:** The generated `AddInquiryGeneratedStores()` extension and its class, `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Every assembly that generates stores emitted the same public class, so a library that generates stores and references another one, such as a web project that references a core data library, failed to build with `CS0436` or `CS0121` when it called the method from its own registration method. Now each library's call registers its own stores, and a host that references several libraries calls each library's registration method without ambiguity. A host that called a referenced library's generated method directly now fails with `CS1061`. To upgrade, add a public registration method with a unique name to that library and call it from the host, as the [library registration guide](docs/site/articles/library-registration.md) describes.
+- **Breaking:** The generated `AddInquiryGeneratedStores()` extension and its class, `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Every assembly that generates stores emitted the same public class, so a library that generates stores and references another one, such as a web project that references a core data library, failed to build with `CS0436` or `CS0121` when it called the method from its own registration method. Now each library's call registers its own stores, and a host that references several libraries calls each library's registration method without ambiguity. A host that called a referenced library's generated method directly now fails with `CS1061`. To upgrade, add a public registration method with a unique name to that library and call it from the host, as the [library registration guide](https://ignytesoftware.github.io/inquiry/articles/library-registration.html) describes.
 
 ### Fixed
 
@@ -282,7 +284,8 @@ changelog and the immutable-tag ruleset; their artifacts remain on nuget.org.
 
 - The repository moved from a personal account to the [IgnyteSoftware](https://github.com/IgnyteSoftware) organization. Issue, pull-request, and documentation URLs now live under `github.com/IgnyteSoftware/inquiry`; the packages themselves are unaffected.
 
-[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.1...HEAD
+[Unreleased]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.2...HEAD
+[1.0.0-rc.2]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.12...v1.0.0-rc.1
 [1.0.0-preview.12]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.11...v1.0.0-preview.12
 [1.0.0-preview.11]: https://github.com/IgnyteSoftware/inquiry/compare/v1.0.0-preview.10...v1.0.0-preview.11

@@ -19,7 +19,7 @@ remove or change them. See [Support](https://github.com/IgnyteSoftware/inquiry/b
 - `Ignyte.Inquiry.MySql`, `Ignyte.Inquiry.MariaDb`, `Ignyte.Inquiry.Aspire.MySql` and
   `Ignyte.Inquiry.Aspire.MariaDb` depend on MySqlConnector 3.0.0. If your own code uses MySqlConnector,
   check its 3.0 release notes.
-- The Aspire registrations moved from `Ignyte.Inquiry.Aspire` to one package per provider, such as
+- In `1.0.0-rc.2`, the Aspire registrations moved from `Ignyte.Inquiry.Aspire` to one package per provider, such as
   `Ignyte.Inquiry.Aspire.SqlServer` for `AddInquirySqlServer`. Replace the `Ignyte.Inquiry.Aspire`
   reference with the package for your provider. Calls such as `builder.AddInquirySqlServer("name")`
   compile unchanged. A call through the class name, such as
@@ -54,7 +54,7 @@ New warnings fail builds that treat warnings as errors:
   on each criterion.
 - `INQ117`: a non-nullable column sets `UseDatabaseDefault = true` with no `DefaultExpression` on an entity
   that generates DDL. Add a `DefaultExpression`, or set `GenerateDdl = false`.
-- `INQ120`, added after `1.0.0-rc.1`: constant handwritten SQL returns no column, or two columns, for a
+- `INQ120`, added in `1.0.0-rc.2`: constant handwritten SQL returns no column, or two columns, for a
   property of its result type. See the name-mapping change below.
 
 ## 3. Check the mapping changes
@@ -99,7 +99,7 @@ New warnings fail builds that treat warnings as errors:
 
 ## 5. Register stores through each library's own method
 
-This change comes after `1.0.0-rc.1`. The generated `AddInquiryGeneratedStores()` extension and its class,
+This change comes in `1.0.0-rc.2`. The generated `AddInquiryGeneratedStores()` extension and its class,
 `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Before, every
 assembly that generates stores exposed them as public, so a library that generates stores and references
 another such library failed to build with `CS0436` or `CS0121` when it called `AddInquiryGeneratedStores()`.
@@ -111,6 +111,6 @@ another such library failed to build with `CS0436` or `CS0121` when it called `A
 - A library that generates stores and references another one no longer needs to call
   `Inquiry.Generated.InquiryGeneratedServiceRegistration` directly. Call `AddInquiryGeneratedStores()` from
   its own registration method.
-- The fix needs every library that generates stores to be built with the new version. A library built with
+- The fix needs every library that generates stores to be built with `1.0.0-rc.2` or later. A library built with
   `1.0.0-rc.1`, such as a package published with it, still exposes its public class, and a library that
-  references it still fails with `CS0121`. Rebuild that library with the new version.
+  references it still fails with `CS0121`. Rebuild that library with `1.0.0-rc.2` or later.
