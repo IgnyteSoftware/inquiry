@@ -1266,7 +1266,8 @@ internal static class StoreOperationEmitter
         var fieldParam = method.Parameters[0];
         var qualifiedName = storeName is null ? method.Name : storeName + "." + method.Name;
         var message = $"Store method '{qualifiedName}' expects at most one row with a matching '{fieldColumn.PropertyName}', but more than one row matched.";
-        source.AppendLine($"        var _rows = await Inquiry.QueryListAsync<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
+        var rows = LocalName(method, "_rows");
+        source.AppendLine($"        var {rows} = await Inquiry.QueryListAsync<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{fieldParam.TypeDisplay}>(");
         source.AppendLine($"                {sqlField},");
         source.AppendLine($"                {fieldParam.Identifier},");
@@ -1275,8 +1276,8 @@ internal static class StoreOperationEmitter
         source.AppendLine("            default,");
         source.AppendLine($"            {cancellation},");
         source.AppendLine("            capacityHint: 2).ConfigureAwait(false);");
-        source.AppendLine($"        if (_rows.Count > 1) throw new global::System.InvalidOperationException({GeneratorHelpers.Literal(message)});");
-        source.AppendLine("        return _rows.Count == 0 ? null : _rows[0];");
+        source.AppendLine($"        if ({rows}.Count > 1) throw new global::System.InvalidOperationException({GeneratorHelpers.Literal(message)});");
+        source.AppendLine($"        return {rows}.Count == 0 ? null : {rows}[0];");
     }
 
     /// <summary>

@@ -1717,14 +1717,15 @@ internal static class StoreProcessor
             element.TypeArguments.Length == 1 &&
             element.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Inquiry.GroupCount<TKey>";
 
-    // Task<T> where T is a non-generic class: the entity or a projection of it. Lists, streams and
-    // scalars fail here so they report INQ005.
+    // Task<T?> where T is a non-generic class: the entity or a projection of it. Lists, streams,
+    // scalars and a non-nullable T fail here so they report INQ005; no match returns null.
     private static bool TryGetSingleRowElementType(ITypeSymbol returnType, out INamedTypeSymbol element)
     {
         element = null!;
         if (returnType is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } task &&
             task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>" &&
-            task.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false, SpecialType: SpecialType.None } candidate)
+            task.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false, SpecialType: SpecialType.None } candidate &&
+            candidate.NullableAnnotation != NullableAnnotation.NotAnnotated)
         {
             element = candidate;
             return true;

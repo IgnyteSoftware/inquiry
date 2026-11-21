@@ -44,6 +44,18 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SelectOneByField_ParameterNamedLikeTheLocalCompiles()
+    {
+        var result = RunGenerator(WidgetStore("""
+            [InquirySelectOneByField(nameof(Widget.Name))]
+            public partial Task<Widget?> GetByNameAsync(string _rows, CancellationToken cancellationToken = default);
+            """));
+        AssertNoErrors(result);
+
+        Assert.Contains("var _rows_ = await", GetWidgetStore(result));
+    }
+
+    [Fact]
     public void SelectOneByField_IncludeDeletedDropsSoftDeleteFilter()
     {
         var result = RunGenerator(WidgetStore("""
@@ -199,6 +211,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("Task<IReadOnlyList<Widget>>")]
     [InlineData("IAsyncEnumerable<Widget>")]
     [InlineData("Task<string>")]
+    [InlineData("Task<Widget>")]
     [InlineData("Widget")]
     public void SelectOneByField_InvalidReturnTypeReportsINQ005(string returnType)
     {

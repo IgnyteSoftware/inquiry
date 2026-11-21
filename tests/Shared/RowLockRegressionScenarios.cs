@@ -76,10 +76,10 @@ internal static class RowLockRegressionScenarios
     }
 
     /// <summary>
-    /// A locked <c>[InquirySelectOneByField]</c> projection read holds its row: the writer waits until the
-    /// holder commits. This also proves the two-row limit and the lock clause combine on each engine.
+    /// A locked <c>[InquirySelectOneByField]</c> read holds its row: the writer waits until the holder
+    /// commits. The entity and projection reads build their SQL separately, so each is run.
     /// </summary>
-    internal static async Task SelectOneByFieldLockHoldsTheRowAsync(IServiceProvider services)
+    internal static async Task SelectOneByFieldLockHoldsTheRowAsync(IServiceProvider services, bool projection)
     {
         await SeedAsync(services, new LockProbe { Id = 1, State = 1 });
 
@@ -89,7 +89,10 @@ internal static class RowLockRegressionScenarios
         Task<bool> writer;
         await using (var transaction = await inquiry.BeginTransactionAsync())
         {
-            Assert.Equal(1, (await probes.SummaryByStateForUpdateAsync(1))?.Id);
+            var id = projection
+                ? (await probes.SummaryByStateForUpdateAsync(1))?.Id
+                : (await probes.GetByStateForUpdateAsync(1))?.Id;
+            Assert.Equal(1, id);
 
             writer = await StartAsync(services, () => UpdateAsync(services, new LockProbe { Id = 1, State = 1, Attempts = 1 }));
             await AssertBlockedAsync(writer);

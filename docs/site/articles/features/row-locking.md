@@ -5,8 +5,8 @@ a row, decide what to change, and write it back, and no other writer may change 
 Use `UpdateSkipLocked` to let several workers take items from the same queue without waiting for each
 other.
 
-`LockMode` is available on `[InquirySelectOneByKey]`, `[InquirySelectAll]`, `[InquirySelectAllByField]`
-and `[InquirySelectAllByPredicate]`. The default, `InquiryLockMode.None`, adds no lock clause.
+`LockMode` is available on `[InquirySelectOneByKey]`, `[InquirySelectOneByField]`, `[InquirySelectAll]`,
+`[InquirySelectAllByField]` and `[InquirySelectAllByPredicate]`. The default, `InquiryLockMode.None`, adds no lock clause.
 
 ## Modes and clauses
 

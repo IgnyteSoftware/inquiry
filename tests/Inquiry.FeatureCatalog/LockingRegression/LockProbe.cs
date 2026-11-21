@@ -65,6 +65,9 @@ public partial class LockProbeStore : InquiryStore<LockProbe>
     public partial Task<LockProbe?> GetByStateAsync(int state, CancellationToken cancellationToken = default);
 
     [InquirySelectOneByField(nameof(LockProbe.State), LockMode = InquiryLockMode.Update)]
+    public partial Task<LockProbe?> GetByStateForUpdateAsync(int state, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByField(nameof(LockProbe.State), LockMode = InquiryLockMode.Update)]
     public partial Task<LockProbeSummary?> SummaryByStateForUpdateAsync(int state, CancellationToken cancellationToken = default);
 }
 
