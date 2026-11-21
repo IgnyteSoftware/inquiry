@@ -3292,6 +3292,9 @@ internal static class StoreOperationEmitter
         var stream = method.ReturnTypeDisplay.Contains("IAsyncEnumerable<");
         var result = method.Operation switch
         {
+            StoreOperation.UpdateByPredicate when method.PredicateUpdateReturn != PredicateUpdateReturn.RowCount => method.ReturnsList
+                ? "One entry per updated row, read as it is after the update, in no particular order. Empty when no row matches."
+                : "The updated row or value, read as it is after the update, or null when no row matches.",
             StoreOperation.Insert or StoreOperation.Upsert => method.ReturnsEntity
                 ? "A newly materialized result entity, or null when the operation returns no row. Use the returned key and database values; the input is not refreshed."
                 : "The provider's affected-row count, not a generated key. Database-generated values are not copied into the input.",

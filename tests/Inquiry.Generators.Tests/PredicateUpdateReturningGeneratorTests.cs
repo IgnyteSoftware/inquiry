@@ -40,6 +40,24 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains($"private const string _sqlUpdateWhere_IncrementAsync = \"{expectedSql}\";", text);
         Assert.Contains("var _row = await Inquiry.QueryGeneratedSingleOrDefaultAsync<global::Demo.Item, long, global::Demo.ItemInquiryEntityStructMaterializer>(_cmd, default, cancellationToken).ConfigureAwait(false);", text);
         Assert.Contains("return _row?.Score;", text);
+        Assert.Contains("The updated row or value, read as it is after the update, or null when no row matches.", text);
+    }
+
+    // The issue's acceptance shape binds the criterion by name, which needs C# 11 nameof on a parameter.
+    [Fact]
+    public void NamedCriterionBindingReturnsTheUpdatedValue()
+    {
+        var result = RunGenerator(ReturningStore("""
+            [InquiryUpdate]
+            [InquirySet(nameof(Item.Score), "{Score} + 1")]
+            [InquiryWhere(nameof(Item.Id), Parameter = nameof(id))]
+            public partial Task<int?> IncrementAsync(long id, CancellationToken cancellationToken = default);
+            """), languageVersion: Microsoft.CodeAnalysis.CSharp.LanguageVersion.CSharp11);
+        var text = GeneratedStoreText(result, "ItemStore.InquiryStore.g.cs");
+
+        AssertCompiles(result);
+        Assert.Contains("UPDATE \\\"TItem\\\" SET \\\"Score\\\" = \\\"Score\\\" + 1 WHERE \\\"Id\\\" = @Id RETURNING", text);
+        Assert.Contains("return _row?.Score;", text);
     }
 
     [Theory]
@@ -168,6 +186,13 @@ public sealed partial class InquiryGeneratorTests
         [InquiryWhere("Id")]
         [InquiryWhere("Category", Or = true)]
         public partial Task<Item?> IncrementAsync(long id, string category, CancellationToken cancellationToken = default);
+        """, "match at most one row")]
+    [InlineData("""
+        [InquiryUpdate]
+        [InquirySet("Score", "{Score} + 1")]
+        [InquiryWhere("Category", OpenGroups = 1, Not = true)]
+        [InquiryWhere("Id", CloseGroups = 1)]
+        public partial Task<int?> IncrementAsync(string category, long id, CancellationToken cancellationToken = default);
         """, "match at most one row")]
     [InlineData("""
         [InquiryUpdate]

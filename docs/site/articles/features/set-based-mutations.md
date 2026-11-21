@@ -134,8 +134,8 @@ public partial class UserStore : InquiryStore<User>
   not set, such as the key of a claimed row, return the entity or a projection.
 
 The single-row form, `Task<T?>`, needs criteria that can match at most one row: `Equal` on every
-primary-key column, or `Equal` on a column with `IsUnique = true`, joined with AND. Optional and
-negated criteria do not count. The update changes every matching row before any row is read, so
+primary-key column, or `Equal` on a column with `IsUnique = true`, joined with AND. Optional criteria
+do not count, and a method with any `Not = true` criterion or group cannot use the single-row form. The update changes every matching row before any row is read, so
 the generator rejects a single-row form that could match more than one. Use the list form for
 those updates.
 

@@ -3997,14 +3997,15 @@ internal static class StoreProcessor
 
     private static bool MatchesAtMostOneRow(EntityData entity, IReadOnlyList<SqlPredicate> predicates)
     {
-        if (predicates.Any(static predicate => predicate.IsOr))
+        // NOT on a group opener negates the whole group, so any negation can hide the key equality.
+        if (predicates.Any(static predicate => predicate.IsOr || predicate.IsNegated))
         {
             return false;
         }
 
         var equalColumns = new HashSet<string>(
             predicates
-                .Where(static predicate => predicate.Op == SqlCompareOp.Equal && !predicate.IsNegated && !predicate.IsOptional && predicate.JsonPath is null)
+                .Where(static predicate => predicate.Op == SqlCompareOp.Equal && !predicate.IsOptional && predicate.JsonPath is null)
                 .Select(static predicate => predicate.Column.ColumnName),
             StringComparer.Ordinal);
         return entity.Keys.Count > 0 && entity.Keys.AsImmutableArray().All(key => equalColumns.Contains(key.ColumnName)) ||
