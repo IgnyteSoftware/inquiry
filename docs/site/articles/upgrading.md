@@ -48,12 +48,14 @@ The [diagnostic repair index](diagnostics.md) has the fix for each ID.
 
 Lowering `INQ039` project-wide still generates a throwing stub for the methods that report `INQ039`.
 
-Two new warnings fail builds that treat warnings as errors:
+New warnings fail builds that treat warnings as errors:
 
 - `INQ112`: positional criteria bind two or more parameters of the same type. Set `Parameter = nameof(x)`
   on each criterion.
 - `INQ117`: a non-nullable column sets `UseDatabaseDefault = true` with no `DefaultExpression` on an entity
   that generates DDL. Add a `DefaultExpression`, or set `GenerateDdl = false`.
+- `INQ120`, added after `1.0.0-rc.1`: constant handwritten SQL returns no column, or two columns, for a
+  property of its result type. See the name-mapping change below.
 
 ## 3. Check the mapping changes
 
@@ -62,7 +64,10 @@ Two new warnings fail builds that treat warnings as errors:
   `SUM(Amount) AS TotalAmount`. For entities and projections, including entity results of stored
   procedures, return every mapped column under the column name the entity maps it to, such as a name set by `[InquiryColumn]`, `[InquiryKey]` or `[InquiryForeignKey]`.
   Extra columns are ignored. A missing or duplicate match throws `InvalidOperationException` before the
-  first row. Code that caught `InvalidCastException`,
+  first row. Build warning [`INQ120`](diagnostics.md#inq120) reports these reads at build time when the SQL
+  text is constant, including an unaliased expression such as `COUNT(*)`, `COALESCE(...)`, `CASE ... END`,
+  a scalar subquery or an `OUTPUT` expression, and a column whose name differs from the expected name. It
+  cannot see SQL built at run time, `SELECT *` or stored procedures, so review those reads too. Code that caught `InvalidCastException`,
   `FormatException` or `OverflowException` around these reads must catch `InvalidOperationException` and
   read `InnerException`. Generated store queries are unchanged.
 - **Attributed base-class properties are mapped.** An entity that derives from a class with Inquiry

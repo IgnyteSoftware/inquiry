@@ -57,8 +57,10 @@ public sealed class ScriptedDatabaseTests
         await using var services = CreateServices(database);
         var inquiry = services.GetRequiredService<IInquiry>();
 
+#pragma warning disable INQ120 // This test checks the run-time error that INQ120 reports at build time.
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => inquiry.QueryListAsync<NameMappedPair>($"SELECT First, Label FROM Pairs"));
+#pragma warning restore INQ120
 
         // The same text the live SQLite test asserts in ResultNameMappingTests.
         Assert.Contains(typeof(NameMappedPair).FullName!, exception.Message, StringComparison.Ordinal);

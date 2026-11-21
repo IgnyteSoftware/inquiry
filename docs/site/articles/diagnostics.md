@@ -33,7 +33,7 @@ only methods that report INQ039, never a method rejected by another error.
 
 Change severity with `<NoWarn>` or with `.editorconfig` or `.globalconfig` severity. `#pragma warning
 disable` has no effect on diagnostics from the Inquiry source generators, at any severity. Only INQ048
-comes from an analyzer, so it is the only Inquiry ID a pragma can suppress.
+and INQ120 come from analyzers, so they are the only Inquiry IDs a pragma can suppress.
 
 INQ048 is a SQL-injection warning. Suppress it locally only after verifying that dynamic SQL cannot
 contain untrusted values or identifiers. Bind values with InquirySql.Sql or the FormattableString APIs.
@@ -1491,5 +1491,19 @@ Trigger: `[InquiryDateTimeKind]` is on a mapped property whose value read from t
 Failing shape: `[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Utc)] public DateTimeOffset At { get; set; }`.
 
 Smallest correction: Remove the attribute from that property. `DateTimeOffset` already carries its offset. For a converter column, set the kind inside `FromProvider`, or use a converter whose provider type is `DateTime`. See [DateTime kind](entity-mapping.md#datetime-kind).
+
+[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
+
+## INQ120
+
+Handwritten SQL result columns do not match the result type. Default: warning, enabled.
+
+Trigger: Constant SQL passed to `QueryAsync<T>`, `QueryListAsync<T>` or `QuerySingleOrDefaultAsync<T>` on `IInquiry` or `IInquiryTransaction` cannot fill a property of `T`, where `T` is an `[InquiryAdHoc]` DTO, an `[InquiryProjection]`, or an `[InquiryTable]` or `[InquiryView]` entity declared in the same project. Results of handwritten SQL map to properties by column name, so the read would throw `InvalidOperationException` on the first call. The warning names `T`, the property and the column names the SQL returns. It reports a property whose column the SQL does not return, and a property that two result columns match. An entity property matches its mapped column name, not its property name.
+
+The analyzer reads the outer `SELECT` list after any CTEs, the first branch of a `UNION`, and the `OUTPUT` list of an `INSERT`, `UPDATE` or `DELETE` on SQL Server, or the `RETURNING` list on PostgreSQL, SQLite and MariaDB. It reads interpolated and raw string literals, `InquirySql.Sql($"...")`, `new InquiryCommand(constant)`, `FormattableStringFactory.Create(constant, ...)`, and a method in the same file whose body only returns one of these. It reports nothing when it cannot know the result names: SQL text that is not constant, `SELECT *`, a stored procedure, SQL that starts with another statement, `SELECT ... INTO`, `FOR XML` or `FOR JSON`, `COLLATE`, syntax it does not parse, an ambiguous dialect, and any expression whose name depends on provider rules. On SQL Server an expression without an alias has no name. PostgreSQL names it after its function or column, so on PostgreSQL an unaliased expression never reports. MySQL, MariaDB, Oracle and SQLite name it with its text, such as `COUNT(*)`, which cannot match a property name; a literal, a parameter or a parenthesized column such as `(Id)` can, so those report nothing. When one result column's name is not known, the analyzer reports no missing columns for that SQL, and on PostgreSQL every unaliased expression has the same effect. `QueryMultipleAsync` grid reads are not checked.
+
+Failing shape: `inquiry.QuerySingleOrDefaultAsync<CheckInCounts>($"SELECT (SELECT COUNT(*) FROM CheckIns), (SELECT COUNT(*) FROM CheckOuts)")` into a DTO with `CheckIns` and `CheckOuts`, or `SELECT [TMemberKey], [Outcome]` into a DTO whose property is `MemberKey`.
+
+Smallest correction: Alias each expression with the name of its property's column, such as `(SELECT COUNT(*) FROM CheckIns) AS CheckIns` or `[TMemberKey] AS [MemberKey]`. Give an unaliased `OUTPUT` expression an alias the same way.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
