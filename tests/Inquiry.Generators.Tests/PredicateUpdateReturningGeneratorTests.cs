@@ -76,6 +76,21 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void SqlServerReturningUpdateKeepsAJsonInList()
+    {
+        var result = RunGenerator(ReturningStore("""
+            [InquiryUpdate]
+            [InquirySet("Score", "{Score} + 1")]
+            [InquiryWhere("Id", Compare.In, InListBinding = InListBinding.Json)]
+            public partial Task<IReadOnlyList<ItemScore>> BumpAsync(IReadOnlyList<long> ids, CancellationToken cancellationToken = default);
+            """), dialect: "SqlServer");
+        var text = GeneratedStoreText(result, "ItemStore.InquiryStore.g.cs");
+
+        AssertCompiles(result);
+        Assert.Contains("INTO @_out WHERE [Id] IN (SELECT [value] FROM OPENJSON(@Id) WITH ([value] BIGINT '$')); SELECT [Id], [Score] FROM @_out", text);
+    }
+
+    [Fact]
     public void SqlServerOutputTableAvoidsABoundParameterName()
     {
         var result = RunGenerator(ReturningStore("""
