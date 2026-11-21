@@ -266,14 +266,17 @@ public sealed partial class InquiryGeneratorTests
         Assert.Contains(expectedMessage, diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    [Fact]
-    public void SingleValueReturnMustBeNullable()
+    [Theory]
+    [InlineData("Task<long>", "Score", "{Score} + 1")]
+    [InlineData("Task<Item>", "Score", "{Score} + 1")]
+    [InlineData("Task<string>", "Name", "'x'")]
+    public void SingleRowReturnMustBeNullable(string returnType, string field, string expression)
     {
-        var result = RunGenerator(ReturningStore("""
+        var result = RunGenerator(ReturningStore($$"""
             [InquiryUpdate]
-            [InquirySet("Score", "{Score} + 1")]
+            [InquirySet("{{field}}", "{{expression}}")]
             [InquiryWhere("Id")]
-            public partial Task<long> IncrementAsync(long id, CancellationToken cancellationToken = default);
+            public partial {{returnType}} IncrementAsync(long id, CancellationToken cancellationToken = default);
             """));
 
         Assert.Contains(result.RunResult.Diagnostics, static diagnostic => diagnostic.Id == "INQ005");

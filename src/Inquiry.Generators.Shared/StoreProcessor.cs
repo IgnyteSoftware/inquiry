@@ -1404,9 +1404,12 @@ internal static class StoreProcessor
             element = list.TypeArguments[0];
             isList = true;
         }
-        else if (result.IsValueType && result is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        else if (result.IsValueType
+            ? result is not INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T }
+            : result.NullableAnnotation == NullableAnnotation.NotAnnotated)
         {
-            // One row returns null when nothing matched, so a value type must be Nullable<T>.
+            // One row returns null when nothing matched, so the result must be nullable: Nullable<T> for a
+            // value type, and T? for a reference type where nullable annotations are enabled.
             return false;
         }
         else
