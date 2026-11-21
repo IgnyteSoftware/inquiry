@@ -7,8 +7,12 @@ using Microsoft.CodeAnalysis.Text;
 namespace Inquiry.Generators;
 
 /// <summary>
-/// Emits the DI registration class and the public extension method that registers it explicitly.
+/// Emits the DI registration class and the extension method that registers it explicitly.
 /// </summary>
+/// <remarks>
+/// The extension class is internal because every generating assembly emits the same type name.
+/// A public type conflicts with the copy in a referenced generating assembly (CS0436, CS0121).
+/// </remarks>
 internal static class RegistrationEmitter
 {
     public static void Emit(
@@ -21,7 +25,7 @@ internal static class RegistrationEmitter
         source.AppendLine("#nullable enable");
         source.AppendLine("namespace Inquiry.DependencyInjection");
         source.AppendLine("{");
-        source.AppendLine("    public static class InquiryGeneratedServiceCollectionExtensions");
+        source.AppendLine("    internal static class InquiryGeneratedServiceCollectionExtensions");
         source.AppendLine("    {");
         source.AppendLine("        public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddInquiryGeneratedStores(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)");
         source.AppendLine("        {");

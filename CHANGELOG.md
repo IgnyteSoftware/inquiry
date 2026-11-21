@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[InquiryUpdate(StampModified = true)]` makes a set-based update, one with `[InquiryWhere]` criteria, also write the entity's `[InquiryModifiedAt]` and `[InquiryModifiedBy]` columns with `UtcNow` and `InquiryAuditContext.CurrentUser`, as entity updates do. The method takes no parameters for those columns, so a call can no longer forget them and leave a stale stamp. `[InquirySet]` expression updates stamp the same way. Without the property, generated SQL is unchanged. `INQ118` is a new build error for a method that opts in and also assigns a modified column through a parameter or `[InquirySet]`.
 - The Aspire and testing guides show how a `WebApplicationFactory` test points an application that calls `AddInquirySqlServer(builder, "name")` or another Aspire method at a test database. Set `ConnectionStrings:name` with `UseSetting` in `ConfigureWebHost`. `ConfigureAppConfiguration` runs after the Aspire method has read the connection string, so it cannot replace it. A missing or blank connection string is still rejected at registration.
 
+### Changed
+
+- **Breaking:** The generated `AddInquiryGeneratedStores()` extension and its class, `Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Every assembly that generates stores emitted the same public class, so a library that generates stores and references another one, such as a web project that references a core data library, failed to build with `CS0436` or `CS0121` when it called the method from its own registration method. Now each library's call registers its own stores, and a host that references several libraries calls each library's registration method without ambiguity. A host that called a referenced library's generated method directly now fails with `CS1061`. To upgrade, add a public registration method with a unique name to that library and call it from the host, as the [library registration guide](docs/site/articles/library-registration.md) describes.
+
 ## [1.0.0-rc.1] - 2026-11-20
 
 ### Added

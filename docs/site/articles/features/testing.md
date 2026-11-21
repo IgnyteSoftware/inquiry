@@ -44,6 +44,12 @@ using var scope = fixture.CreateScope();
 var store = scope.ServiceProvider.GetRequiredService<OrganizationStore>();
 ```
 
+`AddInquiryGeneratedStores()` and `InquiryGeneratedSchema` are internal to the assembly that generates
+the stores. In a separate test project, call the data library's own registration method and read the
+DDL from a public member of the library, such as `WorkspaceRegistration.Schema` in the samples. Or have
+the library grant the test project `InternalsVisibleTo`. See
+[Registering stores from multiple libraries](../library-registration.md).
+
 Each fixture is an isolated database; use one per test (or per test class) — disposal tears it
 down.
 

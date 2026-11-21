@@ -83,3 +83,21 @@ Two new warnings fail builds that treat warnings as errors:
 - **SQLite `IN` lists match stored values.** A `Compare.In` list over `Guid`, `DateTime`, `DateTimeOffset`,
   `TimeOnly`, `byte[]` or `float` now matches rows. A `byte[]` list needs SQLite 3.41 or later. A value
   that another writer stored in a different form, such as a lower-case GUID, no longer matches.
+
+## 5. Register stores through each library's own method
+
+This change comes after `1.0.0-rc.1`. The generated `AddInquiryGeneratedStores()` extension and its class,
+`Inquiry.DependencyInjection.InquiryGeneratedServiceCollectionExtensions`, are now `internal`. Before, every
+assembly that generates stores exposed them as public, so a library that generates stores and references
+another such library failed to build with `CS0436` or `CS0121` when it called `AddInquiryGeneratedStores()`.
+
+- A call to `AddInquiryGeneratedStores()` in the assembly that generates the stores is unchanged.
+- A call to a referenced library's generated method now fails with `CS1061`. Add a public registration
+  method with a unique name to that library, and call it instead. See
+  [Registering stores from multiple libraries](library-registration.md).
+- A library that generates stores and references another one no longer needs to call
+  `Inquiry.Generated.InquiryGeneratedServiceRegistration` directly. Call `AddInquiryGeneratedStores()` from
+  its own registration method.
+- The fix needs every library that generates stores to be built with the new version. A library built with
+  `1.0.0-rc.1`, such as a package published with it, still exposes its public class, and a library that
+  references it still fails with `CS0121`. Rebuild that library with the new version.
