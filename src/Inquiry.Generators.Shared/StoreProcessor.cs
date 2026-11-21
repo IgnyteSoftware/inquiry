@@ -2275,9 +2275,17 @@ internal static class StoreProcessor
                             string.Equals(entityColumn.ColumnName, column.ColumnName, StringComparison.OrdinalIgnoreCase)) ?? column)
                         .ToList()))
                     : ctx;
-                var setClause = predicatePlan.SetAssignments.Count > 0
-                    ? sqlBuilder.RenderUpdateSetClause(predicatePlan.SetAssignments)
-                    : sqlBuilder.RenderUpdateSetClause(ToColumnList(fieldColumns));
+                string setClause;
+                if (predicatePlan.StampBindings.Count > 0)
+                {
+                    setClause = sqlBuilder.RenderUpdateSetClause(StampedSetAssignments(sqlBuilder, fieldColumns, predicatePlan));
+                }
+                else
+                {
+                    setClause = predicatePlan.SetAssignments.Count > 0
+                        ? sqlBuilder.RenderUpdateSetClause(predicatePlan.SetAssignments)
+                        : sqlBuilder.RenderUpdateSetClause(ToColumnList(fieldColumns));
+                }
                 var returningError = TryBuildDegradableConst(source, generatedSql, "_sqlUpdateWhere_" + method.MemberName, needed: true,
                     () => sqlBuilder.BuildUpdateByPredicateReturningSql(ctx, returningCtx, setClause, sqlBuilder.RenderUpdateByPredicateWhere(ctx, predicatePlan.Predicates)));
                 if (returningError is not null)

@@ -61,6 +61,21 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
+    public void StampModifiedReturningUpdateStillWritesTheStamps()
+    {
+        var result = RunGenerator(StampedMemberSource("""
+            [InquiryUpdate(StampModified = true)]
+            [InquirySet(nameof(Member.Score), "{Score} + 1")]
+            [InquiryWhere(nameof(Member.Id))]
+            public partial Task<int?> AddScoreAsync(long id, CancellationToken cancellationToken = default);
+            """));
+        var text = GetMemberStore(result);
+
+        AssertCompiles(result);
+        Assert.Contains("UPDATE \\\"Member\\\" SET \\\"Score\\\" = \\\"Score\\\" + 1, \\\"TStamp\\\" = @TStamp, \\\"LastUpdatedBy\\\" = @LastUpdatedBy WHERE \\\"Id\\\" = @Id RETURNING", text);
+    }
+
+    [Fact]
     public void SqlServerOutputTableAvoidsABoundParameterName()
     {
         var result = RunGenerator(ReturningStore("""
