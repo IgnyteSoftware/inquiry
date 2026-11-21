@@ -87,6 +87,46 @@ written. A method that sets `StampModified = true` and also assigns a modified c
 parameter or `[InquirySet]`, reports [INQ118](../diagnostics.md#inq118). On an entity without modified
 columns the property has no effect, and entity updates always stamp.
 
+## Endpoints without a signed-in user
+
+Some endpoints authenticate without a principal, such as a kiosk or device token that the handler checks, or a webhook signature. Give those endpoints an audit user as endpoint metadata, instead of a `BeginScope` call in each handler:
+
+```csharp
+app.UseRouting();
+app.UseAuthentication();
+app.UseInquiryAuditContext();   // after UseRouting, so the endpoint is known
+
+var kiosk = app.MapGroup("/kiosk").WithInquiryAuditUser("system:kiosk");
+kiosk.MapPost("/sessions/{id}/abandon", AbandonSession);   // inserts stamp "system:kiosk"
+
+// overrideResolver: a browser cookie that signs someone in cannot replace the webhook's audit user.
+app.MapPost("/webhooks/billing", HandleBilling)
+   .WithInquiryAuditUser("system:billing-webhook", overrideResolver: true);
+```
+
+For MVC, put `[InquiryAuditUser("system:kiosk")]` on the controller or action. `WithInquiryAuditUser` works on a route group, a single endpoint, or any other endpoint convention builder.
+
+The middleware picks the user for each request in this order:
+
+| Order | Source | Applies when |
+|---|---|---|
+| 1 | A scope a handler opens with `InquiryAuditContext.BeginScope` | Always, inside that scope. The inner scope replaces the middleware's scope until it is disposed. |
+| 2 | Endpoint metadata with `overrideResolver: true` (`OverrideResolver = true` on the attribute) | Always. The middleware does not call the resolver. |
+| 3 | The user resolver, which is the signed-in principal by default | The resolver returns a value other than `null`. |
+| 4 | Endpoint metadata without `overrideResolver` | The resolver returns `null`. |
+
+The fallback in row 4 applies only when the resolver returns `null`. A custom resolver that returns a placeholder such as `"anonymous"` or an empty string for an unauthenticated request turns the fallback off. Return `null` when there is no user, or use `overrideResolver: true` on those endpoints.
+
+When an endpoint gets the metadata more than once, the value ASP.NET Core adds last wins, and it replaces both the user and `overrideResolver`. The order is:
+
+1. `WithInquiryAuditUser` on a route group.
+2. `[InquiryAuditUser]` on a controller, then on an action or a minimal API handler.
+3. `WithInquiryAuditUser` on the endpoint itself, or on the builder that `MapControllers()` returns.
+
+So an endpoint that sets its own user without `overrideResolver` turns off the override of its group. A convention such as `app.MapControllers().WithInquiryAuditUser("system:api")` replaces every controller and action attribute, including any `OverrideResolver = true`. An endpoint with no metadata behaves as before.
+
+**Middleware order.** The middleware reads the metadata from the routed endpoint, so it must run after `UseRouting`. When `UseInquiryAuditContext` runs before routing, it does not see the metadata, and requests with no signed-in user get a `null` audit user. `overrideResolver` has no effect there either, so a signed-in user replaces the endpoint's audit user. A `WebApplication` that never calls `UseRouting` adds routing at the start of the pipeline, so the metadata works there too.
+
 ## Scope disposal
 
 Dispose nested scopes before their parent. Out-of-order disposal throws

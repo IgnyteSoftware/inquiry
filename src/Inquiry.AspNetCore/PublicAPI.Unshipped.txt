@@ -1,1 +1,8 @@
 #nullable enable
+Inquiry.AspNetCore.InquiryAuditUserAttribute
+Inquiry.AspNetCore.InquiryAuditUserAttribute.InquiryAuditUserAttribute(string! user) -> void
+Inquiry.AspNetCore.InquiryAuditUserAttribute.OverrideResolver.get -> bool
+Inquiry.AspNetCore.InquiryAuditUserAttribute.OverrideResolver.set -> void
+Inquiry.AspNetCore.InquiryAuditUserAttribute.User.get -> string!
+Inquiry.AspNetCore.InquiryAuditUserEndpointConventionBuilderExtensions
+static Inquiry.AspNetCore.InquiryAuditUserEndpointConventionBuilderExtensions.WithInquiryAuditUser<TBuilder>(this TBuilder builder, string! user, bool overrideResolver = false) -> TBuilder
