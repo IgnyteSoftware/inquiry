@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ASP.NET Core endpoints and route groups can set their own audit user, for endpoints with no signed-in principal such as kiosk, device-token or webhook endpoints. Call `WithInquiryAuditUser("system:kiosk")` on a route group or endpoint, or put `[InquiryAuditUser("system:kiosk")]` on an MVC controller or action. `UseInquiryAuditContext` uses that user when the user resolver returns `null`, and always when you pass `overrideResolver: true`. A scope that a handler opens with `InquiryAuditContext.BeginScope` still overrides both. Before, each such handler had to open its own scope, and a forgotten scope wrote `null` into the created-by and modified-by columns. The middleware must run after `UseRouting` to see the metadata. The auditing guide lists the precedence rules.
+
 ## [1.0.0-rc.1] - 2026-11-20
 
 ### Added
