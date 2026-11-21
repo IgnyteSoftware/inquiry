@@ -532,7 +532,7 @@ Operation is not supported by the target dialect. Default: error, enabled.
 
 Trigger: The selected dialect cannot emit this operation.
 
-Failing shape: A returning mutation form rejected for the active dialect. A `LockMode` the dialect cannot run: any lock on SQLite, `Share` on Oracle, `Distinct = true` with a lock on PostgreSQL or Oracle, or offset paging (`Paged = true` or an `InquiryPagedResult<T>` return) with a lock on Oracle.
+Failing shape: A returning mutation form rejected for the active dialect, such as a set-based `[InquiryUpdate]` that returns its updated rows or value on MySQL or MariaDB. A `LockMode` the dialect cannot run: any lock on SQLite, `Share` on Oracle, `Distinct = true` with a lock on PostgreSQL or Oracle, or offset paging (`Paged = true` or an `InquiryPagedResult<T>` return) with a lock on Oracle.
 
 Smallest correction: Use a supported mutation/result shape or explicit provider SQL. Do not obtain an identity with an unsafe MAX(id) query. For a lock, remove `Distinct` or the paging, or remove the lock. Lowering severity project-wide deliberately emits throwing stubs, not working SQL. It is the only diagnostic whose severity changes the generated code; see [Severity and suppression](#severity-and-suppression).
 
@@ -1214,11 +1214,11 @@ Smallest correction: Use supported separate insert/update operations and preserv
 
 Mutation target is invalid. Default: error, enabled.
 
-Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker and protected filter columns.
+Trigger: A mutation target is missing, conflicting, has an unsupported return mode, or an entity update has no writable columns after excluding the soft-delete marker and protected filter columns. For a set-based update that returns its changes, the trigger is also a single-row `Task<T?>` whose criteria can match more than one row, a value return on an update that sets more than one column, or a value type that does not match the updated column.
 
 Failing shape: A parameterless InquiryDelete without InquiryWhere.
 
-Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result. For an empty update, add a writable column or remove the update method.
+Smallest correction: For all rows use InquiryDeleteAll explicitly; otherwise provide key or predicate targeting with a supported result. For an empty update, add a writable column or remove the update method. For a returning set-based update, return `Task<IReadOnlyList<T>>`, filter on the key or a unique column, or return the entity or a projection. See [Return the changed values](features/set-based-mutations.md#return-the-changed-values).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L255).
 

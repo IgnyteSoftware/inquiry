@@ -427,6 +427,17 @@ internal sealed class OracleSqlBuilder : SqlBuilder
             RefCursorBind + " FOR SELECT " + context.SelectColumns + " FROM " + context.Table + " WHERE " +
             context.KeyWhereClause + "; END IF; END;";
 
+    // RETURNING ... INTO cannot feed a result set, so the block collects the ROWID of each updated row
+    // and opens the cursor over those rows. The UPDATE still holds their row locks, so no other writer
+    // can change a value between the UPDATE and the read. The predicate is not tested again, because an
+    // update can change a column that the predicate filters on. SYS.ODCIVARCHAR2LIST holds at most
+    // 32767 entries. A larger update raises an error, and Oracle rolls back the whole block.
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => "DECLARE v_rowids SYS.ODCIVARCHAR2LIST; BEGIN UPDATE " + context.Table + " SET " + setClause +
+            " WHERE " + whereClause + " RETURNING ROWIDTOCHAR(ROWID) BULK COLLECT INTO v_rowids; OPEN " + RefCursorBind +
+            " FOR SELECT " + returning.SelectColumns + " FROM " + context.Table +
+            " WHERE ROWID IN (SELECT CHARTOROWID(COLUMN_VALUE) FROM TABLE(v_rowids)); END;";
+
     public override string BuildUpsertReturningSql(SqlBuildContext context)
         // Reuses the MERGE, which throws for a database-generated key — that case stays unsupported (the
         // MERGE cannot match it). A client-supplied-key upsert always affects its row, so re-select by key.

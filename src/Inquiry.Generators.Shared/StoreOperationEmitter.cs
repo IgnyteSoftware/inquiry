@@ -455,10 +455,11 @@ internal static class StoreOperationEmitter
                 }
 
             case StoreOperation.UpdateByPredicate:
-                AppendHeader(source, method, parameters, isAsync: false);
+                AppendHeader(source, method, parameters, isAsync: method.PredicateUpdateReturn == PredicateUpdateReturn.Scalar);
                 // Set-based UPDATE composes the active-row predicate, so its SQL carries the
                 // parameterized filter term and the binder must fill it.
-                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder);
+                EmitMutationByPredicate(source, sqlBuilder, method, fieldColumns, predicatePlan!, "_sqlUpdateWhere_" + method.MemberName, cancellation, filterBinder,
+                    entityType, structMat);
                 source.AppendLine("    }");
                 break;
 
@@ -1335,7 +1336,9 @@ internal static class StoreOperationEmitter
         ResolvedPredicatePlan plan,
         string sqlField,
         string cancellation,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        string? rowType = null,
+        string? rowMaterializer = null)
     {
         var state = new GeneratedCommandState(method.Parameters, includeMaxParameters: plan.Bindings.Any(binding => binding.IsCollection));
         source.AppendLine($"        var _cmd = new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
@@ -1425,7 +1428,54 @@ internal static class StoreOperationEmitter
         }
 
         source.AppendLine("            });");
-        source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+        // The single form checks for a second row. IsUnique is only a declaration, so a schema
+        // without the unique index must fail loudly, not hide the other updated rows.
+        var query = method.ReturnsList
+            ? $"Inquiry.QueryListAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})"
+            : $"Inquiry.QuerySingleOrDefaultAsync<{rowType}, {state.Type}, {rowMaterializer}>(_cmd, default, {cancellation})";
+        switch (method.PredicateUpdateReturn)
+        {
+            case PredicateUpdateReturn.Rows:
+                source.AppendLine($"        return {query};");
+                break;
+
+            // The value is read through the entity materializer, so converters and provider types
+            // behave as they do on the entity's own reads.
+            case PredicateUpdateReturn.Scalar when method.ReturnsList:
+                var rows = LocalName(method, "_rows");
+                var values = LocalName(method, "_values");
+                var index = LocalName(method, "_i");
+                source.AppendLine($"        var {rows} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        var {values} = new global::System.Collections.Generic.List<{method.ScalarResultType}>({rows}.Count);");
+                source.AppendLine($"        for (var {index} = 0; {index} < {rows}.Count; {index}++)");
+                source.AppendLine("        {");
+                source.AppendLine($"            {values}.Add({rows}[{index}].{setColumns[0].PropertyName});");
+                source.AppendLine("        }");
+                source.AppendLine($"        return {values};");
+                break;
+
+            case PredicateUpdateReturn.Scalar:
+                var row = LocalName(method, "_row");
+                source.AppendLine($"        var {row} = await {query}.ConfigureAwait(false);");
+                source.AppendLine($"        return {row}?.{setColumns[0].PropertyName};");
+                break;
+
+            default:
+                source.AppendLine($"        return Inquiry.ExecuteAsync(_cmd, {cancellation});");
+                break;
+        }
+    }
+
+    // A method parameter can use a generated local's name, so the local takes trailing underscores until it is free.
+    private static string LocalName(StoreMethodData method, string name)
+    {
+        var suffix = 0;
+        while (method.Parameters.AsImmutableArray().Any(parameter => parameter.Name == name + new string('_', suffix)))
+        {
+            suffix++;
+        }
+
+        return name + new string('_', suffix);
     }
 
     /// <summary>
@@ -3260,6 +3310,9 @@ internal static class StoreOperationEmitter
         var stream = method.ReturnTypeDisplay.Contains("IAsyncEnumerable<");
         var result = method.Operation switch
         {
+            StoreOperation.UpdateByPredicate when method.PredicateUpdateReturn != PredicateUpdateReturn.RowCount => method.ReturnsList
+                ? "One entry per updated row, read as it is after the update, in no particular order. Empty when no row matches."
+                : "The updated row or value, read as it is after the update, or null when no row matches.",
             StoreOperation.Insert or StoreOperation.Upsert => method.ReturnsEntity
                 ? "A newly materialized result entity, or null when the operation returns no row. Use the returned key and database values; the input is not refreshed."
                 : "The provider's affected-row count, not a generated key. Database-generated values are not copied into the input.",

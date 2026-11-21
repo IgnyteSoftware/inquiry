@@ -7,8 +7,11 @@ namespace Inquiry.Stores;
 /// With one or more criteria, the method performs a partial update: leading scalar parameters map by
 /// name to SET columns and trailing parameters bind the criteria positionally.
 /// <see cref="InquirySetAttribute"/> can replace the inferred SET columns with compile-time expressions.
-/// A single-entity method returns either <see cref="bool"/> or the updated entity. The return type
-/// selects the generated command shape.
+/// A single-entity method returns either <see cref="bool"/> or the updated entity. A partial update
+/// returns the affected-row count as <c>Task&lt;int&gt;</c>, or the updated rows as they are after the
+/// update: <c>Task&lt;T?&gt;</c> for one row or <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> for every row,
+/// where <c>T</c> is the entity, an <c>[InquiryProjection]</c> of it, or the type of the single SET
+/// column. The return type selects the generated command shape.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
 public sealed class InquiryUpdateAttribute : Attribute

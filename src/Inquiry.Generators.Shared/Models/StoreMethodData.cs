@@ -26,6 +26,19 @@ internal enum ProcedureReturnKind
     TaskOfEntityList,
 }
 
+/// <summary>What a set-based <c>[InquiryUpdate]</c> returns, decided at discovery.</summary>
+internal enum PredicateUpdateReturn
+{
+    /// <summary><c>Task&lt;int&gt;</c>: the affected-row count.</summary>
+    RowCount,
+
+    /// <summary>The updated rows as the entity or an <c>[InquiryProjection]</c> of it.</summary>
+    Rows,
+
+    /// <summary>The updated value of the single SET column.</summary>
+    Scalar,
+}
+
 /// <summary>
 /// Value-equatable replacement for the old <c>StoreMethodModel</c>. Carries the store-method facts
 /// extracted in the discovery transform. <see cref="FieldNames"/> holds the raw
@@ -162,6 +175,23 @@ internal sealed record StoreMethodData(
     /// <c>ExecuteScalarAsync&lt;T&gt;</c>.
     /// </summary>
     public string? ScalarResultType { get; init; }
+
+    /// <summary>
+    /// For <see cref="StoreOperation.UpdateByPredicate"/>, what the method returns. With
+    /// <see cref="PredicateUpdateReturn.Rows"/>, <see cref="ResultElementTypeFqn"/> names the row type.
+    /// With <see cref="PredicateUpdateReturn.Scalar"/>, <see cref="ScalarResultType"/> names the value
+    /// type. <see cref="ReturnsList"/> selects the list form for both.
+    /// </summary>
+    public PredicateUpdateReturn PredicateUpdateReturn { get; init; }
+
+    /// <summary>
+    /// For a <see cref="PredicateUpdateReturn.Scalar"/> update, the value type without nullability,
+    /// compared with the SET column's property type.
+    /// </summary>
+    public string? ScalarResultComparisonType { get; init; }
+
+    /// <summary>For a <see cref="PredicateUpdateReturn.Scalar"/> update, whether the value type is <c>Nullable&lt;T&gt;</c>.</summary>
+    public bool ScalarResultIsNullableValueType { get; init; }
 
     /// <summary>
     /// For a select-list operation, the fully-qualified element type the method returns (the

@@ -53,6 +53,9 @@ internal sealed class SqliteSqlBuilder : SqlBuilder
     internal override string BuildSoftDeleteByKeyReturningSql(SqlBuildContext context)
         => BuildSoftDeleteByKeySql(context) + " RETURNING " + context.SelectColumns;
 
+    internal override string BuildUpdateByPredicateReturningSql(SqlBuildContext context, SqlBuildContext returning, string setClause, string whereClause)
+        => "UPDATE " + context.Table + " SET " + setClause + " WHERE " + whereClause + " RETURNING " + returning.SelectColumns;
+
     public override string BuildDeleteByKeySql(SqlBuildContext context)
         => "DELETE FROM " + context.Table + " WHERE " + context.KeyWriteWhereClause;
 
