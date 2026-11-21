@@ -41,6 +41,9 @@ IReadOnlyList<CategorySales> report = await inquiry.QueryListAsync<CategorySales
 
 `QueryAsync<T>` (streaming) and `QuerySingleOrDefaultAsync<T>` take the same DTOs.
 
+When the SQL is fixed, a store method with `[InquiryQuery]` can return the same DTO and bind its
+parameters by name. See [handwritten SQL](handwritten-queries.md) for when to use each.
+
 ## Column mapping
 
 Mapping is **by name, not by position**. Every public (or internal) instance property with a `set` or `init` accessor reads the result column that has the same name. Use a SQL alias when the column name differs from the property name. The SELECT-list order does not matter.
@@ -113,6 +116,7 @@ safely. They keep their own mapping and do not need the binding step.
 
 ## See also
 
+- [Handwritten SQL](handwritten-queries.md) — `[InquiryQuery]` store methods and `IInquiry` queries.
 - [Projections](projections.md) — column subsets of one entity, with generated SQL.
 - [Aggregates](aggregates.md) — single scalar results.
 - [Security](../security.md) — how interpolated ad-hoc SQL is parameterized.

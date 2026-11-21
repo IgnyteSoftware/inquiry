@@ -17,6 +17,13 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     public override bool ComputedColumnDeclaresStoreType => true;
     public override bool UseArrayInParameters => true;
 
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new()
+    {
+        BacktickIdentifiers = true,
+        BackslashEscapes = true,
+        HashComments = true,
+    };
+
     public override string ArrayParameterBinderFqn => "global::Inquiry.Parameters.InquiryJsonArrayParameter";
 
     protected override string RenderIn(string quotedColumn, string parameterName, DbTypeClass elementType)

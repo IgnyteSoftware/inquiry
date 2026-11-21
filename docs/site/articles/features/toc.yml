@@ -18,6 +18,8 @@
   href: view-entities.md
 - name: Ad-hoc DTOs
   href: ad-hoc-dtos.md
+- name: Handwritten SQL
+  href: handwritten-queries.md
 - name: Aggregates
   href: aggregates.md
 - name: Optimistic concurrency

@@ -28,4 +28,5 @@ internal enum StoreOperation
     StoredProcedure,
     SelectTopByOrder,
     GroupCount,
+    Query,
 }

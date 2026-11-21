@@ -1,3 +1,4 @@
+using Inquiry.Generators;
 using Inquiry.Generators.Abstractions;
 using Inquiry.Generators.Infrastructure;
 
@@ -106,6 +107,8 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
         => SqlServerTvpResolver.ResolveProcedure(context);
 
     public override bool SupportsStoredProcedures => true;
+
+    internal override HandwrittenSqlSyntax HandwrittenSqlSyntax { get; } = new() { BracketIdentifiers = true };
     public override bool SupportsProcedureReturnValue => true;
 
     public override string QuoteIdentifier(string identifier)

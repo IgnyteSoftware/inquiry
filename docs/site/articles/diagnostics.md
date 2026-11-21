@@ -1492,8 +1492,6 @@ Failing shape: `[InquiryColumn, InquiryDateTimeKind(DateTimeKind.Utc)] public Da
 
 Smallest correction: Remove the attribute from that property. `DateTimeOffset` already carries its offset. For a converter column, set the kind inside `FromProvider`, or use a converter whose provider type is `DateTime`. See [DateTime kind](entity-mapping.md#datetime-kind).
 
-[Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).
-
 ## INQ120
 
 Handwritten SQL result columns do not match the result type. Default: warning, enabled.
@@ -1534,5 +1532,15 @@ Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, 
 Failing shape: `[InquirySelectOneByKey(Exclude = new[] { nameof(Announcement.Id) })]`, where `Id` is the key.
 
 Smallest correction: Remove the column from `Exclude`. To read only a few columns into a different type, declare an [`[InquiryProjection]`](features/projections.md). See [Omit expensive columns](features/select-declarations.md#omit-expensive-columns).
+
+## INQ123
+
+InquiryQuery method is invalid. Default: error, enabled.
+
+Trigger: An `[InquiryQuery]` method cannot be generated. The SQL names a parameter that the method does not declare, or the method declares a parameter that the SQL does not use. Names match exactly, including case, and names in string literals, quoted identifiers and comments do not count. The diagnostic also reports two parameter names in the SQL that differ only in case, a parameter type that is not a bindable scalar, an unsupported return type, a row type that is not an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class of the same assembly, and `Scalar = true` on a row result. The message says which.
+
+Failing shape: `[InquiryQuery("SELECT * FROM [Activity] WHERE [TMemberKey] = @MemberKey")] Task<IReadOnlyList<Activity>> QueryAsync(int memberKey, CancellationToken cancellationToken = default);`
+
+Smallest correction: Make each SQL name match a parameter, here `@memberKey`, and use or remove every parameter. For SQL that declares local variables or changes at run time, use `IInquiry`. See [handwritten SQL](features/handwritten-queries.md).
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs).

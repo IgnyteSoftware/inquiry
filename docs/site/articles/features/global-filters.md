@@ -141,7 +141,7 @@ can enforce new values for callers outside generated stores too.
 | Insert, batch insert, bulk insert | No filter validation or stamping | Supplied values retained |
 | Upsert with an enforced filter | Rejected with INQ095 | No generated write |
 | Eager loading | Parameterized filters rejected; static filters supported, named ignore rejected | Not applicable |
-| Raw SQL, ad-hoc queries, stored procedures | No generated filter injection | No protection |
+| Raw SQL, ad-hoc queries, `[InquiryQuery]` methods, stored procedures | No generated filter injection | No protection |
 
 Batch/set-based mutation on a concurrency-token entity has separate restrictions (`INQ022`).
 A named ignore is read-only and cannot remove write enforcement. The filter policy applies to

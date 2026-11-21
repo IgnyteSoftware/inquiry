@@ -9,7 +9,7 @@ internal static class InquiryDiagnosticDescriptors
     //
     // IDs in use:      INQ001, INQ002, INQ004–INQ012, INQ014, INQ016, INQ017, INQ018–INQ023,
     //                  INQ024–INQ026, INQ028–INQ032, INQ035–INQ041, INQ042, INQ043, INQ044,
-    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ122. INQ076 is owned by SQL Server.
+    //                  INQ045–INQ075, INQ077–INQ086, INQ087–INQ096, INQ116–INQ123. INQ076 is owned by SQL Server.
     // Retired (do NOT reuse, keeps existing IDs stable): INQ003, INQ013, INQ015, INQ027 (projection
     //   on soft-delete, removed in P3 #14 — now supported).
     //
@@ -70,6 +70,7 @@ internal static class InquiryDiagnosticDescriptors
     //   INQ120         Handwritten SQL result columns (a generated result shape's column is missing from, or matched twice by, constant SQL read through IInquiry) [IN USE]
     //   INQ121         Upsert MatchOn                 (MatchOn names no unique index, an unusable property, or competes with another unique key on MySQL/MariaDB) [IN USE]
     //   INQ122         Select Exclude                 (an Exclude name is unknown, repeated, or names a column the read needs) [IN USE]
+    //   INQ123         Handwritten store query        ([InquiryQuery] unknown or unused parameter, unbindable parameter, unsupported return) [IN USE]
     // ---------------------------------------------------------------------------------------------
 
 
@@ -1181,4 +1182,10 @@ internal static class InquiryDiagnosticDescriptors
         "Store method '{0}' cannot exclude '{1}': {2}. Remove it from Exclude.",
         "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
         helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq122");
+
+    public static readonly DiagnosticDescriptor QueryInvalid = new(
+        "INQ123", "InquiryQuery method is invalid",
+        "Store method '{0}' has an invalid [InquiryQuery]: {1}",
+        "Inquiry", DiagnosticSeverity.Error, isEnabledByDefault: true,
+        helpLinkUri: "https://ignytesoftware.github.io/inquiry/articles/diagnostics.html#inq123");
 }

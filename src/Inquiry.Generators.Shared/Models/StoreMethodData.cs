@@ -255,4 +255,26 @@ internal sealed record StoreMethodData(
     /// <c>IReadOnlyList&lt;T&gt;</c> in the return tuple. Empty for non-multi-result methods.
     /// </summary>
     public EquatableArray<string> ProcedureResultSetTypeFqns { get; init; } = EquatableArray<string>.Empty;
+
+    /// <summary>The SQL of an <c>[InquiryQuery]</c> method, as written.</summary>
+    public string? QuerySql { get; init; }
+
+    /// <summary>The shape an <c>[InquiryQuery]</c> method returns.</summary>
+    public QueryReturnKind QueryReturn { get; init; }
+
+    /// <summary>The row type of a list or single-row <c>[InquiryQuery]</c> method.</summary>
+    public string? QueryResultTypeFqn { get; init; }
+
+    /// <summary>The name-mapped struct materializer generated for <see cref="QueryResultTypeFqn"/>.</summary>
+    public string? QueryMaterializerFqn { get; init; }
+}
+
+/// <summary>The shape an <c>[InquiryQuery]</c> method returns, decided at discovery.</summary>
+internal enum QueryReturnKind
+{
+    None,
+    List,
+    SingleOrDefault,
+    RowCount,
+    Scalar,
 }

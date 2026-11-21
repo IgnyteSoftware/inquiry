@@ -100,4 +100,7 @@ internal sealed record ParameterData(
     /// or null when this parameter is not a collection. Populated for stored-procedure TVP resolution.
     /// </summary>
     public Inquiry.Generators.Abstractions.DbTypeClass? ElementDbTypeClass { get; init; }
+
+    /// <summary>The parameter's type. <c>[InquiryQuery]</c> binds it as a column of this type.</summary>
+    public TypeData? ValueType { get; init; }
 }
