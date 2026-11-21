@@ -235,7 +235,19 @@ internal static class StoreProcessor
         }
 
         var fieldNames = ImmutableArray<string>.Empty;
-        if (operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
+        if (operation == StoreOperation.SelectOneByField)
+        {
+            // The constructor rejects a blank name only at run time, so check it here too.
+            var field = GeneratorHelpers.GetConstructorString(attribute);
+            if (string.IsNullOrWhiteSpace(field))
+            {
+                diagnostics.Add(DiagnosticData.Create(InquiryDiagnosticDescriptors.UnknownField, location, method.Name, "<none>"));
+                return null;
+            }
+
+            fieldNames = ImmutableArray.Create(field!);
+        }
+        else if (operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
         {
             var names = GeneratorHelpers.GetConstructorStringArray(attribute);
             if (names is null || names.Length == 0)
@@ -354,6 +366,12 @@ internal static class StoreProcessor
                     resultElementTypeFqn = selectElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 }
             }
+        }
+        else if (operation == StoreOperation.SelectOneByField)
+        {
+            returnsList = false;
+            TryGetSingleRowElementType(method.ReturnType, out var singleElement);
+            resultElementTypeFqn = singleElement.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         }
         else
         {
@@ -565,7 +583,8 @@ internal static class StoreProcessor
         var includeDeleted = operation is StoreOperation.SelectAll or StoreOperation.SelectAllEager
             or StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
-            or StoreOperation.SelectTopByOrder or StoreOperation.GroupCount &&
+            or StoreOperation.SelectTopByOrder or StoreOperation.GroupCount
+            or StoreOperation.SelectOneByField &&
             GeneratorHelpers.GetNamedBool(attribute, "IncludeDeleted");
         var distinct = operation is StoreOperation.SelectAll or StoreOperation.SelectAllByField
             or StoreOperation.SelectAllByPredicate &&
@@ -575,6 +594,7 @@ internal static class StoreProcessor
             GeneratorHelpers.GetNamedBool(attribute, "StampModified");
         var lockMode = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
+            or StoreOperation.SelectOneByField
             ? GeneratorHelpers.GetNamedInt(attribute, "LockMode") ?? 0
             : 0;
         var upsertMatchOn = operation == StoreOperation.Upsert
@@ -582,6 +602,7 @@ internal static class StoreProcessor
             : ImmutableArray<string>.Empty;
         var excludedColumnNames = operation is StoreOperation.SelectAll or StoreOperation.SelectOneByKey
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
+            or StoreOperation.SelectOneByField
             ? GeneratorHelpers.GetNamedStringArray(attribute, "Exclude").Select(static name => name ?? string.Empty).ToImmutableArray()
             : ImmutableArray<string>.Empty;
 
@@ -1432,6 +1453,9 @@ internal static class StoreProcessor
                 case "InquirySelectAllByFieldAttribute":
                     attribute = candidate;
                     return StoreOperation.SelectAllByField;
+                case "InquirySelectOneByFieldAttribute":
+                    attribute = candidate;
+                    return StoreOperation.SelectOneByField;
                 case "InquirySelectAllByPredicateAttribute":
                     attribute = candidate;
                     return StoreOperation.SelectAllByPredicate;
@@ -1523,6 +1547,8 @@ internal static class StoreProcessor
                 IsTaskOfReadOnlyList(returnType, entityType),
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectTopByOrder =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
+            // The element may be the entity or an [InquiryProjection] of it, resolved at emit.
+            StoreOperation.SelectOneByField => TryGetSingleRowElementType(returnType, out _),
             StoreOperation.Insert or StoreOperation.Upsert when returnsEntity =>
                 GeneratorHelpers.IsGenericType(returnType, "System.Threading.Tasks.Task<TResult>", entityType),
             StoreOperation.Insert or StoreOperation.Upsert =>
@@ -1690,6 +1716,23 @@ internal static class StoreProcessor
         => element.IsGenericType &&
             element.TypeArguments.Length == 1 &&
             element.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::Inquiry.GroupCount<TKey>";
+
+    // Task<T?> where T is a non-generic class: the entity or a projection of it. Lists, streams,
+    // scalars and a non-nullable T fail here so they report INQ005; no match returns null.
+    private static bool TryGetSingleRowElementType(ITypeSymbol returnType, out INamedTypeSymbol element)
+    {
+        element = null!;
+        if (returnType is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: 1 } task &&
+            task.ConstructedFrom.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) == "global::System.Threading.Tasks.Task<TResult>" &&
+            task.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false, SpecialType: SpecialType.None } candidate &&
+            candidate.NullableAnnotation != NullableAnnotation.NotAnnotated)
+        {
+            element = candidate;
+            return true;
+        }
+
+        return false;
+    }
 
     private static bool TryGetSelectElementType(ITypeSymbol returnType, out INamedTypeSymbol element, out bool isList)
     {
@@ -1889,7 +1932,7 @@ internal static class StoreProcessor
             // FieldColumns are equality-filter columns only for SelectAllByField. Other operations reuse
             // the slot for non-filter semantics — UpdateByPredicate puts its SET (written) columns there,
             // and FullTextSearch its full-text-indexed search columns — so neither is an "unindexed filter".
-            if (filterMethod.Operation == StoreOperation.SelectAllByField)
+            if (filterMethod.Operation is StoreOperation.SelectAllByField or StoreOperation.SelectOneByField)
             {
                 foreach (var fieldColumn in fieldCols)
                 {
@@ -2245,7 +2288,8 @@ internal static class StoreProcessor
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
         // opts into IncludeDeleted gets its own unfiltered per-method const instead of the shared one.
-        // Exact complement of the needsPerMethodSql gate below — a method is served by the shared
+        // Exact complement of the needsPerMethodSql gate below, for the operations that have a shared
+        // const (SelectOneByField has none and always gets its own) — a method is served by the shared
         // const precisely when no per-method shape (IncludeDeleted, Distinct, LockMode, named-filter
         // bypass) forces its own. Keeping the two in lockstep is what prevents both dead shared
         // consts and a bypass method silently falling back to filtered SQL.
@@ -2639,8 +2683,10 @@ internal static class StoreProcessor
         // and silently keep the filter it claims to bypass.
         foreach (var (method, fieldColumns, _, selectPlan) in valid)
         {
+            // A select-one-by-field always gets its own const: it has no shared form to fall back to.
             var needsPerMethodSql = (hasSoftDelete && method.IncludeDeleted) || method.Distinct || method.LockMode != 0
-                || method.IgnoredFilterNames.Count > 0 || method.ExcludedColumnNames.Count > 0;
+                || method.IgnoredFilterNames.Count > 0 || method.ExcludedColumnNames.Count > 0
+                || method.Operation == StoreOperation.SelectOneByField;
             // A projection method runs its _sqlProj_ const, built below, so an entity const here is never used.
             if (!needsPerMethodSql || selectPlan is not null || projectionMethods.ContainsKey(method.MemberName))
             {
@@ -2693,6 +2739,18 @@ internal static class StoreProcessor
                             if (lockError is not null)
                             { lockErrors[method.MemberName] = lockError; break; }
                         }
+                        AppendSql(field, sql);
+                        baseSelectFields[method.MemberName] = field;
+                        break;
+                    }
+
+                case StoreOperation.SelectOneByField:
+                    {
+                        // The member name alone is unique; a field-name prefix could make two names collide.
+                        var field = "_sqlSelectOneBy_" + method.MemberName;
+                        var lockError = TryBuildSelectOneByFieldSql(out var sql, sqlBuilder, methodCtx, method, fieldColumns);
+                        if (lockError is not null)
+                        { lockErrors[method.MemberName] = lockError; break; }
                         AppendSql(field, sql);
                         baseSelectFields[method.MemberName] = field;
                         break;
@@ -2873,6 +2931,15 @@ internal static class StoreProcessor
             {
                 LockMode = method.LockMode,
             };
+            if (method.Operation == StoreOperation.SelectOneByField)
+            {
+                var oneError = TryBuildSelectOneByFieldSql(out var oneSql, sqlBuilder, projCtx, method, fieldColumns);
+                if (oneError is not null)
+                { lockErrors[method.MemberName] = oneError; continue; }
+                AppendSql("_sqlProj_" + method.MemberName, oneSql);
+                continue;
+            }
+
             var projSql = method.Operation == StoreOperation.SelectAllByField
                 ? sqlBuilder.BuildSelectByFieldSql(projCtx, ToColumnList(fieldColumns), method.Distinct)
                 : sqlBuilder.BuildSelectAllSql(projCtx, method.Distinct);
@@ -3010,7 +3077,7 @@ internal static class StoreProcessor
                 documentedMethods[method] = documentedMethod;
                 // Project: select the projection's columns and materialize the projection type.
                 StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, entity, relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, "_sqlProj_" + method.MemberName, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities,
+                    sqlBuilder, "_sqlProj_" + method.MemberName, projection.FullyQualifiedName, projection.StructMaterializerFullName, entities: entities, storeName: store.Name,
                     procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings) ? tvpBindings : null);
             }
             else
@@ -3040,7 +3107,7 @@ internal static class StoreProcessor
                 };
                 documentedMethods[method] = documentedMethod;
                 StoreOperationEmitter.Emit(source, documentedMethod, fieldColumns, predicatePlan, selectPlan, WithLoadedRelations(entity, method), relationChildEntities, relationJunctionEntities,
-                    sqlBuilder, baseSelectField, structMatOverride: subsetMaterializer, entities: entities,
+                    sqlBuilder, baseSelectField, structMatOverride: subsetMaterializer, entities: entities, storeName: store.Name,
                     procedureTvpBindings: sprocTvpResolutions.TryGetValue(method, out var tvpBindings2) ? tvpBindings2 : null);
             }
         }
@@ -3195,6 +3262,9 @@ internal static class StoreProcessor
                 break;
             case StoreOperation.SelectOneByKey:
                 Add("query", baseSelectField ?? "_sqlSelectByKey");
+                break;
+            case StoreOperation.SelectOneByField when baseSelectField is not null:
+                Add("query", baseSelectField);
                 break;
             case StoreOperation.SelectOneByKeyEager:
                 Add("parent query", baseSelectField ?? "_sqlSelectByKey");
@@ -3560,6 +3630,7 @@ internal static class StoreProcessor
         {
             var ignoreFilterOperationValid = method.Operation is StoreOperation.SelectAll
                 or StoreOperation.SelectOneByKey or StoreOperation.SelectAllByField
+                or StoreOperation.SelectOneByField
                 or StoreOperation.SelectAllByPredicate or StoreOperation.SelectTopByOrder
                 or StoreOperation.GroupCount or StoreOperation.KeysetPage
                 or StoreOperation.FullTextSearch or StoreOperation.Count
@@ -3637,7 +3708,7 @@ internal static class StoreProcessor
             return false;
         }
 
-        if (method.Operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch)
+        if (method.Operation is StoreOperation.SelectAllByField or StoreOperation.FullTextSearch or StoreOperation.SelectOneByField)
         {
             var resolved = new List<ColumnData>(method.FieldNames.Count);
             foreach (var name in method.FieldNames)
@@ -5225,7 +5296,7 @@ internal static class StoreProcessor
                 entity.ConcurrencyToken is not null
                     ? parameters.Count == 2 && parameters[0].ComparisonDisplay == entity.FullyQualifiedName
                     : MatchesPositionalColumns(method, nonCancellationCount, entity.Keys.AsImmutableArray()),
-            StoreOperation.SelectAllByField =>
+            StoreOperation.SelectAllByField or StoreOperation.SelectOneByField =>
                 fieldColumns.Count > 0 && MatchesPositionalColumns(method, nonCancellationCount, fieldColumns),
             StoreOperation.Insert or StoreOperation.Update or StoreOperation.Upsert =>
                 parameters.Count == 2 && parameters[0].ComparisonDisplay == entity.FullyQualifiedName,
@@ -5745,6 +5816,22 @@ internal static class StoreProcessor
         {
             return ex.Message;
         }
+    }
+
+    // Returns the INQ039 reason when the provider cannot limit this locked shape to two rows correctly.
+    private static string? TryBuildSelectOneByFieldSql(out string sql, SqlBuilder sqlBuilder, SqlBuildContext context, StoreMethodData method, IReadOnlyList<ColumnData> fieldColumns)
+    {
+        try
+        {
+            sql = sqlBuilder.BuildSelectOneByFieldSql(context, ToColumnList(fieldColumns));
+        }
+        catch (System.NotSupportedException ex)
+        {
+            sql = string.Empty;
+            return ex.Message;
+        }
+
+        return method.LockMode == 0 ? null : TryApplyLockClause(ref sql, sqlBuilder, context, method);
     }
 
     private static string? TryApplyLockClause(ref string sql, SqlBuilder sqlBuilder, SqlBuildContext context, StoreMethodData method)

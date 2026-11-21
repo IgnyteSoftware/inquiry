@@ -5,8 +5,8 @@ a row, decide what to change, and write it back, and no other writer may change 
 Use `UpdateSkipLocked` to let several workers take items from the same queue without waiting for each
 other.
 
-`LockMode` is available on `[InquirySelectOneByKey]`, `[InquirySelectAll]`, `[InquirySelectAllByField]`
-and `[InquirySelectAllByPredicate]`. The default, `InquiryLockMode.None`, adds no lock clause.
+`LockMode` is available on `[InquirySelectOneByKey]`, `[InquirySelectOneByField]`, `[InquirySelectAll]`,
+`[InquirySelectAllByField]` and `[InquirySelectAllByPredicate]`. The default, `InquiryLockMode.None`, adds no lock clause.
 
 ## Modes and clauses
 
@@ -209,6 +209,10 @@ Keep these limits in mind when you adapt it:
   paging (`Paged = true`, or an `InquiryPagedResult<T>` return) with a lock mode on Oracle (ORA-02014).
   Remove `Distinct` or the paging, or remove the lock. MySQL, MariaDB and SQL Server run both
   combinations.
+- **`[InquirySelectOneByField]` with `UpdateSkipLocked` skips duplicates too.** A locked row is left
+  out, so a second matching row that another transaction holds does not make the read throw. On
+  Oracle the combination reports `INQ039`: Oracle applies the method's `ROWNUM <= 2` limit before
+  `SKIP LOCKED` drops locked rows, so the read could return `null` while an unlocked match exists.
 - **The total of an `InquiryPagedResult<T>` is not locked.** The lock mode applies to the SELECT that
   returns the page. The separate COUNT does not request row locks, so the total can change while you
   hold the page's rows.

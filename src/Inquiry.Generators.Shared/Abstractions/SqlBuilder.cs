@@ -620,6 +620,18 @@ public abstract class SqlBuilder
     public abstract string BuildSelectByKeySql(SqlBuildContext context);
 
     internal virtual string BuildSelectByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns, bool distinct = false)
+        => (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + FromTable(context) + " WHERE " + BuildFieldWhere(context, filterColumns);
+
+    /// <summary>
+    /// Builds the <c>[InquirySelectOneByField]</c> SELECT: the select-by-field query limited to two
+    /// rows, so the caller can detect a second match without reading every match. The default appends
+    /// <c>LIMIT 2</c>, which goes before a trailing lock clause.
+    /// </summary>
+    internal virtual string BuildSelectOneByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+        => BuildSelectByFieldSql(context, filterColumns) + " LIMIT 2";
+
+    /// <summary>The field equality terms AND-composed with the active-row predicate (no leading <c>WHERE</c>).</summary>
+    protected string BuildFieldWhere(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
     {
         var parts = new string[filterColumns.Count];
         for (var i = 0; i < filterColumns.Count; i++)
@@ -627,8 +639,7 @@ public abstract class SqlBuilder
             parts[i] = QuoteIdentifier(filterColumns[i].ColumnName) + " = " + ParameterName(filterColumns[i].PropertyName);
         }
 
-        var where = string.Join(" AND ", parts);
-        return (distinct ? "SELECT DISTINCT " : "SELECT ") + context.SelectColumns + " FROM " + FromTable(context) + " WHERE " + AppendWhere(where, context.ActiveRowPredicate);
+        return AppendWhere(string.Join(" AND ", parts), context.ActiveRowPredicate);
     }
 
     /// <summary>

@@ -261,6 +261,11 @@ internal sealed class SqlServerSqlBuilder : SqlBuilder
 
     protected override string TopOneSuffix => "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
 
+    // TOP, not OFFSET/FETCH: this query has no ORDER BY, which OFFSET/FETCH requires.
+    internal override string BuildSelectOneByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+        => "SELECT TOP (2) " + context.SelectColumns + " FROM " + FromTable(context)
+            + " WHERE " + BuildFieldWhere(context, filterColumns);
+
     /// <summary>
     /// SQL Server lacks the row-value <c>(a, b) &gt; (@c0, @c1)</c> comparison, so a multi-column keyset
     /// renders the lexicographic OR-form <c>(a &gt; @c0) OR (a = @c0 AND b &gt; @c1)</c>. Single-column

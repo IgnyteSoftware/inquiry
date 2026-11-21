@@ -7,7 +7,8 @@ rename for 1.0. Prefer explicit nameof fields over deriving query meaning from a
 
 Use InquirySelectAllByPredicate plus InquiryWhere as the canonical general filtering declaration.
 Use InquirySelectAllByField for equality-only filters, especially when returning a projection.
-Keep InquirySelectOneByKey as the explicit key lookup. InquirySelectAll remains the unfiltered form.
+Keep InquirySelectOneByKey as the explicit key lookup. Use InquirySelectOneByField to read one row by
+a non-key field that the application treats as unique. InquirySelectAll remains the unfiltered form.
 This is a documented division of capabilities, not a claim that all forms are interchangeable.
 
 The projection restriction on predicate selects is accepted for 1.0. They return the store entity,
@@ -23,6 +24,7 @@ entity columns is acceptable. Do not move filtering into memory merely to bypass
 | InquirySelectAllByField | Entity or projection; buffered list or stream | Listed fields joined by equality AND | Both | Ordered offset, buffered; optional total | No | Exclude, entity results only |
 | InquirySelectAllByPredicate + InquiryWhere | Entity only; buffered list or stream | Comparisons, groups, optional criteria | Both | Ordered offset, buffered; optional total | No | Exclude |
 | InquirySelectOneByKey | Nullable entity | Primary key | Not configurable | None | No | Exclude |
+| InquirySelectOneByField | Nullable entity or projection; a second match throws | One field by equality | Not configurable | None | No | Exclude, entity results only |
 | InquiryKeysetPage | InquiryPage of the entity and cursor | Cursor seek, not arbitrary InquiryWhere filters | Key-field order and one direction; no DISTINCT option | Keyset only | No | No |
 | InquirySelectAllEager / InquirySelectOneByKeyEager | Entity; buffered list or stream / nullable entity | All parents / primary key | Not configurable | None | Declared relationships, or those named by InquiryInclude | No |
 
@@ -59,6 +61,31 @@ public partial Task<IReadOnlyList<ProductSummary>> SummariesAsync(
     int? categoryId, CancellationToken ct = default);
 ```
 
+To read one row by a non-key field, use the single-row form. It returns the row, or null when no
+row matches:
+
+```csharp
+[InquirySelectOneByField(nameof(Product.ProductName))]
+public partial Task<Product?> GetByNameAsync(
+    string productName, CancellationToken ct = default);
+```
+
+The method follows the `QuerySingleOrDefaultAsync` rule: when more than one row matches, it throws
+`InvalidOperationException`, and the message names the store method and the field. Do not declare
+InquirySelectAllByField and call `SingleOrDefault()` on the list. That reads every match, and a
+duplicate surfaces as a generic LINQ error. The generated SQL reads at most two rows, which is enough
+to detect a duplicate: `LIMIT 2`, `TOP (2)` on SQL Server, and `ROWNUM <= 2` on Oracle. Oracle uses
+`ROWNUM` because it rejects `FOR UPDATE` together with `FETCH FIRST`. With `UpdateSkipLocked`, a
+locked duplicate is skipped rather than reported, and Oracle rejects the combination with INQ039; see
+[Row locking](row-locking.md#limitations).
+
+The method takes one parameter of the field's type, then the CancellationToken. The return type can
+also be a nullable projection. `IncludeDeleted`, `LockMode`, `Exclude`, global filters, and `InquiryIgnoreFilter`
+behave as on InquirySelectAllByField. An unknown field reports INQ007, a return type other than
+`Task<T?>` reports INQ005 (a non-nullable `Task<T>` only where nullable annotations are enabled), and a parameter that does not match the field type reports INQ006. To
+match on more than one field, use InquirySelectAllByPredicate. A database unique constraint on the
+field is still the reliable guard against duplicates; this method only detects them on read.
+
 An ordered offset query keeps values and paging parameters separate:
 
 ```csharp
@@ -91,7 +118,7 @@ see [bind criteria by name](query-composition.md#bind-criteria-by-name).
 ## Omit expensive columns
 
 `Exclude` reads the store entity without some of its columns, such as image or document bytes. It is
-available on InquirySelectAll, InquirySelectOneByKey, InquirySelectAllByField, and
+available on InquirySelectAll, InquirySelectOneByKey, InquirySelectAllByField, InquirySelectOneByField, and
 InquirySelectAllByPredicate. Here Announcement has an `int Id` key, `string Title`, and a
 `byte[]? Image`:
 

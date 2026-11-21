@@ -160,7 +160,7 @@ Trigger: The method return shape is not supported for its operation.
 
 Failing shape: A procedure returns Task&lt;List&lt;Product&gt;&gt;.
 
-Smallest correction: Use Task&lt;IReadOnlyList&lt;Product&gt;&gt; or IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list).
+Smallest correction: Use Task&lt;IReadOnlyList&lt;Product&gt;&gt; or IAsyncEnumerable&lt;Product&gt; for procedure rows, or another supported procedure result channel. See the [worked procedure repair](#unsupported-procedure-list). An [InquirySelectOneByField] method must return Task&lt;Product?&gt; or a nullable projection; a list, a stream, or, in a nullable-enabled context, a non-nullable Task&lt;Product&gt; reports INQ005.
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L90).
 
@@ -184,7 +184,7 @@ Trigger: A query field does not resolve to a mapped property or column.
 
 Failing shape: [InquirySelectAllByField("CategroyID")]
 
-Smallest correction: [InquirySelectAllByField(nameof(Product.CategoryID))]
+Smallest correction: [InquirySelectAllByField(nameof(Product.CategoryID))]. The same applies to [InquirySelectOneByField].
 
 [Source descriptor](https://github.com/IgnyteSoftware/inquiry/blob/main/src/Inquiry.Generators.Shared/Diagnostics/InquiryDiagnosticDescriptors.cs#L108).
 
@@ -1529,7 +1529,7 @@ Smallest correction: Declare the index, `[InquiryIndex(nameof(MemberKey), nameof
 
 Select Exclude names a column the read cannot omit. Default: error, enabled.
 
-Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, `[InquirySelectAllByField]` or `[InquirySelectAllByPredicate]` names a key column, the `[InquiryConcurrencyToken]` column, the `[InquirySoftDelete]` column, an `[InquiryGlobalFilter]` column, a foreign key that an `[InquiryRelation]` or `[InquiryManyToMany]` on any entity joins on, a column in the method's `OrderBy`, or a C# `required` property. It also reports a name that is not a mapped property or column, a name that matches more than one column, a name listed twice, a list that leaves a keyless view with no column, and `Exclude` on a method that returns a projection. The message names the column and the reason.
+Trigger: The `Exclude` list on `[InquirySelectAll]`, `[InquirySelectOneByKey]`, `[InquirySelectAllByField]`, `[InquirySelectOneByField]` or `[InquirySelectAllByPredicate]` names a key column, the `[InquiryConcurrencyToken]` column, the `[InquirySoftDelete]` column, an `[InquiryGlobalFilter]` column, a foreign key that an `[InquiryRelation]` or `[InquiryManyToMany]` on any entity joins on, a column in the method's `OrderBy`, or a C# `required` property. It also reports a name that is not a mapped property or column, a name that matches more than one column, a name listed twice, a list that leaves a keyless view with no column, and `Exclude` on a method that returns a projection. The message names the column and the reason.
 
 Failing shape: `[InquirySelectOneByKey(Exclude = new[] { nameof(Announcement.Id) })]`, where `Id` is the key.
 

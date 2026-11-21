@@ -27,6 +27,24 @@ public sealed class RowLockRegressionIntegrationTests
     }
 
     [SkippableFact]
+    public async Task SelectOneByFieldEnforcesCardinality()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldEnforcesCardinalityAsync(harness.Services);
+    }
+
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectOneByFieldLockHoldsTheRow(bool projection)
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldLockHoldsTheRowAsync(harness.Services, projection);
+    }
+
+    [SkippableFact]
     public async Task PagedLockModesRun()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

@@ -25,6 +25,24 @@ public sealed class RowLockRegressionIntegrationTests
         await RowLockRegressionScenarios.ProjectionReadHoldsTheRowOnlyWhenLockedAsync(harness.Services, byField, locked);
     }
 
+    [SkippableFact]
+    public async Task SelectOneByFieldEnforcesCardinality()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldEnforcesCardinalityAsync(harness.Services);
+    }
+
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectOneByFieldLockHoldsTheRow(bool projection)
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldLockHoldsTheRowAsync(harness.Services, projection);
+    }
+
     private Task<OracleTestHarness> CreateHarnessAsync()
         => OracleTestHarness.CreateFromDdlAsync(_fixture.AdminConnectionString, LockProbeSchema.OracleDdl, "lockreg", configureServices: LockRegressionCommandCounter.Register);
 }
