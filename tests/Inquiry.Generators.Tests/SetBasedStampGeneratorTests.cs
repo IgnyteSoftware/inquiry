@@ -127,6 +127,23 @@ public sealed partial class InquiryGeneratorTests
             text);
     }
 
+    [Fact]
+    public void StampModifiedStampNameIsReservedIgnoringCase()
+    {
+        // A parameter with the stamp's exact spelling must not let a predicate claim the same name in another case.
+        var result = RunGenerator(StampedMemberSource("""
+            [InquiryUpdate(StampModified = true)]
+            [InquiryWhere(nameof(Member.Status), JsonPath = "$.lastUpdatedBy")]
+            public partial Task<int> SetScoreAsync(int score, string LastUpdatedBy, CancellationToken cancellationToken = default);
+            """), dialect: "SqlServer");
+        AssertNoErrors(result);
+        var text = GetMemberStore(result);
+
+        var sql = text.Split('\n').Single(static line => line.Contains("_sqlUpdateWhere_SetScoreAsync =", StringComparison.Ordinal));
+        Assert.Contains("[LastUpdatedBy] = @LastUpdatedBy WHERE", sql, StringComparison.Ordinal);
+        Assert.DoesNotContain("= @lastUpdatedBy\";", sql, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("""
         [InquiryUpdate(StampModified = true)]

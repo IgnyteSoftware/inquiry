@@ -3403,8 +3403,8 @@ internal static class StoreProcessor
                 out predicatePlan,
                 setColumns,
                 leadingParameterCount: method.SetExpressions.Count > 0 ? expressionParameterCount : null,
-                reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1))
-                    .Concat(stampBindings.Select(static stamp => stamp.SqlParameterName)).ToArray(),
+                reservedParameterNames: setBindings.Select(static binding => binding.SqlParameterName.Substring(1)).ToArray(),
+                stampParameterNames: stampBindings.Select(static stamp => stamp.SqlParameterName).ToArray(),
                 setParameterIndexes: method.SetExpressions.Count > 0
                     ? setBindings.Select(static binding => binding.MethodParameterIndex).ToArray()
                     : setParameterIndexes))
@@ -3920,7 +3920,8 @@ internal static class StoreProcessor
         int trailingParameterCount = 0,
         int? leadingParameterCount = null,
         IReadOnlyCollection<string>? reservedParameterNames = null,
-        IReadOnlyCollection<int>? setParameterIndexes = null)
+        IReadOnlyCollection<int>? setParameterIndexes = null,
+        IReadOnlyCollection<string>? stampParameterNames = null)
     {
         plan = null;
         var nonCancellationCount = method.Parameters.Count - 1 - trailingParameterCount;
@@ -3967,6 +3968,14 @@ internal static class StoreProcessor
         {
             reservedIgnoringCase.UnionWith(reservedParameterNames.Where(reservedName =>
                 !method.Parameters.AsImmutableArray().Any(parameter => string.Equals(parameter.Name, reservedName, StringComparison.Ordinal))));
+        }
+
+        // A stamp has no method parameter, so a predicate name must avoid it ignoring case even when
+        // a parameter shares its exact spelling.
+        if (stampParameterNames is not null)
+        {
+            usedNames.UnionWith(stampParameterNames);
+            reservedIgnoringCase.UnionWith(stampParameterNames);
         }
 
         // Paging names are reserved after the filter above, because a C# parameter may use one (#543).
@@ -4361,11 +4370,6 @@ internal static class StoreProcessor
         => parameter.NonNullableComparisonDisplay == column.Type.NonNullableDisplayName;
 
     /// <summary>
-    /// The SQL bind name for a SET-expression parameter. It is the parameter name unless that equals a
-    /// filter bind name ignoring case (#288); then a numbered name that no column, parameter, filter
-    /// or earlier SET binding uses.
-    /// </summary>
-    /// <summary>
     /// Names the modified-* stamp parameters of a <c>StampModified</c> update. Each takes its property
     /// name unless that matches a SET or filter parameter ignoring case, because SQL Server and MySQL
     /// compare parameter names that way.
@@ -4403,6 +4407,11 @@ internal static class StoreProcessor
         return stamps;
     }
 
+    /// <summary>
+    /// The SQL bind name for a SET-expression parameter. It is the parameter name unless that equals a
+    /// filter bind name ignoring case (#288); then a numbered name that no column, parameter, filter
+    /// or earlier SET binding uses.
+    /// </summary>
     private static string SetExpressionSqlName(
         string name,
         EntityData entity,
