@@ -26,6 +26,22 @@ public sealed class RowLockRegressionIntegrationTests
     }
 
     [SkippableFact]
+    public async Task SelectOneByFieldEnforcesCardinality()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldEnforcesCardinalityAsync(harness.Services);
+    }
+
+    [SkippableFact]
+    public async Task SelectOneByFieldLockHoldsTheRow()
+    {
+        Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);
+        await using var harness = await CreateHarnessAsync();
+        await RowLockRegressionScenarios.SelectOneByFieldLockHoldsTheRowAsync(harness.Services);
+    }
+
+    [SkippableFact]
     public async Task PagedLockModesRun()
     {
         Skip.IfNot(_fixture.IsAvailable, _fixture.SkipReason);

@@ -30,7 +30,8 @@ internal static class StoreOperationEmitter
         string? resultTypeOverride = null,
         string? structMatOverride = null,
         IReadOnlyDictionary<string, EntityData>? entities = null,
-        IReadOnlyDictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>? procedureTvpBindings = null)
+        IReadOnlyDictionary<string, (ProcedureTvpResolution Resolution, string FieldName)>? procedureTvpBindings = null,
+        string? storeName = null)
     {
         // a projection-returning select overrides the materialized result type and its struct
         // materializer; all other operations use the store's entity.
@@ -98,6 +99,12 @@ internal static class StoreOperationEmitter
                 AppendHeader(source, method, parameters, isAsync: false);
                 // Buffered and streaming both use the immutable generated-command path.
                 EmitFastQueryByFields(source, sqlBuilder, method.Parameters, fieldColumns, entityType, structMat, cancellation, indent: "        ", sqlField: baseSelectField, returnsList: method.ReturnsList, filterBinder: filterBinder);
+                source.AppendLine("    }");
+                break;
+
+            case StoreOperation.SelectOneByField:
+                AppendHeader(source, method, parameters, isAsync: true);
+                EmitSelectOneByField(source, sqlBuilder, method, fieldColumns[0], entityType, structMat, cancellation, baseSelectField!, storeName, filterBinder);
                 source.AppendLine("    }");
                 break;
 
@@ -1238,6 +1245,38 @@ internal static class StoreOperationEmitter
         source.AppendLine($"{indent}    ),");
         source.AppendLine($"{indent}    default,");
         source.AppendLine($"{indent}    {cancellation});");
+    }
+
+    /// <summary>
+    /// Emits a <c>SelectOneByField</c> body. The SQL reads at most two rows; a second row throws with
+    /// the store method and field in the message.
+    /// </summary>
+    private static void EmitSelectOneByField(
+        StringBuilder source,
+        SqlBuilder sqlBuilder,
+        StoreMethodData method,
+        ColumnData fieldColumn,
+        string entityType,
+        string structMat,
+        string cancellation,
+        string sqlField,
+        string? storeName,
+        string? filterBinder)
+    {
+        var fieldParam = method.Parameters[0];
+        var qualifiedName = storeName is null ? method.Name : storeName + "." + method.Name;
+        var message = $"Store method '{qualifiedName}' expects at most one row with a matching '{fieldColumn.PropertyName}', but more than one row matched.";
+        source.AppendLine($"        var _rows = await Inquiry.QueryListAsync<{entityType}, {fieldParam.TypeDisplay}, {structMat}>(");
+        source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{fieldParam.TypeDisplay}>(");
+        source.AppendLine($"                {sqlField},");
+        source.AppendLine($"                {fieldParam.Identifier},");
+        AppendBinderLambda(source, sqlBuilder, "_arg", new[] { fieldColumn }, _ => "_arg", "                ", emitSizePrecision: true, trailingComma: false, filterBinder: filterBinder);
+        source.AppendLine("            ),");
+        source.AppendLine("            default,");
+        source.AppendLine($"            {cancellation},");
+        source.AppendLine("            capacityHint: 2).ConfigureAwait(false);");
+        source.AppendLine($"        if (_rows.Count > 1) throw new global::System.InvalidOperationException({GeneratorHelpers.Literal(message)});");
+        source.AppendLine("        return _rows.Count == 0 ? null : _rows[0];");
     }
 
     /// <summary>
@@ -3382,6 +3421,8 @@ internal static class StoreOperationEmitter
             StoreOperation.BulkInsert => "The number of rows reported by the bulk operation, not generated keys.",
             StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager or StoreOperation.SelectTopByOrder
                 => "The matching entity, or null when no row matches.",
+            StoreOperation.SelectOneByField
+                => "The matching result, or null when no row matches. More than one matching row throws InvalidOperationException.",
             StoreOperation.Exists => "Whether a matching row exists.",
             StoreOperation.Count => "The number of matching rows, converted to the declared scalar type.",
             StoreOperation.Aggregate => "The aggregate converted to the declared type; SQL NULL becomes default(T).",

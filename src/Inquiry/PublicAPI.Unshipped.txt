@@ -27,3 +27,12 @@ Inquiry.Stores.InquiryQueryAttribute.Scalar.set -> void
 Inquiry.Stores.InquiryQueryAttribute.Sql.get -> string!
 Inquiry.InquiryExceptionExtensions
 static Inquiry.InquiryExceptionExtensions.IsUniqueViolation(this System.Exception! exception) -> bool
+Inquiry.Stores.InquirySelectOneByFieldAttribute
+Inquiry.Stores.InquirySelectOneByFieldAttribute.Exclude.get -> string![]?
+Inquiry.Stores.InquirySelectOneByFieldAttribute.Exclude.set -> void
+Inquiry.Stores.InquirySelectOneByFieldAttribute.Field.get -> string!
+Inquiry.Stores.InquirySelectOneByFieldAttribute.IncludeDeleted.get -> bool
+Inquiry.Stores.InquirySelectOneByFieldAttribute.IncludeDeleted.set -> void
+Inquiry.Stores.InquirySelectOneByFieldAttribute.InquirySelectOneByFieldAttribute(string! field) -> void
+Inquiry.Stores.InquirySelectOneByFieldAttribute.LockMode.get -> Inquiry.Stores.InquiryLockMode
+Inquiry.Stores.InquirySelectOneByFieldAttribute.LockMode.set -> void

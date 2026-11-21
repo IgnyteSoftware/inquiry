@@ -29,4 +29,5 @@ internal enum StoreOperation
     SelectTopByOrder,
     GroupCount,
     Query,
+    SelectOneByField,
 }

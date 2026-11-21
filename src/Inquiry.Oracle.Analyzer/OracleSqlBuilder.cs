@@ -457,6 +457,12 @@ internal sealed class OracleSqlBuilder : SqlBuilder
 
     protected override string TopOneSuffix => "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
 
+    // ROWNUM, not FETCH FIRST: Oracle rejects FOR UPDATE with a row-limiting clause (ORA-02014),
+    // and this query must still accept LockMode.
+    internal override string BuildSelectOneByFieldSql(SqlBuildContext context, IReadOnlyList<IColumn> filterColumns)
+        => "SELECT " + context.SelectColumns + " FROM " + FromTable(context)
+            + " WHERE " + AppendWhere(BuildFieldWhere(context, filterColumns), "ROWNUM <= 2");
+
     /// <summary>
     /// Oracle does not support a row-value <c>(a, b) &gt; (@c0, @c1)</c> comparison, so a multi-column
     /// keyset renders the lexicographic OR-form <c>(a &gt; @c0) OR (a = @c0 AND b &gt; @c1)</c>.

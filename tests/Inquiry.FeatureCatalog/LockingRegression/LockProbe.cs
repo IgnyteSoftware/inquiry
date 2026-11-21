@@ -60,6 +60,12 @@ public partial class LockProbeStore : InquiryStore<LockProbe>
 
     [InquirySelectAllByField("State")]
     public partial Task<IReadOnlyList<LockProbeSummary>> SummariesByStateAsync(int state, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByField(nameof(LockProbe.State))]
+    public partial Task<LockProbe?> GetByStateAsync(int state, CancellationToken cancellationToken = default);
+
+    [InquirySelectOneByField(nameof(LockProbe.State), LockMode = InquiryLockMode.Update)]
+    public partial Task<LockProbeSummary?> SummaryByStateForUpdateAsync(int state, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Per-dialect DDL for the <see cref="LockProbe"/> table.</summary>

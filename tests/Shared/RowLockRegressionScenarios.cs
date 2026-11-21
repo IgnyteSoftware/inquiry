@@ -58,6 +58,48 @@ internal static class RowLockRegressionScenarios
         Assert.Equal(1, (await GetAsync(services, 1)).Attempts);
     }
 
+    /// <summary>
+    /// <c>[InquirySelectOneByField]</c> (#609): one match returns the row, no match returns null, and two
+    /// matches throw with the store method and field in the message.
+    /// </summary>
+    internal static async Task SelectOneByFieldEnforcesCardinalityAsync(IServiceProvider services)
+    {
+        await SeedAsync(services, ShapeRows());
+
+        await using var scope = services.CreateAsyncScope();
+        var probes = scope.ServiceProvider.GetRequiredService<LockProbeStore>();
+        Assert.Equal(5, (await probes.GetByStateAsync(3))?.Id);
+        Assert.Null(await probes.GetByStateAsync(9));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => probes.GetByStateAsync(1));
+        Assert.Contains("'LockProbeStore.GetByStateAsync'", error.Message, StringComparison.Ordinal);
+        Assert.Contains("'State'", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A locked <c>[InquirySelectOneByField]</c> projection read holds its row: the writer waits until the
+    /// holder commits. This also proves the two-row limit and the lock clause combine on each engine.
+    /// </summary>
+    internal static async Task SelectOneByFieldLockHoldsTheRowAsync(IServiceProvider services)
+    {
+        await SeedAsync(services, new LockProbe { Id = 1, State = 1 });
+
+        await using var holder = services.CreateAsyncScope();
+        var inquiry = holder.ServiceProvider.GetRequiredService<IInquiry>();
+        var probes = holder.ServiceProvider.GetRequiredService<LockProbeStore>();
+        Task<bool> writer;
+        await using (var transaction = await inquiry.BeginTransactionAsync())
+        {
+            Assert.Equal(1, (await probes.SummaryByStateForUpdateAsync(1))?.Id);
+
+            writer = await StartAsync(services, () => UpdateAsync(services, new LockProbe { Id = 1, State = 1, Attempts = 1 }));
+            await AssertBlockedAsync(writer);
+            await transaction.CommitAsync();
+        }
+
+        Assert.True(await writer.WaitAsync(_completesWithin));
+        Assert.Equal(1, (await GetAsync(services, 1)).Attempts);
+    }
+
     /// <summary>Five rows over three states, for the paging and DISTINCT checks.</summary>
     internal static LockProbe[] ShapeRows() =>
     [
