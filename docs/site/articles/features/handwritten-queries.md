@@ -114,7 +114,7 @@ Because every `@name` must be a method parameter, SQL that declares SQL Server l
 | `Task<IReadOnlyList<T>>` | Every row. An empty result is an empty list. |
 | `Task<T?>` | The only row, or `null`. More than one row throws `InvalidOperationException`. |
 | `Task<int>` | The affected-row count from the provider. |
-| `Task<TScalar>` | The first column of the first row, converted to `TScalar`. No row or SQL `NULL` gives `default`. `TScalar` is a number, `bool`, `string`, `DateTime` or enum, or a nullable one. |
+| `Task<TScalar>` | The first column of the first row, converted to `TScalar`. No row or SQL `NULL` gives `default`. `TScalar` is `byte`, `short`, `int`, `long`, `float`, `double`, `decimal`, `bool`, `string` or `DateTime`, or a nullable one. For any other single value, such as a `Guid`, an enum or an unsigned number, return a one-property `[InquiryAdHoc]` row. |
 
 `T` is an `[InquiryTable]`, `[InquiryView]`, `[InquiryProjection]` or `[InquiryAdHoc]` class in the
 same assembly as the store. Entity and projection rows match their mapped column names, such as an

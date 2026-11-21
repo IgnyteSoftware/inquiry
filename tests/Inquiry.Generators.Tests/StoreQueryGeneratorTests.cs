@@ -222,6 +222,10 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("public partial Task<int> RunAsync(IEnumerable<int> ids, CancellationToken cancellationToken = default);", "not a scalar type Inquiry can bind")]
     [InlineData("public partial Task<DateOnly> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
     [InlineData("public partial Task<Guid?> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
+    [InlineData("public partial Task<uint> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
+    [InlineData("public partial Task<Activity> RunAsync(CancellationToken cancellationToken = default);", "Declare Task<Activity?>")]
+    [InlineData("public partial Task<long> RunAsync(CancellationToken first, CancellationToken cancellationToken = default);", "CancellationToken before the last parameter")]
+    [InlineData("public partial Task<DayOfWeek> RunAsync(CancellationToken cancellationToken = default);", "converts on every provider")]
     public void Query_UnsupportedShapesReportINQ123(string declaration, string expected)
     {
         var source = QueryHeader + $$"""
@@ -297,6 +301,18 @@ public sealed partial class InquiryGeneratorTests
         AssertNoErrors(result);
     }
 
+    [Fact]
+    public void Query_NameWithACombiningMarkMatchesItsParameter()
+    {
+        var source = QueryHeader + """
+                [InquiryQuery("SELECT COUNT(*) FROM Activity WHERE Id = @café")]
+                public partial Task<long> CountAsync(long café, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        AssertNoErrors(RunGenerator(source));
+    }
+
     [Theory]
     [InlineData("SqlServer", "SELECT COUNT(*) FROM Activity WHERE Id = @id /* outer /* inner */ @ignored */")]
     [InlineData("PostgreSql", "SELECT COUNT(*) FROM Activity WHERE Id = @id /* outer /* inner */ @ignored */")]
@@ -304,6 +320,7 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("MySql", "SELECT COUNT(*) FROM Activity WHERE Id = @id -- @ignored")]
     [InlineData("Oracle", "SELECT COUNT(*) FROM \"Order Details\"@remote WHERE Id = :id")]
     [InlineData("Oracle", "SELECT COUNT(*) FROM ACTIVITY#@remote WHERE Id = :id")]
+    [InlineData("SqlServer", "-- comment\\rSELECT COUNT(*) FROM Activity WHERE Id = @id")]
     [InlineData("Oracle", "SELECT COUNT(*) FROM Activity WHERE Id = :id AND Note <> nq'[it's @ghost]'")]
     public void Query_DialectScanFindsOnlyRealParameters(string dialect, string sql)
     {

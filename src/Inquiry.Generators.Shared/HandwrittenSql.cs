@@ -147,11 +147,14 @@ internal static class HandwrittenSql
 
     private static bool IsNameStart(char c) => c == '_' || char.IsLetter(c);
 
-    private static bool IsNamePart(char c) => c == '_' || char.IsLetterOrDigit(c);
+    // C# identifier-part characters, so a name matches the method parameter it binds to.
+    private static bool IsNamePart(char c) => c == '_' || char.IsLetterOrDigit(c) || char.GetUnicodeCategory(c) is
+        System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.SpacingCombiningMark
+        or System.Globalization.UnicodeCategory.ConnectorPunctuation or System.Globalization.UnicodeCategory.Format;
 
     private static int SkipLine(string sql, int index)
     {
-        var end = sql.IndexOf('\n', index);
+        var end = sql.IndexOfAny(['\r', '\n'], index);
         return end < 0 ? sql.Length : end + 1;
     }
 

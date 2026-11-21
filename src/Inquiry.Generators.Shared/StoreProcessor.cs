@@ -679,6 +679,12 @@ internal static class StoreProcessor
         }
         else if (GetQueryMaterializer(result, method) is { } rowMaterializer)
         {
+            // No row is a null result, so a non-nullable declaration would not match the generated call.
+            if (result.NullableAnnotation == NullableAnnotation.NotAnnotated)
+            {
+                return $"a single-row method returns null when there is no row. Declare Task<{result.Name}?>.";
+            }
+
             materializerFqn = rowMaterializer;
             kind = QueryReturnKind.SingleOrDefault;
             resultTypeFqn = result.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -696,22 +702,22 @@ internal static class StoreProcessor
         }
         else
         {
-            return $"the result type '{result.ToDisplayString()}' is neither a mapped row type nor a scalar Inquiry converts on every provider (a number, bool, string, DateTime or enum). {supported} To read another single value, return a one-property [InquiryAdHoc] row.";
+            return $"the result type '{result.ToDisplayString()}' is neither a mapped row type nor a scalar Inquiry converts on every provider (byte, short, int, long, float, double, decimal, bool, string or DateTime). {supported} To read another single value, return a one-property [InquiryAdHoc] row.";
         }
 
         return scalar ? "Scalar = true cannot be combined with a row result. Remove Scalar, or return Task<TScalar>." : null;
     }
 
     // Scalar results go through ScalarConvert, which relies on Convert.ChangeType. Guid, DateOnly,
-    // TimeOnly, DateTimeOffset and byte[] arrive as text or another type on some providers and do not convert.
+    // TimeOnly, DateTimeOffset and byte[] arrive as text or another type on some providers. Unsigned
+    // values are stored as their signed partner, and Oracle returns enums as decimal, so neither
+    // converts back. Row materializers handle all of these.
     private static bool IsConvertibleQueryScalar(TypeData type)
-        => !type.IsByteArray && !type.IsGuid && !type.IsDateOnly && !type.IsTimeOnly
-            && (type.IsEnum ? type.EnumUnderlyingSpecialType : type.SpecialType) is SpecialType.System_Boolean
-                or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Int16
-                or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32
-                or SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single
-                or SpecialType.System_Double or SpecialType.System_Decimal or SpecialType.System_String
-                or SpecialType.System_DateTime;
+        => !type.IsByteArray && !type.IsGuid && !type.IsDateOnly && !type.IsTimeOnly && !type.IsEnum
+            && type.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte
+                or SpecialType.System_Int16 or SpecialType.System_Int32 or SpecialType.System_Int64
+                or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal
+                or SpecialType.System_String or SpecialType.System_DateTime;
 
     /// <summary>
     /// The materializer for an <c>[InquiryQuery]</c> row type: the name-mapped struct that the entity,
@@ -753,10 +759,16 @@ internal static class StoreProcessor
     /// <summary>Returns the INQ123 reason when an <c>[InquiryQuery]</c> parameter cannot be bound, or null.</summary>
     private static string? FindUnbindableQueryParameter(ImmutableArray<ParameterData> parameters)
     {
-        foreach (var parameter in parameters)
+        for (var i = 0; i < parameters.Length; i++)
         {
+            var parameter = parameters[i];
             if (parameter.IsCancellationToken)
             {
+                if (i != parameters.Length - 1)
+                {
+                    return $"parameter '{parameter.Name}' is a CancellationToken before the last parameter. Declare one CancellationToken, last.";
+                }
+
                 continue;
             }
 
