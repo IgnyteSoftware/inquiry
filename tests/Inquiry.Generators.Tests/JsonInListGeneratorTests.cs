@@ -24,11 +24,11 @@ public sealed partial class InquiryGeneratorTests
         var text = GeneratedProductStoreText(result);
 
         Assert.Contains("[CategoryId] IN (SELECT [value] FROM OPENJSON(@CategoryId) WITH ([value] INT '$'))", text);
-        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind(_c, \"@CategoryId\", categoryIds, \"int\", 7);", text);
+        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind(_c, \"@CategoryId\", categoryIds, \"int\", 7, false);", text);
         // Short integer lists keep rc.1's scalar binding; JSON replaces only the long-list transport.
         Assert.Contains("\"@CategoryId_in0\"", text);
         Assert.Contains("[ProductName] IN (SELECT [value] FROM OPENJSON(@ProductName) WITH ([value] NVARCHAR(MAX) '$'))", text);
-        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind(_c, \"@ProductName\", names, \"nvarchar\", 7);", text);
+        Assert.Contains("global::Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind(_c, \"@ProductName\", names, \"nvarchar\", 7, false);", text);
         Assert.DoesNotContain("InquiryTvpParameter", text);
         Assert.DoesNotContain("_inquiryTvpDescriptor_", text);
 
@@ -56,7 +56,7 @@ public sealed partial class InquiryGeneratorTests
         var text = GeneratedProductStoreText(result);
 
         Assert.Contains("[CategoryId] IN (SELECT [value] FROM OPENJSON(@CategoryId) WITH ([value] INT '$'))", text);
-        Assert.Contains("InquiryJsonInParameter.Bind(_c, \"@CategoryId\", categoryIds, \"int\", 7);", text);
+        Assert.Contains("InquiryJsonInParameter.Bind(_c, \"@CategoryId\", categoryIds, \"int\", 7, false);", text);
         Assert.Contains("[ProductName] IN (SELECT [Value] FROM @ProductName)", text);
         Assert.Contains("InquiryTvpParameter.Bind(_c, \"@ProductName\", names, \"[dbo].[Inquiry_Tvp_", text);
 

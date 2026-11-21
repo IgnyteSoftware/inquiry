@@ -20,4 +20,4 @@ Inquiry.SqlServer.Parameters.InquiryJsonInParameter
 Inquiry.SqlServer.SqlServerInListBindingAttribute
 Inquiry.SqlServer.SqlServerInListBindingAttribute.Binding.get -> Inquiry.Stores.InListBinding
 Inquiry.SqlServer.SqlServerInListBindingAttribute.SqlServerInListBindingAttribute(Inquiry.Stores.InListBinding binding) -> void
-static Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, string! sqlType, int scale) -> void
+static Inquiry.SqlServer.Parameters.InquiryJsonInParameter.Bind<T>(System.Data.Common.DbCommand! command, string! parameterName, System.Collections.Generic.IEnumerable<T>? values, string! sqlType, int scale, bool nullable) -> void

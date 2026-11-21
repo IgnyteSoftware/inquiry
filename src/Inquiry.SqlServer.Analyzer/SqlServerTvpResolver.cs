@@ -28,17 +28,17 @@ internal static class SqlServerTvpResolver
         }
 
         var resolved = physical!;
+        var nullable = context.ElementIsNullable || context.Column.ProviderValueIsNullable;
         if (context.UsesJson)
         {
             // The scale only drives temporal truncation, so other types pass the binder's neutral 7.
             var scale = resolved.SystemType is "datetime2" or "datetimeoffset" or "time" ? resolved.Scale : 7;
             return new(null, null)
             {
-                TransportArguments = "\"" + resolved.SystemType + "\", " + scale.ToString(CultureInfo.InvariantCulture),
+                TransportArguments = "\"" + resolved.SystemType + "\", " + scale.ToString(CultureInfo.InvariantCulture) + ", " + (nullable ? "true" : "false"),
             };
         }
 
-        var nullable = context.ElementIsNullable || context.Column.ProviderValueIsNullable;
         var signature = resolved.Canonical + "|nullable=" + (nullable ? "1" : "0");
         var schema = string.IsNullOrWhiteSpace(context.OwningSchema) ? "dbo" : context.OwningSchema!;
         var hash = Hash("sqlserver-tvp-v2|element=" + signature);

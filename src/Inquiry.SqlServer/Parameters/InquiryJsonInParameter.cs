@@ -20,7 +20,8 @@ public static class InquiryJsonInParameter
     /// <param name="values">The elements; null binds an empty array.</param>
     /// <param name="sqlType">The generator-resolved SQL Server system type of the column, such as <c>datetime2</c>.</param>
     /// <param name="scale">The column's fractional-second scale for temporal types, 0 to 7.</param>
-    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string sqlType, int scale)
+    /// <param name="nullable">False when a null element is an error, as it is for a <c>NOT NULL</c> table type.</param>
+    public static void Bind<T>(DbCommand command, string parameterName, IEnumerable<T>? values, string sqlType, int scale, bool nullable)
     {
         ArgumentNullException.ThrowIfNull(command);
 
@@ -34,7 +35,7 @@ public static class InquiryJsonInParameter
         // A fixed nvarchar(max) keeps one sp_executesql signature for every list length.
         command.Parameters.Add(new SqlParameter(parameterName, SqlDbType.NVarChar, -1)
         {
-            Value = ToJsonArray(values, sqlType, scale),
+            Value = ToJsonArray(nullable || values is null ? values : RejectNulls(values), sqlType, scale),
         });
     }
 
@@ -78,6 +79,21 @@ public static class InquiryJsonInParameter
         }
 
         return InquiryJsonArrayParameter.ToJsonArray(values);
+    }
+
+    private static IEnumerable<T> RejectNulls<T>(IEnumerable<T> values)
+    {
+        var index = 0;
+        foreach (var value in values)
+        {
+            if (value is null)
+            {
+                throw new InvalidOperationException($"IN list element at index {index} is null but the column is NOT NULL.");
+            }
+
+            index++;
+            yield return value;
+        }
     }
 
     private static string FormatDateTime(DateTime value, string sqlType, int scale)

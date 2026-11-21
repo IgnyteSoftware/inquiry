@@ -180,6 +180,8 @@ public sealed class JsonInListIntegrationTests
         Assert.Equal(2, await store.CountByPayloadAsync([[1, 2, 3, 4, 5], []]));
         Assert.Equal(0, await store.CountByPayloadAsync([[1, 2, 3, 4]]));
         Assert.Equal(1, await store.CountByOptionalNumberAsync([null, 42]));
+        // A null element over a NOT NULL column is rejected, as the NOT NULL table type rejects it.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.CountByCaseInsensitiveAsync(["Alpha", null!]));
         Assert.Equal(1, await store.CountByGuidAsync([Guid.Parse("66666666-7777-8888-9999-000000000000")]));
     }
 
