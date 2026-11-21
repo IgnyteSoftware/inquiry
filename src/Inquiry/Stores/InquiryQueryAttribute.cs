@@ -18,13 +18,15 @@ namespace Inquiry.Stores;
 /// <c>Task&lt;IReadOnlyList&lt;T&gt;&gt;</c> or <c>Task&lt;T?&gt;</c> (single row or <see langword="null"/>),
 /// where <c>T</c> is an <c>[InquiryTable]</c>, <c>[InquiryView]</c>, <c>[InquiryProjection]</c> or
 /// <c>[InquiryAdHoc]</c> type of the same assembly; <c>Task&lt;int&gt;</c> for the affected-row
-/// count; or <c>Task&lt;TScalar&gt;</c> for the first column of the first row, where <c>TScalar</c> is a signed
-/// number, <c>byte</c>, <c>bool</c>, <c>string</c> or <see cref="DateTime"/>. Result columns map to
-/// properties by name. Set <see cref="Scalar"/> to read a <c>Task&lt;int&gt;</c> method as a scalar.
+/// count; or <c>Task&lt;TScalar&gt;</c> for the first column of the first row, where <c>TScalar</c> is
+/// <c>byte</c>, <c>short</c>, <c>int</c>, <c>long</c>, <c>float</c>, <c>double</c>, <c>decimal</c>, <c>bool</c>,
+/// <c>string</c> or <see cref="DateTime"/>, or a nullable one. Result columns map to
+/// the row type by name. Set <see cref="Scalar"/> to read a <c>Task&lt;int&gt;</c> method as a scalar.
 /// </para>
 /// <para>
 /// The method runs in the active Inquiry transaction when there is one. Global filters, soft-delete
-/// filters and audit values do not apply to handwritten SQL.
+/// filters and audit values do not apply to handwritten SQL. A store over an
+/// <c>[InquiryView]</c> entity cannot declare query methods, because the SQL can write.
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]

@@ -2573,6 +2573,10 @@ internal static class StoreProcessor
             {
                 var tokens = HandwrittenSql.FindBindTokens(method.QuerySql!, sqlBuilder.HandwrittenSqlSyntax);
                 AppendSql("_sqlQuery_" + method.MemberName, HandwrittenSql.Rewrite(method.QuerySql!, tokens, sqlBuilder.ParameterName));
+
+                // The body names the const through the store type, so a method parameter with the
+                // same name cannot replace the SQL.
+                baseSelectFields[method.MemberName] = store.FullyQualifiedName + "._sqlQuery_" + method.MemberName;
             }
         }
 
@@ -3400,9 +3404,9 @@ internal static class StoreProcessor
         selectPlan = null;
 
         // A view-mapped entity is read-only: reject any non-read operation up front (INQ052). That
-        // is every mutating operation, plus [InquiryStoredProcedure] — a procedure is arbitrary SQL
-        // not bound to the view and can write, so it must not ride a read-only view store.
-        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation == StoreOperation.StoredProcedure))
+        // is every mutating operation, plus [InquiryStoredProcedure] and [InquiryQuery]. Both run arbitrary SQL
+        // that is not bound to the view and can write, so neither may ride a read-only view store.
+        if (entity.IsView && (IsMutatingOperation(method.Operation) || method.Operation is StoreOperation.StoredProcedure or StoreOperation.Query))
         {
             context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
             return false;
@@ -3417,13 +3421,6 @@ internal static class StoreProcessor
 
         if (method.Operation == StoreOperation.Query)
         {
-            // A view store is read-only, so it cannot declare an affected-row count.
-            if (entity.IsView && method.QueryReturn == QueryReturnKind.RowCount)
-            {
-                context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.ViewIsReadOnly, method.Location?.ToLocation(), method.Name, StripGlobalPrefix(entity.FullyQualifiedName)));
-                return false;
-            }
-
             if (method.Parameters.Count == 0 || !method.Parameters[method.Parameters.Count - 1].IsCancellationToken)
             {
                 context.ReportDiagnostic(Diagnostic.Create(InquiryDiagnosticDescriptors.InvalidParameters, method.Location?.ToLocation(), method.Name));

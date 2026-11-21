@@ -134,13 +134,15 @@ internal static class HandwrittenSql
         return builder.ToString();
     }
 
-    // A prefix after a word, a closing identifier quote or a second prefix is not a parameter: SQL
-    // Server @@ROWCOUNT, PostgreSQL x::int and Oracle table@dblink or "Order Details"@dblink stay as written.
+    // A second prefix is never a parameter, so SQL Server @@ROWCOUNT and x::int stay as written. An @
+    // or $ after a word or a closing identifier quote is not one either: Oracle table@dblink and
+    // "Order Details"@dblink, and SQLite names that contain $. A colon starts a bind even after a
+    // word, as in SQLite SELECT:id, because neither dialect that accepts it uses it inside names.
     private static bool IsBindStart(string sql, int index, char prefix)
         => index + 1 < sql.Length
             && IsNameStart(sql[index + 1])
-            && !PrecededByWord(sql, index)
-            && (index == 0 || (sql[index - 1] != prefix && sql[index - 1] is not ('"' or ']' or '`')));
+            && (index == 0 || sql[index - 1] != prefix)
+            && (prefix == ':' || (!PrecededByWord(sql, index) && (index == 0 || sql[index - 1] is not ('"' or ']' or '`'))));
 
     private static bool PrecededByWord(string sql, int index)
         => index > 0 && (IsNamePart(sql[index - 1]) || sql[index - 1] is '$' or '#');

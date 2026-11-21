@@ -1,7 +1,7 @@
 namespace Inquiry.Stores;
 
 /// <summary>
-/// Annotates a stored-procedure method parameter with provider-aware metadata so the generator
+/// Annotates a stored-procedure or <see cref="InquiryQueryAttribute"/> method parameter with provider-aware metadata so the generator
 /// emits explicit <c>DbType</c>, <c>Size</c>, <c>Precision</c>, and <c>Scale</c> on the
 /// generated <see cref="System.Data.Common.DbParameter"/>. Without this attribute the generator
 /// still emits <c>DbType</c> inferred from the CLR type; the attribute overrides or supplements
@@ -15,9 +15,11 @@ namespace Inquiry.Stores;
 /// matches the procedure's formal parameter and avoids silent rounding.
 /// </para>
 /// <para>
-/// This attribute is only meaningful on parameters of methods decorated with
-/// <see cref="InquiryStoredProcedureAttribute"/>. It is silently ignored on parameters of
-/// other store methods whose parameter metadata is derived from the entity column.
+/// This attribute applies to parameters of methods decorated with
+/// <see cref="InquiryStoredProcedureAttribute"/> or <see cref="InquiryQueryAttribute"/>. Those methods
+/// read <c>Length</c>, <c>Precision</c>, <c>Scale</c> and <c>IsUnicode</c>. <c>IsInputOutput</c> and
+/// <c>TvpTypeName</c> apply to stored procedures only. The attribute is ignored on parameters of other
+/// store methods, whose parameter metadata comes from the entity column.
 /// </para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Parameter, AllowMultiple = false, Inherited = false)]

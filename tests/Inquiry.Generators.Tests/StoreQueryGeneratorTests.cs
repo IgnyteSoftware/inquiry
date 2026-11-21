@@ -253,7 +253,7 @@ public sealed partial class InquiryGeneratorTests
     }
 
     [Fact]
-    public void Query_RowCountOnAViewStoreReportsINQ052()
+    public void Query_OnAViewStoreReportsINQ052()
     {
         var source = """
             using System.Threading;
@@ -281,8 +281,10 @@ public sealed partial class InquiryGeneratorTests
             """;
 
         var result = RunGenerator(source);
-        var diagnostic = Assert.Single(result.RunResult.Diagnostics, static d => d.Id == "INQ052");
-        Assert.Contains("ClearAsync", diagnostic.GetMessage(CultureInfo.InvariantCulture));
+        var messages = result.RunResult.Diagnostics.Where(static d => d.Id == "INQ052").Select(static d => d.GetMessage(CultureInfo.InvariantCulture)).ToArray();
+        Assert.Equal(2, messages.Length);
+        Assert.Contains(messages, static m => m.Contains("ClearAsync", StringComparison.Ordinal));
+        Assert.Contains(messages, static m => m.Contains("CountAsync", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -299,6 +301,20 @@ public sealed partial class InquiryGeneratorTests
 
         var result = RunGenerator(source);
         AssertNoErrors(result);
+    }
+
+    [Fact]
+    public void Query_ParameterNamedLikeTheSqlConstDoesNotReplaceTheSql()
+    {
+        var source = QueryHeader + """
+                [InquiryQuery("SELECT COUNT(*) FROM Activity WHERE Note = @_sqlQuery_CountAsync")]
+                public partial Task<long> CountAsync(string _sqlQuery_CountAsync, CancellationToken cancellationToken = default);
+            }
+            """;
+
+        var result = RunGenerator(source);
+        AssertNoErrors(result);
+        Assert.Contains("global::Demo.ActivityStore._sqlQuery_CountAsync,", GetActivityStore(result));
     }
 
     [Fact]
@@ -321,6 +337,8 @@ public sealed partial class InquiryGeneratorTests
     [InlineData("Oracle", "SELECT COUNT(*) FROM \"Order Details\"@remote WHERE Id = :id")]
     [InlineData("Oracle", "SELECT COUNT(*) FROM ACTIVITY#@remote WHERE Id = :id")]
     [InlineData("SqlServer", "-- comment\\rSELECT COUNT(*) FROM Activity WHERE Id = @id")]
+    [InlineData("Sqlite", "SELECT:id")]
+    [InlineData("Oracle", "SELECT COUNT(*) FROM Activity WHERE Id=:id")]
     [InlineData("Oracle", "SELECT COUNT(*) FROM Activity WHERE Id = :id AND Note <> nq'[it's @ghost]'")]
     public void Query_DialectScanFindsOnlyRealParameters(string dialect, string sql)
     {

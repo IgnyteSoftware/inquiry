@@ -479,7 +479,7 @@ internal static class StoreOperationEmitter
                 break;
 
             case StoreOperation.Query:
-                EmitHandwrittenQuery(source, sqlBuilder, method, parameters, cancellation);
+                EmitHandwrittenQuery(source, sqlBuilder, method, parameters, cancellation, baseSelectField ?? "_sqlQuery_" + method.MemberName);
                 break;
         }
     }
@@ -488,7 +488,7 @@ internal static class StoreOperationEmitter
     /// Emits an <c>[InquiryQuery]</c> body. Each method parameter binds as a column of its own type,
     /// so enums, unsigned values and provider date types bind as they do in generated predicates.
     /// </summary>
-    private static void EmitHandwrittenQuery(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string cancellation)
+    private static void EmitHandwrittenQuery(StringBuilder source, SqlBuilder sqlBuilder, StoreMethodData method, string parameters, string cancellation, string sqlField)
     {
         var state = new GeneratedCommandState(method.Parameters);
         var call = method.QueryReturn switch
@@ -504,7 +504,7 @@ internal static class StoreOperationEmitter
         AppendHeader(source, method, parameters, isAsync: false);
         source.AppendLine($"        return this.Inquiry.{call}(");
         source.AppendLine($"            new global::Inquiry.Commands.InquiryGeneratedCommand<{state.Type}>(");
-        source.AppendLine($"                _sqlQuery_{method.MemberName},");
+        source.AppendLine($"                {sqlField},");
         source.AppendLine($"                {state.Value},");
         source.AppendLine($"                static (global::System.Data.Common.DbCommand _c, {state.Type} _args) =>");
         source.AppendLine("                {");

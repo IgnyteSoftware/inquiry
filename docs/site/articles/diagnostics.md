@@ -686,7 +686,7 @@ Smallest correction: Choose one read-back channel; ReturnsValue requires Task&lt
 
 View-mapped entity is read-only. Default: error, enabled.
 
-Trigger: A write or procedure is declared against a read-only view entity.
+Trigger: A write, a stored procedure or an `[InquiryQuery]` method is declared against a read-only view entity.
 
 Failing shape: InquiryInsert on InquiryStore&lt;ViewRow&gt;.
 

@@ -83,9 +83,10 @@ method, replace each placeholder with `@name` and declare a parameter of that na
 - Two parameters whose names differ only in case cannot both appear in the SQL, because providers
   match parameter names without case.
 - The generator does not read names inside string literals, quoted identifiers or comments. A
-  prefix that follows a letter, a digit, a closing identifier quote or the same prefix is not a
-  parameter, so SQL Server `@@ROWCOUNT`, PostgreSQL `value::int` and an Oracle `table@link` or
-  `"Order Details"@link` stay as written.
+  prefix right after the same prefix is not a parameter, so SQL Server `@@ROWCOUNT` and
+  PostgreSQL `value::int` stay as written. An `@` or `$` right after a letter, a digit or a closing
+  identifier quote is not a parameter either, so an Oracle `table@link` or `"Order Details"@link`
+  stays as written. A `:` starts a parameter even right after a word, as in SQLite `SELECT:id`.
 - Parameters are scalar values: numbers, strings, `bool`, `Guid`, dates and times, `byte[]` and enums.
   `[InquiryParameter(Length = …, Precision = …, Scale = …, IsUnicode = …)]` sets the parameter metadata.
   Collections are not supported.
@@ -129,9 +130,11 @@ A query method runs in the active Inquiry transaction, such as one started by
 `ExecuteInTransactionAsync`, like every generated store method.
 
 Handwritten SQL is outside generated policy. [Global filters](global-filters.md), soft-delete
-filters, tenant predicates and audit values do not apply, so write those conditions in the SQL. A
-[view entity](view-entities.md) store accepts query methods, except a `Task<int>` row count, which
-reports `INQ052`.
+filters, tenant predicates and audit values do not apply, so write those conditions in the SQL.
+
+A [view entity](view-entities.md) store is read-only, and handwritten SQL can write, so a query
+method on it reports `INQ052`, as a stored procedure does. Declare the query on a table store, where
+the SQL can still read the view.
 
 ## See also
 
