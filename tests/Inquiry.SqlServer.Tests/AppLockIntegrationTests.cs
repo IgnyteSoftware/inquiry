@@ -12,7 +12,6 @@ namespace Inquiry.SqlServer.Tests;
 [Collection(SqlServerCollection.Name)]
 public sealed class AppLockIntegrationTests
 {
-    private static readonly TimeSpan _blockedFor = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan _completesWithin = TimeSpan.FromSeconds(30);
 
     private readonly SqlServerContainerFixture _fixture;
@@ -47,14 +46,13 @@ public sealed class AppLockIntegrationTests
         await using var harness = await SqlServerTestHarness.CreateAsync(_fixture.AdminConnectionString, "AppLock");
         const string resource = "applock:commit";
 
-        // Open the waiter first, so the blocked check covers the lock wait and not the connection open.
         await using var waiter = await BeginAsync(harness);
         Task waiting;
         await using (var holder = await BeginAsync(harness))
         {
             await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
             waiting = Task.Run(() => waiter.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, _completesWithin));
-            await AssertBlockedAsync(waiting);
+            await WaitUntilBlockedAsync(holder.Transaction, waiting);
             await holder.Transaction.CommitAsync();
         }
 
@@ -204,14 +202,14 @@ public sealed class AppLockIntegrationTests
         await using var holder = await BeginAsync(harness);
         await holder.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, TimeSpan.Zero);
 
-        // Open the waiter first, so the token cancels a wait that is already on the server.
         await using var waiter = await BeginAsync(harness);
         using var cancel = new CancellationTokenSource();
-        var elapsed = Stopwatch.StartNew();
-        cancel.CancelAfter(TimeSpan.FromMilliseconds(500));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => Task.Run(() => waiter.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, Timeout.InfiniteTimeSpan, cancel.Token)).WaitAsync(_completesWithin));
-        Assert.True(elapsed.Elapsed >= TimeSpan.FromMilliseconds(450), $"The wait ended after {elapsed.Elapsed}.");
+        var waiting = Task.Run(() => waiter.Transaction.AcquireAppLockAsync(resource, SqlServerAppLockMode.Exclusive, Timeout.InfiniteTimeSpan, cancel.Token));
+
+        // Cancel only after SQL Server reports the wait, so the token stops a wait on the server.
+        await WaitUntilBlockedAsync(holder.Transaction, waiting);
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting.WaitAsync(_completesWithin));
     }
 
     private static async Task<ScopedTransaction> BeginAsync(SqlServerTestHarness harness)
@@ -243,13 +241,27 @@ public sealed class AppLockIntegrationTests
     private static Task<string> LockModeAsync(IInquiryTransaction transaction, string resource)
         => transaction.ExecuteScalarAsync<string>($"SELECT APPLOCK_MODE('public', {resource}, 'Transaction')");
 
-    private static async Task AssertBlockedAsync(Task worker)
+    // Polls from the observer's connection until SQL Server shows an application-lock request
+    // that waits in this database. A waiter task that ends first fails the test.
+    private static async Task WaitUntilBlockedAsync(IInquiryTransaction observer, Task waiter)
     {
-        await Task.WhenAny(worker, Task.Delay(_blockedFor));
-        if (worker.IsCompleted)
+        using var timeout = new CancellationTokenSource(_completesWithin);
+        while (true)
         {
-            await worker;
-            Assert.Fail("The waiter finished while another transaction held the lock.");
+            if (waiter.IsCompleted)
+            {
+                await waiter;
+                Assert.Fail("The waiter finished while another transaction held the lock.");
+            }
+
+            var waits = await observer.ExecuteScalarAsync<int>(
+                $"SELECT COUNT(*) FROM sys.dm_tran_locks WHERE resource_type = 'APPLICATION' AND request_status = 'WAIT' AND resource_database_id = DB_ID()");
+            if (waits > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(20, timeout.Token);
         }
     }
 
