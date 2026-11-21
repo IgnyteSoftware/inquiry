@@ -3,6 +3,18 @@
 Inquiry ships generated store interfaces for unit-testing services without a database, the
 provider-neutral **`Inquiry.Testing`** package, and **`Inquiry.Sqlite.Testing`** for SQLite fixtures.
 
+## Choosing an approach
+
+| Use | When the test checks | What runs |
+|---|---|---|
+| A fake of a generated store interface | Business logic that calls stores. The data access is not under test. | Your code only. No Inquiry runtime. |
+| The scripted runtime (`ScriptedDatabase`) | The data-access code itself: handwritten SQL, parameter binding, column mapping, converters, transactions, rollback, cancellation before a command runs, and interceptors. No database is allowed or needed. | The real Inquiry runtime and generated stores, over scripted results. |
+| A real database (`SqliteInquiryFixture`, `InquirySandbox`, a container) | SQL semantics: the SQL text, constraints, locks, isolation, bulk copy, and provider type conversion. | Everything, against the engine. |
+
+The scripted runtime does not run SQL. A test that passes there proves that the runtime sends the
+expected command and maps the scripted rows. It does not prove that the SQL is valid or that the
+database returns those rows.
+
 ## Mocking stores: `[InquiryGenerateInterface]`
 
 Generated store methods are non-virtual (no dispatch overhead on the hot path), so the store class
@@ -22,6 +34,146 @@ method signatures (default parameter values preserved), declares the store as im
 registers the interface in DI as a forward to the **same scoped store instance** — so services can
 depend on `IOrganizationStore` and tests can hand them a mock, while production keeps direct,
 devirtualized calls. The interface is `partial`, so you can extend it with your own members.
+
+## Scripted runtime: `ScriptedDatabase`
+
+Install `Ignyte.Inquiry.Testing` and import `Inquiry.Testing`. A `ScriptedDatabase` is an ADO.NET
+data source whose commands return scripted results. Register its `DataSource` with the provider's
+`DbDataSource` overload. The test then resolves the real `IInquiry` and generated stores, so you do
+not write an `IInquiry` double:
+
+```csharp
+var database = new ScriptedDatabase(SqlClientFactory.Instance);
+
+var services = new ServiceCollection()
+    .AddInquiry(typeof(OrderStore).Assembly)
+    .AddInquirySqlServer(database.DataSource)
+    .BuildServiceProvider();
+
+database
+    .Enqueue(ScriptedResult.Rows(new ScriptedResultSet()
+        .Column<string>("CustomerID").Column<string>("CompanyName")
+        .Row("VINET", "Vins et alcools Chevalier")))
+    .When(command => command.CommandText.StartsWith("UPDATE", StringComparison.Ordinal), ScriptedResult.RowCount(1));
+```
+
+Pass the provider's `DbProviderFactory`. The scripted command creates its parameters with that
+factory, so the runtime binds real provider parameters. On SQL Server, a `DateTime` parameter carries
+`SqlDbType.DateTime2`, as it does in production. The factory also decides whether the connection
+supports `DbBatch`, so batches take the provider's production path.
+
+### Scripting results
+
+Each `ScriptedResult` answers whichever ADO.NET call the runtime makes:
+
+| Result | Reader | Non-query | Scalar |
+|---|---|---|---|
+| `Rows(resultSet, ...)` | The result sets, in order | `-1` | First column of the first row |
+| `RowCount(n)` | No result sets, `n` rows affected | `n` | `null` |
+| `Scalar(value)` | One unnamed column with one row | `-1` | `value` |
+| `Throws(exception)` | Throws | Throws | Throws |
+
+`Throws` takes any exception, so you can test the code that handles a failure. A provider exception
+works when the test can create one: `new SqliteException(message, 19)` is a SQLite constraint
+violation. SqlClient's `SqlException` has no public constructor, so a test cannot script a SQL Server
+error number such as 2627. Throw the exception type your code catches instead.
+
+`RowCount(-1)` reports no count, as SQL Server does for a procedure that runs `SET NOCOUNT ON`.
+
+For a stored procedure, `WithOutput("@Total", 19.75m)` sets an output or input-output parameter,
+and `WithReturnValue(3)` sets the return value. A command with such a parameter fails when its
+result does not set it, so a read-back never silently returns a default:
+
+```csharp
+database.When(
+    command => command.CommandText == "usp_SumByCategory",
+    ScriptedResult.RowCount(-1).WithOutput("@Total", 19.75m));
+```
+
+A command first tries the `When` rules in the order you added them. Each rule answers every command
+its predicate matches. The predicate gets the command as a `RecordedCommand`, so it can match on
+the text, the parameters or the transaction. If no rule matches, the command takes the next
+`Enqueue` result. A command that matches neither throws `InvalidOperationException`. The message
+shows the command text and every parameter with its `DbType` and value.
+
+Give each scripted value the CLR type of its column, which is the type the mapped member reads.
+The scripted reader does not convert values. For example, SQLite returns `long` for an `INTEGER`
+column and its reader converts it to `int`, but the scripted reader does not. On SQL Server, a
+reader opened with `CommandBehavior.SequentialAccess` rejects a read from an earlier column, as
+SqlClient does.
+
+A table-valued parameter's rows are read when the command runs, as SqlClient reads them, so a
+failing row source fails the command. Its recorded `Value` is a list of `object?[]` rows.
+
+### Asserting on commands and transactions
+
+`database.Commands` lists every command in execution order as a `RecordedCommand`. Each one has
+its text, its `CommandType`, its parameters, its affected row count, its exception, and the
+transaction it ran in.
+Each `RecordedParameter` has its value, `DbType`, `Direction`, `Size`, `Precision` and `Scale`.
+It also has a `ProviderParameter` copy when the provider's parameter can be cloned. SqlClient's
+parameter can be; SQLite's cannot, so on SQLite `ProviderParameter` is `null`:
+
+```csharp
+var orderDate = database.Commands[0].Parameters.Single(p => p.Name == "@OrderDate");
+Assert.Equal(SqlDbType.DateTime2, ((SqlParameter)orderDate.ProviderParameter!).SqlDbType);
+```
+
+`database.Transactions` lists every transaction with its isolation level and its `Outcome`:
+`Active`, `Committed` or `RolledBack`. A transaction disposed without a commit counts as rolled
+back. This example checks that a failure inside `ExecuteInTransactionAsync` rolls back the earlier
+command:
+
+```csharp
+database
+    .Enqueue(ScriptedResult.RowCount(1))
+    .Enqueue(ScriptedResult.Throws(new InvalidOperationException("Duplicate order")));
+
+await Assert.ThrowsAnyAsync<Exception>(() => inquiry.ExecuteInTransactionAsync(async tx =>
+{
+    await tx.ExecuteAsync($"UPDATE Orders SET ShipName = {name} WHERE OrderID = {id}");
+    await tx.ExecuteAsync($"INSERT INTO Orders (ShipName) VALUES ({name})");
+}));
+
+var transaction = Assert.Single(database.Transactions);
+Assert.Equal(RecordedTransactionOutcome.RolledBack, transaction.Outcome);
+Assert.All(database.Commands, command => Assert.Same(transaction, command.Transaction));
+```
+
+A nested Inquiry transaction runs as a savepoint. Each savepoint is also listed in
+`database.Transactions`, with the scope it was begun in as its `Parent`, and the commands inside it
+record the savepoint as their `Transaction`. When the nested transaction fails, its savepoint is
+`RolledBack` while the outer transaction can still commit. A released savepoint stays `Active` until
+its transaction ends and then takes that outcome.
+
+### Provider support
+
+| Provider | Scripted runtime | Register with |
+|---|---|---|
+| SQL Server | Supported | `AddInquirySqlServer(database.DataSource)` and `SqlClientFactory.Instance` |
+| SQLite | Supported | `AddInquirySqlite(database.DataSource)` and `SqliteFactory.Instance` |
+| PostgreSQL | Not supported | Its registration needs an `NpgsqlDataSource`. |
+| MySQL, MariaDB | Not supported | Their registrations need a `MySqlDataSource`. |
+| Oracle | Not supported | Its command setup and array-bound batches need an `OracleCommand`. |
+
+Bulk inserts that use the provider's native bulk copy, such as `SqlBulkCopy`, need a real
+connection and fail against the scripted one. Command and connection telemetry reports the
+database system as `other_sql`. Operations that take the system from the provider's connection
+factory still report the real provider.
+
+Where SqlClient and SQLite follow different ADO.NET rules, the scripted connection follows the
+provider you passed. On SQL Server, a command must carry the pending transaction, and a parameter
+can belong to only one command at a time. On SQLite, a command joins the connection's pending
+transaction, savepoint names ignore case, and releasing an unknown savepoint fails.
+
+The scripted connection does not apply other provider validation that needs the engine or the
+provider's own rules. It accepts every isolation level, including ones the provider rejects, such as
+`Snapshot` on SQLite. It also accepts an input parameter whose value is `null` instead of
+`DBNull.Value`, which SQLite rejects and SQL Server sends as a missing parameter. Inquiry's scalar
+binders bind `DBNull.Value`, so this matters only for a binder you write yourself.
+
+Commands run synchronously and `Cancel` does nothing, so only a token that is already cancelled
+when a command starts is exercised. Cancellation during a running command needs a real database.
 
 ## Integration testing packages
 

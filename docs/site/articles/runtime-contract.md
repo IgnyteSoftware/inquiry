@@ -117,8 +117,14 @@ Use a small IInquiry double when testing generated method dispatch or SQL bindin
 the operations relevant to that test. An unsupported default should fail the test instead of
 silently pretending that the database operation succeeded.
 
-Use the built-in runtime against a real provider for transaction, cancellation, batch, stream lifetime,
-and database behavior checks. A passing mock-based test cannot establish those guarantees.
+To test the data-access code itself without a database, run the built-in runtime over
+`ScriptedDatabase` from `Ignyte.Inquiry.Testing` instead of writing a double. Binding, mapping,
+transactions, cancellation before a command runs, and interception are then the production code.
+Only the results are scripted. See [Testing](features/testing.md#scripted-runtime-scripteddatabase).
+
+Use the built-in runtime against a real provider to check what the database does: the SQL itself,
+constraints, locking, isolation, provider type conversion, and the data a rollback or batch leaves
+behind. A passing mock-based or scripted test cannot establish those guarantees.
 
 See [Errors and partial outcomes](error-contracts.md), [Transactions](features/transactions.md), and
 [Registering data libraries](library-registration.md).
