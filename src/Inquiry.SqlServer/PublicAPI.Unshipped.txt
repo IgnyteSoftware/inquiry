@@ -1,1 +1,18 @@
 #nullable enable
+Inquiry.SqlServer.SqlServerAppLockException
+Inquiry.SqlServer.SqlServerAppLockException.Failure.get -> Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockException.Resource.get -> string!
+Inquiry.SqlServer.SqlServerAppLockException.ReturnCode.get -> int
+Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockFailure.Canceled = -2 -> Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockFailure.Deadlock = -3 -> Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockFailure.InvalidRequest = -999 -> Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockFailure.Timeout = -1 -> Inquiry.SqlServer.SqlServerAppLockFailure
+Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerAppLockMode.Exclusive = 4 -> Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerAppLockMode.IntentExclusive = 3 -> Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerAppLockMode.IntentShared = 2 -> Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerAppLockMode.Shared = 0 -> Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerAppLockMode.Update = 1 -> Inquiry.SqlServer.SqlServerAppLockMode
+Inquiry.SqlServer.SqlServerInquiryTransactionExtensions
+static Inquiry.SqlServer.SqlServerInquiryTransactionExtensions.AcquireAppLockAsync(this Inquiry.Transactions.IInquiryTransaction! transaction, string! resource, Inquiry.SqlServer.SqlServerAppLockMode mode, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
