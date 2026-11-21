@@ -532,6 +532,9 @@ internal static class StoreProcessor
             or StoreOperation.SelectAllByField or StoreOperation.SelectAllByPredicate
             ? GeneratorHelpers.GetNamedInt(attribute, "LockMode") ?? 0
             : 0;
+        var upsertMatchOn = operation == StoreOperation.Upsert
+            ? ReadUpsertMatchOn(attribute)
+            : ImmutableArray<string>.Empty;
 
         return new StoreMethodData(
             Name: method.Name,
@@ -559,6 +562,7 @@ internal static class StoreProcessor
             HardDelete = hardDelete,
             StampModified = stampModified,
             LockMode = lockMode,
+            UpsertMatchOn = new EquatableArray<string>(upsertMatchOn),
             TopByOrderColumn = topByOrderColumn,
             TopByOrderDescending = topByOrderDescending,
             GroupCountColumn = groupCountColumn,
@@ -963,6 +967,20 @@ internal static class StoreProcessor
         }
 
         return enumerable is { TypeArguments.Length: 1 } ? enumerable.TypeArguments[0] : null;
+    }
+
+    // A null element stays as an empty name so INQ121 reports it instead of dropping it.
+    private static ImmutableArray<string> ReadUpsertMatchOn(AttributeData attribute)
+    {
+        foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key == "MatchOn" && argument.Value.Kind == TypedConstantKind.Array && !argument.Value.IsNull)
+            {
+                return argument.Value.Values.Select(static value => value.Value as string ?? string.Empty).ToImmutableArray();
+            }
+        }
+
+        return ImmutableArray<string>.Empty;
     }
 
     /// <summary>
@@ -1933,8 +1951,12 @@ internal static class StoreProcessor
         // upsert-only, and views reject upserts (INQ052), so a keyless entity short-circuits to false.
         var key = entity.Keys.Count > 0 ? entity.Keys[0] : null;
         var keyMayBeDatabaseSupplied = key is not null && (key.IsGenerated || key.UseDatabaseDefault);
+        // A MatchOn upsert has its own per-method consts and never takes the null-key insert path, so
+        // every shared upsert gate below counts key-matched upserts only.
+        static bool IsKeyUpsert(StoreMethodData method)
+            => method.Operation == StoreOperation.Upsert && method.UpsertMatchOn.Count == 0;
         var nullableDatabaseSuppliedKeyUpsert = keyMayBeDatabaseSupplied && key!.Type.IsNullable &&
-            valid.Any(static m => m.Method.Operation == StoreOperation.Upsert);
+            valid.Any(static m => IsKeyUpsert(m.Method));
 
         // A SelectAll method with a resolved plan (ORDER BY / paging) emits its own per-method const, so
         // only a plain SelectAll or any SelectAllEager needs the shared _sqlSelectAll. A method that
@@ -1952,7 +1974,7 @@ internal static class StoreProcessor
              m.Method.Operation == StoreOperation.SelectAllEager));
         var needsSelectByKey = valid.Any(m => UsesSharedSelect(m) && m.Method.Operation is StoreOperation.SelectOneByKey or StoreOperation.SelectOneByKeyEager);
         var needsInsert = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && !m.Method.ReturnsEntity) ||
-            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity) ||
+            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => IsKeyUpsert(m.Method) && !m.Method.ReturnsEntity) ||
             valid.Any(m => (m.Method.Operation == StoreOperation.InsertAll ||
                 (m.Method.Operation == StoreOperation.BulkInsert && !sqlBuilder.SupportsBulkCopy)) &&
                 (sqlBuilder.UsesArrayBindingForBatchMutations ||
@@ -1962,11 +1984,11 @@ internal static class StoreProcessor
         var needsUpdate = valid.Any(static m =>
             (m.Method.Operation == StoreOperation.Update && !m.Method.ReturnsEntity) ||
             m.Method.Operation == StoreOperation.UpdateAll);
-        var needsUpsert = valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && !m.Method.ReturnsEntity);
+        var needsUpsert = valid.Any(static m => IsKeyUpsert(m.Method) && !m.Method.ReturnsEntity);
         var needsInsertReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Insert && m.Method.ReturnsEntity) ||
-            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
+            nullableDatabaseSuppliedKeyUpsert && valid.Any(static m => IsKeyUpsert(m.Method) && m.Method.ReturnsEntity);
         var needsUpdateReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Update && m.Method.ReturnsEntity);
-        var needsUpsertReturning = valid.Any(static m => m.Method.Operation == StoreOperation.Upsert && m.Method.ReturnsEntity);
+        var needsUpsertReturning = valid.Any(static m => IsKeyUpsert(m.Method) && m.Method.ReturnsEntity);
 
         // delete routing. The shared _sqlDeleteByKey is the "default" delete statement: a literal
         // DELETE for an ordinary entity, or the soft UPDATE for a soft-delete entity. A HardDelete method
@@ -2039,6 +2061,27 @@ internal static class StoreProcessor
         var upsertReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlUpsertReturning", needsUpsertReturning, () => sqlBuilder.BuildUpsertReturningSql(ctx));
         var deleteReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlDeleteReturning", needsDeleteReturning, () => sqlBuilder.BuildDeleteByKeyReturningSql(ctx));
         var softDeleteReturningError = TryBuildDegradableConst(source, generatedSql, "_sqlSoftDeleteReturning", needsSoftDeleteReturning, () => sqlBuilder.BuildSoftDeleteByKeyReturningSql(ctx));
+
+        // Each MatchOn upsert builds the dialect's key-upsert SQL from a context whose key is the match
+        // columns. The name follows the method, so two methods never share a const.
+        var matchOnUpsertErrors = new Dictionary<StoreMethodData, string>();
+        foreach (var (method, _, _, _) in valid)
+        {
+            if (method.Operation != StoreOperation.Upsert || method.UpsertMatchOn.Count == 0)
+            {
+                continue;
+            }
+
+            var matchCtx = new SqlBuildContext(sqlBuilder, entity.Schema, entity.TableName, entityColumns,
+                upsertMatchProperties: method.UpsertMatchOn.AsImmutableArray());
+            var matchError = method.ReturnsEntity
+                ? TryBuildDegradableConst(source, generatedSql, StoreOperationEmitter.MatchOnUpsertField(method), true, () => sqlBuilder.BuildUpsertReturningSql(matchCtx))
+                : TryBuildDegradableConst(source, generatedSql, StoreOperationEmitter.MatchOnUpsertField(method), true, () => sqlBuilder.BuildUpsertSql(matchCtx));
+            if (matchError is not null)
+            {
+                matchOnUpsertErrors[method] = matchError;
+            }
+        }
         if (needsDeleteByKey)
         {
             AppendSql("_sqlDeleteByKey", hasSoftDelete ? sqlBuilder.BuildSoftDeleteByKeySql(ctx) : sqlBuilder.BuildDeleteByKeySql(ctx));
@@ -2566,6 +2609,8 @@ internal static class StoreProcessor
             // active dialect, report INQ039 and emit a throwing stub instead of an un-compilable body.
             var unsupportedReason = method.Operation switch
             {
+                StoreOperation.Upsert when method.UpsertMatchOn.Count > 0 =>
+                    matchOnUpsertErrors.TryGetValue(method, out var matchOnError) ? matchOnError : null,
                 StoreOperation.Insert when method.ReturnsEntity => insertReturningError,
                 StoreOperation.Update when method.ReturnsEntity => updateReturningError,
                 // Returning upsert uses _sqlUpsertReturning, or _sqlInsertReturning on the null-key path.
@@ -2836,6 +2881,9 @@ internal static class StoreProcessor
             case StoreOperation.Update:
                 Add("command", method.ReturnsEntity ? "_sqlUpdateReturning" : "_sqlUpdate");
                 break;
+            case StoreOperation.Upsert when method.UpsertMatchOn.Count > 0:
+                Add("command", StoreOperationEmitter.MatchOnUpsertField(method));
+                break;
             case StoreOperation.Upsert:
                 Add("command", method.ReturnsEntity ? "_sqlUpsertReturning" : "_sqlUpsert");
                 if (entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault))
@@ -3072,6 +3120,14 @@ internal static class StoreProcessor
                     InquiryDiagnosticDescriptors.WriteEnforcedFilterInvalid, method.Location?.ToLocation(),
                     method.Name, entity.Name, enforced.PropertyName,
                     "an upsert's insert branch cannot be filtered — split the method into an explicit insert and update, or drop EnforceOnWrites from that filter"));
+                return false;
+            }
+
+            if (method.UpsertMatchOn.Count > 0 && UpsertMatchOnError(method, entity, sqlBuilder) is { } matchOnError)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InquiryDiagnosticDescriptors.UpsertMatchOnInvalid, method.Location?.ToLocation(),
+                    method.Name, entity.Name, matchOnError));
                 return false;
             }
         }
@@ -3628,6 +3684,95 @@ internal static class StoreProcessor
         // The two paging parameters must be int (offset, then limit).
         return parameters[filterCount].ComparisonDisplay == "int" &&
             parameters[filterCount + 1].ComparisonDisplay == "int";
+    }
+
+    /// <summary>The INQ121 reason for an invalid <c>MatchOn</c>, or null when it is valid.</summary>
+    private static string? UpsertMatchOnError(StoreMethodData method, EntityData entity, SqlBuilder sqlBuilder)
+    {
+        var names = method.UpsertMatchOn.AsImmutableArray();
+        var columns = entity.Columns.AsImmutableArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            var column = columns.FirstOrDefault(c => string.Equals(c.PropertyName, name, StringComparison.Ordinal));
+            if (column is null)
+            {
+                return $"'{name}' is not a mapped property of '{entity.Name}'";
+            }
+
+            if (!seen.Add(name))
+            {
+                return $"'{name}' is listed more than once";
+            }
+
+            // The match predicate binds the caller's value, so the database must not supply it.
+            if (column.IsGenerated || column.UseDatabaseDefault || !string.IsNullOrEmpty(column.ComputedExpression))
+            {
+                return $"'{name}' gets its value from the database, so the upsert cannot match on it";
+            }
+
+            // The generated method stamps these before the statement runs, so the value never matches.
+            if (column.IsCreatedAudit || column.IsModifiedAt || column.IsModifiedBy)
+            {
+                return $"'{name}' is an auditing column that the upsert stamps, so the upsert cannot match on it";
+            }
+
+            // A unique index treats NULLs as distinct (or rejects a second NULL) and NULL = NULL is never
+            // true, so a NULL value never finds the row it should update.
+            if (column.IsNullable || column.ProviderValueIsNullable)
+            {
+                return $"'{name}' is nullable, or its converter stores a nullable value, and a NULL value never matches an existing row. Make the property and its stored value non-nullable";
+            }
+        }
+
+        // A natural key may share columns with a composite key. A match set that holds the whole key
+        // finds at most the key's row, and a key conflict with other match values fails the insert.
+        if (entity.Keys.Count > 0 && entity.Keys.AsImmutableArray().All(k => seen.Contains(k.PropertyName)))
+        {
+            return "it contains the whole entity key. Remove MatchOn to match on the key";
+        }
+
+        bool SameSet(IReadOnlyCollection<string> properties)
+            => properties.Count == seen.Count && properties.All(seen.Contains);
+
+        // Generated DDL drops a column-level unique flag on an unbounded string where keys must be
+        // bounded, with only a warning (INQ032), so that flag declares no index here.
+        var uniqueKeys = columns.Where(c => c.IsUnique && !c.IsKey &&
+                !(sqlBuilder.RequiresBoundedStringKeys && sqlBuilder.MapsToUnboundedString(c)))
+            .Select(static c => (IReadOnlyCollection<string>)new[] { c.PropertyName })
+            .Concat(entity.Indexes.AsImmutableArray().Where(static i => i.IsUnique)
+                .Select(static i => (IReadOnlyCollection<string>)i.LogicalKeyProperties.AsImmutableArray()))
+            .ToArray();
+        if (!uniqueKeys.Any(SameSet))
+        {
+            return "no unique index covers exactly (" + string.Join(", ", names) + "). Declare [InquiryIndex(" +
+                string.Join(", ", names.Select(static n => "\"" + n + "\"")) + ", IsUnique = true)] on the entity. " +
+                "On a GenerateDdl = false table the attribute asserts that the deployed table has this index";
+        }
+
+        if (sqlBuilder.UpsertConflictsOnAnyUniqueKey)
+        {
+            // The primary key is a unique key too. Only AUTO_INCREMENT gives each insert a fresh key. An
+            // assigned key or a database default can repeat a key and send the update to another row.
+            var conflictingKey = entity.Keys.AsImmutableArray().FirstOrDefault(static k => !k.IsGenerated);
+            if (conflictingKey is not null)
+            {
+                return $"the '{sqlBuilder.DialectName}' upsert also updates the row whose key conflicts, and key '{conflictingKey.PropertyName}' of '{entity.Name}' is not AUTO_INCREMENT, so an insert can repeat an existing key. " +
+                    "Use a database-generated key, or split the method into an explicit insert and update";
+            }
+
+            // A unique key that holds the whole primary key, or every match column, can only conflict on
+            // the row that the key or the match index already identifies.
+            var primaryKey = entity.Keys.AsImmutableArray().Select(static k => k.PropertyName).ToArray();
+            var competing = uniqueKeys.FirstOrDefault(k => !seen.All(k.Contains) && !primaryKey.All(k.Contains));
+            if (competing is not null)
+            {
+                return $"the '{sqlBuilder.DialectName}' upsert updates the row that conflicts on any unique key, and " +
+                    $"'{entity.Name}' also has a unique key on (" + string.Join(", ", competing) + "). Remove that unique key, or split the method into an explicit insert and update";
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

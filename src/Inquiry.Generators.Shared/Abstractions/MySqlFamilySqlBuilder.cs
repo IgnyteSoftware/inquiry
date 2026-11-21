@@ -338,7 +338,7 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     private string OnDuplicateKeyAssignments(SqlBuildContext context, string? requiredKeyAssignment = null)
     {
         var assignments = string.Join(", ", context.Columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !context.KeyColumns.Contains(c) && !c.IsGenerated && !c.IsConcurrencyToken && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c =>
             {
                 var quoted = QuoteIdentifier(c.ColumnName);
@@ -389,6 +389,9 @@ public abstract class MySqlFamilySqlBuilder : SqlBuilder
     // MySQL/InnoDB auto-creates a backing index for every foreign-key column, so the INQ061
     // unindexed-FK lint does not apply.
     public override bool ForeignKeysAreAutoIndexed => true;
+
+    // ON DUPLICATE KEY UPDATE has no conflict target.
+    public override bool UpsertConflictsOnAnyUniqueKey => true;
 
     /// <summary>MySQL-family computed columns are typed and STORED.</summary>
     protected override string RenderComputedColumn(IColumn column)

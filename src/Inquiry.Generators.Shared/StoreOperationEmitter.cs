@@ -148,7 +148,23 @@ internal static class StoreOperationEmitter
                 // CreatedAt only lands via the insert branch (the conflict-branch SET excludes it),
                 // so the unset-stamp is correct for both outcomes; ModifiedAt is set on both.
                 EmitAuditAssignments(source, entity, firstParameter, isInsert: true, indent: "        ");
-                if (method.ReturnsEntity)
+                if (method.UpsertMatchOn.Count > 0)
+                {
+                    // The match columns find the row, so a null key needs no insert-only path. A key the
+                    // database supplies is not in the INSERT, so it is not bound.
+                    var matchOnColumns = SelectMutationColumns(entity, includeKey: true)
+                        .Where(static c => !(c.IsKey && (c.IsGenerated || c.UseDatabaseDefault)))
+                        .ToArray();
+                    if (method.ReturnsEntity)
+                    {
+                        EmitFastQuerySingleFromEntity(source, sqlBuilder, MatchOnUpsertField(method), entity, firstParameter, entityType, structMat, cancellation, indent: "        ", includeKey: true, isAwait: false, columnsOverride: matchOnColumns);
+                    }
+                    else
+                    {
+                        EmitFastExecuteFromEntity(source, sqlBuilder, MatchOnUpsertField(method), entity, firstParameter, entityType, cancellation, indent: "        ", includeKey: true, returnRowsAffectedAsBool: false, columnsOverride: matchOnColumns);
+                    }
+                }
+                else if (method.ReturnsEntity)
                 {
                     if (ShouldUseInsertWhenKeyIsNull(entity))
                     {
@@ -527,9 +543,10 @@ internal static class StoreOperationEmitter
         bool includeKey,
         bool returnRowsAffectedAsBool,
         bool forUpdate = false,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        ColumnData[]? columnsOverride = null)
     {
-        var columns = SelectMutationColumns(entity, includeKey, forUpdate);
+        var columns = columnsOverride ?? SelectMutationColumns(entity, includeKey, forUpdate);
 
         // a bool-returning mutation on a token entity captures the row count so a 0-row conflict can
         // (when the runtime option is set) throw instead of silently returning false.
@@ -1674,9 +1691,10 @@ internal static class StoreOperationEmitter
         bool isAwait,
         bool emitConcurrencyGuard = false,
         bool forUpdate = false,
-        string? filterBinder = null)
+        string? filterBinder = null,
+        ColumnData[]? columnsOverride = null)
     {
-        var columns = SelectMutationColumns(entity, includeKey, forUpdate);
+        var columns = columnsOverride ?? SelectMutationColumns(entity, includeKey, forUpdate);
 
         // A returning update on a token entity captures the nullable result. This lets the runtime
         // distinguish a stale token from a deleted row and throw when the option is set.
@@ -3370,6 +3388,10 @@ internal static class StoreOperationEmitter
 
         return result?.ToString() ?? text;
     }
+
+    /// <summary>The per-method SQL const of an <c>[InquiryUpsert(MatchOn = ...)]</c> method.</summary>
+    internal static string MatchOnUpsertField(StoreMethodData method)
+        => (method.ReturnsEntity ? "_sqlUpsertReturning_" : "_sqlUpsert_") + method.MemberName;
 
     private static bool ShouldUseInsertWhenKeyIsNull(EntityData entity)
         => entity.Keys[0].Type.IsNullable && (entity.Keys[0].IsGenerated || entity.Keys[0].UseDatabaseDefault);

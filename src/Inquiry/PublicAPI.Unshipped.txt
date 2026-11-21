@@ -4,3 +4,5 @@ Inquiry.Stores.InquiryUpdateAttribute.StampModified.set -> void
 Inquiry.Entities.InquiryDateTimeKindAttribute
 Inquiry.Entities.InquiryDateTimeKindAttribute.InquiryDateTimeKindAttribute(System.DateTimeKind kind) -> void
 Inquiry.Entities.InquiryDateTimeKindAttribute.Kind.get -> System.DateTimeKind
+Inquiry.Stores.InquiryUpsertAttribute.MatchOn.get -> string![]!
+Inquiry.Stores.InquiryUpsertAttribute.MatchOn.set -> void

@@ -32,6 +32,8 @@
     <Compile Include="..\Shared\EagerGridCommandAssertions.cs" LinkBase="Shared" />
     <Compile Include="..\Shared\PagedResultAssertions.cs" LinkBase="Shared" />
     <Compile Include="..\Shared\SmallInListScenarios.cs" LinkBase="Shared" />
+    <Compile Include="..\Shared\UpsertMatchOnScenarios.cs" LinkBase="Shared" />
+    <Compile Include="..\Shared\UpsertMatchOnAssignedKeyScenarios.cs" LinkBase="Shared" />
     <Compile Include="..\Shared\ManyToManyExtensionAssertions.cs" LinkBase="Shared" />
     <!-- W9 full-text search is NOT supported on Oracle (generator emits INQ035); FullText is excluded. -->
     <!-- <Compile Include="..\Inquiry.FeatureCatalog\FullText\*.cs" LinkBase="FeatureCatalog\FullText" /> -->

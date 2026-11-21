@@ -132,6 +132,12 @@ internal sealed record StoreMethodData(
     /// </summary>
     public bool StampModified { get; init; }
 
+    /// <summary>
+    /// For <see cref="StoreOperation.Upsert"/>, the raw <c>MatchOn</c> property names in declaration
+    /// order. Empty means the upsert matches on the entity key. Validated at emit (INQ121).
+    /// </summary>
+    public EquatableArray<string> UpsertMatchOn { get; init; } = EquatableArray<string>.Empty;
+
     /// <summary>For <see cref="StoreOperation.SelectTopByOrder"/>, the raw column name (resolved at emit).</summary>
     public string? TopByOrderColumn { get; init; }
 

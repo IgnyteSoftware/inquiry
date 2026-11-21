@@ -97,6 +97,13 @@ public sealed class SqlBuildContext
     /// default) for every context with no bypass in play. Validated upstream (INQ091), so an
     /// unmatched entry here is simply inert.
     /// </param>
+    /// <param name="upsertMatchProperties">
+    /// The <c>[InquiryUpsert(MatchOn = ...)]</c> properties, for the per-method context of an upsert
+    /// matched on a unique natural key. They take the place of the key in <see cref="KeyColumns"/> and
+    /// every clause built from it, so each dialect's key-upsert builder matches on them unchanged. The
+    /// real key then joins the match columns outside <see cref="SetClauses"/>. Null (the default)
+    /// matches on the key.
+    /// </param>
     public SqlBuildContext(
         SqlBuilder builder,
         string? schema,
@@ -107,14 +114,17 @@ public sealed class SqlBuildContext
         IColumn? softDeletePredicateColumn = null,
         IReadOnlyList<IColumn>? globalFilterPredicateColumns = null,
         bool hasSecondaryUniqueConstraint = false,
-        IReadOnlyCollection<string>? ignoredGlobalFilterNames = null)
+        IReadOnlyCollection<string>? ignoredGlobalFilterNames = null,
+        IReadOnlyList<string>? upsertMatchProperties = null)
     {
         Columns = columns;
         RawSchema = schema;
         RawTableName = tableName;
         GenerateForeignKeys = generateForeignKeys;
         HasSecondaryUniqueConstraint = hasSecondaryUniqueConstraint;
-        KeyColumns = columns.Where(c => c.IsKey).ToArray();
+        KeyColumns = upsertMatchProperties is null
+            ? columns.Where(c => c.IsKey).ToArray()
+            : upsertMatchProperties.Select(p => columns.First(c => string.Equals(c.PropertyName, p, StringComparison.Ordinal))).ToArray();
         // A database-managed token (rowversion) is supplied by the database, so exclude it from INSERT.
         // A server-computed column is calculated by the database expression, so exclude it too.
         InsertableColumns = columns.Where(c => !c.IsGenerated && !c.UseDatabaseDefault && !c.IsDatabaseGeneratedToken && string.IsNullOrEmpty(c.ComputedExpression)).ToArray();
@@ -129,7 +139,7 @@ public sealed class SqlBuildContext
         // branch unchanged.
         // A server-computed column is never SET — the database recomputes it from its expression.
         SetClauses = string.Join(", ", columns
-            .Where(c => !c.IsKey && !c.IsGenerated && !c.IsConcurrencyToken && !c.PreventReassignment && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
+            .Where(c => !c.IsKey && !KeyColumns.Contains(c) && !c.IsGenerated && !c.IsConcurrencyToken && !c.PreventReassignment && c.SoftDelete == SoftDeleteKind.None && !c.IsCreatedAt && !c.IsCreatedBy && string.IsNullOrEmpty(c.ComputedExpression))
             .Select(c => builder.QuoteIdentifier(c.ColumnName) + " = " + builder.ParameterName(c.PropertyName)));
         QuotedKeyColumns = KeyColumns.Select(k => builder.QuoteIdentifier(k.ColumnName)).ToArray();
         KeyParameters = KeyColumns.Select(k => builder.ParameterName(k.PropertyName)).ToArray();
