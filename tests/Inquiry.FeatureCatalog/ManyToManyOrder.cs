@@ -6,7 +6,7 @@ namespace Inquiry.FeatureCatalog;
 public static class M2MMaterializationProbe
 {
     public const string Sentinel = "__UNRELATED_SENTINEL__";
-    private static readonly object _gate = new();
+    private static readonly Lock _gate = new();
     private static HashSet<string> _excludedTitles = new();
     private static HashSet<long> _excludedJunctionProductIds = new();
     private static int _childReads;

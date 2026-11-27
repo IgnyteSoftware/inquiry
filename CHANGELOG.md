@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Package dependencies are updated: `Npgsql` 10.0.4 and `Oracle.ManagedDataAccess.Core` 23.26.401.
+
 ## [1.0.0-rc.2] - 2026-11-21
 
 ### Added
