@@ -85,7 +85,7 @@ public class CommandResourceLookupBenchmarks
 
     private sealed class LegacyResourceSet : IDisposable
     {
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private List<IInquiryExecutionResource>? _items = new();
 
         public void Add(IInquiryExecutionResource resource)

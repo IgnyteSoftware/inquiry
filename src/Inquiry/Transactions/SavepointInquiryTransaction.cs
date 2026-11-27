@@ -37,7 +37,7 @@ internal sealed class SavepointInquiryTransaction : InquiryTransactionBase
     private readonly TransactedInquiryRequestPipeline _outerPipeline;
     private readonly string _savepointName;
     private readonly IsolationLevel _isolationLevel;
-    private readonly object _lifecycleLock = new();
+    private readonly Lock _lifecycleLock = new();
     private bool _closed;
     private bool _terminalSucceeded;
     private bool _cleanupAttempted;

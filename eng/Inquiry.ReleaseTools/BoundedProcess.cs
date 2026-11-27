@@ -188,7 +188,7 @@ internal static class BoundedProcess
     private sealed class BoundedTextCapture
     {
         private readonly char[] _buffer;
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private int _start;
         private int _count;
         private bool _truncated;

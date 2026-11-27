@@ -136,7 +136,7 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesOracleDdl, "UnsignedOrSB3");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        // sbyte -1 → unchecked((byte)-1) = 255 → NUMBER(3); reads back to -1.
+        // Maps signed byte -1 to unsigned byte 255 in NUMBER(3) and reads 255 back as -1.
         var item = MakeItem(1);
         item.SByteVal = -1;
         await store.InsertAsync(item);
