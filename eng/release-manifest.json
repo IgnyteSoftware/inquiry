@@ -152,7 +152,7 @@
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "Oracle.ManagedDataAccess.Core": "23.26.401",
-        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Configuration.ConfigurationManager": "11.0.0",
         "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
@@ -266,7 +266,7 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Configuration.ConfigurationManager": "11.0.0",
         "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
@@ -391,7 +391,7 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Configuration.ConfigurationManager": "11.0.0",
         "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
@@ -505,7 +505,7 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "Oracle.ManagedDataAccess.Core": "23.26.401",
-        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Configuration.ConfigurationManager": "11.0.0",
         "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
@@ -562,7 +562,7 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "Respawn": "7.0.0",
-        "System.Configuration.ConfigurationManager": "10.0.15",
+        "System.Configuration.ConfigurationManager": "11.0.0",
         "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
