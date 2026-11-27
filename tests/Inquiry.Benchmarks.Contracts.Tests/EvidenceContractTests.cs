@@ -268,7 +268,7 @@ public sealed class EvidenceContractTests
             Assert.Equal(first.ContentSha256, second.ContentSha256);
             Assert.Equal(first.ToCanonicalJsonBytes(), second.ToCanonicalJsonBytes());
 
-            ResolvedDependencyManifest Collect(string root)
+            static ResolvedDependencyManifest Collect(string root)
             {
                 Directory.CreateDirectory(root);
                 string Asset(string relative, string content)

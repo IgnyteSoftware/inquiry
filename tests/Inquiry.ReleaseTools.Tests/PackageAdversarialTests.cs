@@ -190,7 +190,7 @@ public sealed class PackageAdversarialTests
     }
 
     [Fact]
-    public void Non_Oracle_package_cannot_include_System_Configuration_compile_assets()
+    public void SqlServer_package_System_Configuration_exclude_contract_cannot_drift()
     {
         var fixture = _sqlServerFixture.Value;
         var directory = Directory.CreateTempSubdirectory("inquiry-system-configuration-mutation-");
@@ -203,8 +203,8 @@ public sealed class PackageAdversarialTests
             Mutate(nupkg, archive => ReplaceText(
                 archive,
                 "Ignyte.Inquiry.SqlServer.nuspec",
-                "exclude=\"Compile,Build,Analyzers\"",
-                "exclude=\"Build,Analyzers\""));
+                "exclude=\"Build,Analyzers\"",
+                "exclude=\"Compile,Build,Analyzers\""));
 
             Assert.Throws<ReleaseVerificationException>(() => PackageVerifier.VerifyPackagePairForTests(
                 RepositoryFixture.Root,

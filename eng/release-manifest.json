@@ -151,9 +151,9 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "Oracle.ManagedDataAccess.Core": "23.26.400",
+        "Oracle.ManagedDataAccess.Core": "23.26.401",
         "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
         "net10.0",
@@ -190,7 +190,7 @@
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "Npgsql": "10.0.3"
+        "Npgsql": "10.0.4"
       },
       "libTfms": [
         "net10.0",
@@ -258,7 +258,7 @@
       "dependencies": {
         "Ignyte.Inquiry.Aspire": "[1.0.0]",
         "Ignyte.Inquiry.SqlServer": "[1.0.0]",
-        "Microsoft.Data.SqlClient": "7.1.2",
+        "Microsoft.Data.SqlClient": "8.0.0",
         "Microsoft.Extensions.Configuration": "10.0.15",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
         "Microsoft.Extensions.DependencyInjection": "10.0.15",
@@ -267,7 +267,7 @@
         "Microsoft.Extensions.Logging": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
         "net10.0",
@@ -386,13 +386,13 @@
       "project": "src/Inquiry.SqlServer/Inquiry.SqlServer.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "[1.0.0]",
-        "Microsoft.Data.SqlClient": "7.1.2",
+        "Microsoft.Data.SqlClient": "8.0.0",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
         "net10.0",
@@ -420,7 +420,7 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "Npgsql": "10.0.3"
+        "Npgsql": "10.0.4"
       },
       "libTfms": [
         "net10.0",
@@ -504,9 +504,9 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
         "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.15",
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
-        "Oracle.ManagedDataAccess.Core": "23.26.400",
+        "Oracle.ManagedDataAccess.Core": "23.26.401",
         "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
         "net10.0",
@@ -555,7 +555,7 @@
       "project": "src/Inquiry.Testing/Inquiry.Testing.csproj",
       "dependencies": {
         "Ignyte.Inquiry": "[1.0.0]",
-        "Microsoft.Data.SqlClient": "7.1.2",
+        "Microsoft.Data.SqlClient": "8.0.0",
         "Microsoft.Extensions.Configuration.Abstractions": "10.0.15",
         "Microsoft.Extensions.DependencyInjection": "10.0.15",
         "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15",
@@ -563,7 +563,7 @@
         "Microsoft.Extensions.Logging.Abstractions": "10.0.15",
         "Respawn": "7.0.0",
         "System.Configuration.ConfigurationManager": "10.0.15",
-        "System.Security.Cryptography.Pkcs": "10.0.13"
+        "System.Security.Cryptography.Pkcs": "10.0.15"
       },
       "libTfms": [
         "net10.0",

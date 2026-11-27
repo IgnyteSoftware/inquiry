@@ -16,7 +16,7 @@ public static class InquiryCommandResources
 {
     private const int ResourceSignalMask = 1023;
     private static readonly ConditionalWeakTable<DbCommand, ResourceSet> _resources = new();
-    private static readonly object _resourceSignalGate = new();
+    private static readonly Lock _resourceSignalGate = new();
     private static readonly WeakReference<DbCommand>[]?[] _resourceSignals = new WeakReference<DbCommand>[ResourceSignalMask + 1][];
 
     internal static void Register(DbCommand command, IInquiryExecutionResource resource)
@@ -158,7 +158,7 @@ public static class InquiryCommandResources
 
     private sealed class ResourceSet : IDisposable
     {
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private readonly int _signalIndex;
         private readonly WeakReference<DbCommand> _signal;
         private List<IInquiryExecutionResource>? _items = new();

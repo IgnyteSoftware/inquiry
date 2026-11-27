@@ -7,13 +7,13 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
-    <PackageVersion Include="coverlet.collector" Version="10.1.0" />
-    <PackageVersion Include="Dapper" Version="2.1.89" />
+    <PackageVersion Include="coverlet.collector" Version="10.1.1" />
+    <PackageVersion Include="Dapper" Version="2.1.100" />
     <PackageVersion Include="Dapper.AOT" Version="1.1.0" />
     <!-- The schema evolution sample uses DbUp. dbup-core is pinned so the API the guide cites is the one restored. -->
     <PackageVersion Include="dbup-core" Version="6.1.1" />
     <PackageVersion Include="dbup-sqlserver" Version="7.2.0" />
-    <PackageVersion Include="linq2db" Version="6.5.1" />
+    <PackageVersion Include="linq2db" Version="6.6.0" />
     <!-- RepoDB packages share one version. RepoDb.Oracle needs RepoDb 1.16.0, and the 1.16 adapters fit the driver pins below. -->
     <PackageVersion Include="RepoDb" Version="1.16.0" />
     <PackageVersion Include="RepoDb.MySqlConnector" Version="1.16.0" />
@@ -21,7 +21,7 @@
     <PackageVersion Include="RepoDb.PostgreSql" Version="1.16.0" />
     <PackageVersion Include="RepoDb.Sqlite.Microsoft" Version="1.16.0" />
     <PackageVersion Include="RepoDb.SqlServer" Version="1.16.1" />
-    <PackageVersion Include="JsonSchema.Net" Version="9.6.0" />
+    <PackageVersion Include="JsonSchema.Net" Version="9.7.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="8.0.0" />
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.15" />
@@ -39,15 +39,15 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageVersion Include="MySqlConnector" Version="3.0.0" />
-    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Npgsql" Version="10.0.4" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="9.23.26300" />
-    <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.400" />
+    <PackageVersion Include="Oracle.ManagedDataAccess.Core" Version="23.26.401" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
-    <PackageVersion Include="Testcontainers.MariaDb" Version="4.16.0" />
-    <PackageVersion Include="Testcontainers.MySql" Version="4.16.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.16.0" />
-    <PackageVersion Include="Testcontainers.Oracle" Version="4.16.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.17.0" />
+    <PackageVersion Include="Testcontainers.MariaDb" Version="4.17.0" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.17.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.17.0" />
+    <PackageVersion Include="Testcontainers.Oracle" Version="4.17.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.15" />
     <!-- Transitive pin: SSH.NET is pulled by Testcontainers and fixes GHSA-q939-rpr3-3284
@@ -69,7 +69,7 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
     <!-- Build-time tooling (applied via Directory.Build.props) -->
     <!-- Update this intentionally with the analyzer/toolchain policy. Do not put Version on PackageReference. -->
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.34.0.3385" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.37.0.15768" />
     <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="11.0.100" />
     <PackageVersion Include="MinVer" Version="8.0.0" />

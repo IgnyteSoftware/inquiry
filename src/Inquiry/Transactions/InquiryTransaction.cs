@@ -15,7 +15,7 @@ internal sealed class InquiryTransaction : InquiryTransactionBase
     private readonly TransactedInquiryRequestPipeline _pipeline;
     private readonly Action _onDetach;
     private readonly Action _onClose;
-    private readonly object _lifecycleLock = new();
+    private readonly Lock _lifecycleLock = new();
     private static readonly TimeSpan _cleanupTimeout = TimeSpan.FromSeconds(5);
     private int _closed;
     private Task? _terminalTask;

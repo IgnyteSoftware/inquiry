@@ -9,7 +9,7 @@ public sealed class EntityFactory<TEntity>
 {
     private readonly Func<long, TEntity> _create;
     private readonly Dictionary<string, Action<TEntity, long>> _states = new(StringComparer.Ordinal);
-    private readonly object _statesLock = new();
+    private readonly Lock _statesLock = new();
     private long _sequence;
 
     /// <summary>

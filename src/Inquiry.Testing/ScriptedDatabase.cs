@@ -34,7 +34,7 @@ namespace Inquiry.Testing;
 /// </remarks>
 public sealed class ScriptedDatabase
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly Queue<ScriptedResult> _ordered = new();
     private readonly List<(Func<RecordedCommand, bool> Matches, ScriptedResult Result)> _rules = new();
     private readonly List<RecordedCommand> _commands = new();

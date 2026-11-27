@@ -43,7 +43,7 @@ internal sealed record ExecutedBatch(IReadOnlyList<ExecutedBatchCommand> Command
 /// </remarks>
 internal sealed class BatchExecutionProbe
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Func<DbCommand, object?>? _inspectFinalizedCommand;
     private readonly Func<DbBatchCommand, object?>? _inspectExecutedBatchCommand;
     private readonly List<int> _initializedChunkSizes = new();

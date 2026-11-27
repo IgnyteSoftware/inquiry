@@ -136,7 +136,7 @@ public sealed class UnsignedTypesIntegrationTests
             _fixture.AdminConnectionString, FeatureSchema.UnsignedTypesPostgreSqlDdl, "UnsignedPgSB3");
         var store = harness.GetRequiredService<UnsignedTypesItemStore>();
 
-        // sbyte -1 → unchecked((byte)-1) = 255 → SMALLINT; reads back GetInt16=255 → (sbyte)=-1.
+        // Maps signed byte -1 to unsigned byte 255 in SMALLINT and reads 255 back as -1.
         var item = MakeItem(1);
         item.SByteVal = -1;
         await store.InsertAsync(item);

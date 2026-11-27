@@ -22,7 +22,7 @@ namespace Inquiry.Testing;
 /// </remarks>
 public sealed class RecordingCommandInterceptor : IInquiryCommandInterceptor
 {
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
     private readonly List<RecordedCommand> _commands = new();
     private readonly Dictionary<DbCommand, RecordedCommand> _inFlight = new();
 
