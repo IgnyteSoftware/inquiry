@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Package dependencies are updated: `Npgsql` 10.0.4 and `Oracle.ManagedDataAccess.Core` 23.26.401.
+- Package dependencies are updated: `Microsoft.Data.SqlClient` 8.0.0, `Npgsql` 10.0.4, `Oracle.ManagedDataAccess.Core` 23.26.401, and `System.Security.Cryptography.Pkcs` 10.0.15.
 
 ## [1.0.0-rc.2] - 2026-11-21
 

@@ -572,10 +572,7 @@ public static class PackageVerifier
                 RequireSequence(dependency.Attributes().Select(attribute => attribute.Name.LocalName), ["id", "version", "exclude"],
                     $"{packageId} dependency attributes");
                 var dependencyId = (string?)dependency.Attribute("id");
-                var usesSystemConfigurationAtCompileTime = package.Dependencies.ContainsKey("Oracle.ManagedDataAccess.Core");
-                var expectedExclude = !usesSystemConfigurationAtCompileTime && dependencyId == "System.Configuration.ConfigurationManager"
-                    ? "Compile,Build,Analyzers"
-                    : "Build,Analyzers";
+                const string expectedExclude = "Build,Analyzers";
                 Require((string?)dependency.Attribute("exclude") == expectedExclude,
                     $"{packageId} dependency {dependencyId} must use the exact exclude contract {expectedExclude}.");
             }
