@@ -121,13 +121,13 @@
       },
       "Oracle.ManagedDataAccess.Core": {
         "type": "Direct",
-        "requested": "[23.26.400, )",
-        "resolved": "23.26.400",
-        "contentHash": "PWVJunbl2LVcdFBluW5R3678MvrTLlTrQBdXe9wR4YCauISa4zCceJ7fLHVFFiGog8/ZPxo2cY4adpVQCJf+YQ==",
+        "requested": "[23.26.401, )",
+        "resolved": "23.26.401",
+        "contentHash": "Cdl0yviHUbmDyHvKHft8r6z44Xm6pY6esHnNXRXXBqImDanuMzapXWxRZu68pNw59X8v/qso+r9wYBibBe/VXw==",
         "dependencies": {
           "System.Diagnostics.PerformanceCounter": "8.0.0",
           "System.DirectoryServices.Protocols": "8.0.2",
-          "System.Security.Cryptography.Pkcs": "8.0.1"
+          "System.Security.Cryptography.Pkcs": "10.0.13"
         }
       },
       "RepoDb": {
@@ -660,7 +660,7 @@
           "Ignyte.Inquiry": "[1.0.0, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.15, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.15, )",
-          "Oracle.ManagedDataAccess.Core": "[23.26.400, )"
+          "Oracle.ManagedDataAccess.Core": "[23.26.401, )"
         }
       },
       "Microsoft.Build.Tasks.Core": {
@@ -959,13 +959,13 @@
       },
       "Oracle.ManagedDataAccess.Core": {
         "type": "Direct",
-        "requested": "[23.26.400, )",
-        "resolved": "23.26.400",
-        "contentHash": "PWVJunbl2LVcdFBluW5R3678MvrTLlTrQBdXe9wR4YCauISa4zCceJ7fLHVFFiGog8/ZPxo2cY4adpVQCJf+YQ==",
+        "requested": "[23.26.401, )",
+        "resolved": "23.26.401",
+        "contentHash": "Cdl0yviHUbmDyHvKHft8r6z44Xm6pY6esHnNXRXXBqImDanuMzapXWxRZu68pNw59X8v/qso+r9wYBibBe/VXw==",
         "dependencies": {
           "System.Diagnostics.PerformanceCounter": "8.0.0",
           "System.DirectoryServices.Protocols": "8.0.2",
-          "System.Security.Cryptography.Pkcs": "8.0.1"
+          "System.Security.Cryptography.Pkcs": "10.0.13"
         }
       },
       "RepoDb": {
@@ -1415,7 +1415,7 @@
         "type": "Project",
         "dependencies": {
           "Ignyte.Inquiry": "[1.0.0, )",
-          "Oracle.ManagedDataAccess.Core": "[23.26.400, )"
+          "Oracle.ManagedDataAccess.Core": "[23.26.401, )"
         }
       },
       "Microsoft.Build.Tasks.Core": {
